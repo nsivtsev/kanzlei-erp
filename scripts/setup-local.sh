@@ -50,10 +50,24 @@ fi
 if ! bench --site development.localhost list-apps | grep -q "^erpnext"; then
   bench --site development.localhost install-app erpnext
 fi
+if [[ ! -e apps/kanzlei_erp ]]; then
+  ln -s /workspace apps/kanzlei_erp
+fi
+if [[ "$(readlink apps/kanzlei_erp)" != "/workspace" ]]; then
+  echo "apps/kanzlei_erp must link to /workspace" >&2
+  exit 1
+fi
+grep -qxF kanzlei_erp sites/apps.txt || printf "kanzlei_erp\n" >> sites/apps.txt
+uv pip install --quiet -e /workspace --python env/bin/python
+if ! bench --site development.localhost list-apps | grep -q "^kanzlei_erp"; then
+  bench --site development.localhost install-app kanzlei_erp
+fi
 bench --site development.localhost set-config developer_mode 1
+bench --site development.localhost set-config allow_tests true
+bench --site development.localhost migrate > /tmp/kanzlei-migrate.log 2>&1
 bench --site development.localhost clear-cache
 touch .kanzlei-ready
 '
 
-echo "ERPNext setup finished. Open http://development.localhost:8100"
+echo "Kanzlei ERP setup finished. Open http://development.localhost:8100"
 echo "Login: Administrator; password is LOCAL_ADMIN_PASSWORD in .env"

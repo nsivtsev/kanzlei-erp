@@ -12,9 +12,9 @@
 
 ### Task 1: App and tests
 
-**Files:** `.gitignore`, `development/frappe-bench/apps/kanzlei_erp/**`, `README.md`
+**Files:** `.gitignore`, `kanzlei_erp/**`, `pyproject.toml`, `README.md`
 
-1. Generate a Frappe app in the existing bench and make only its source trackable.
+1. Generate a Frappe app, keep its source at the repository root, and link it into the existing bench.
 2. Write failing tests for monthly, quarterly, yearly, and weekly due-date generation, including month-end and leap-year cases.
 3. Implement the smallest recurrence-date helper and run the tests.
 

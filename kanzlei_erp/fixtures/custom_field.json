@@ -1,0 +1,51 @@
+[
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_customer",
+  "dt": "Task",
+  "fieldname": "kanzlei_customer",
+  "fieldtype": "Link",
+  "label": "Mandant",
+  "options": "Customer",
+  "insert_after": "project",
+  "in_list_view": 1,
+  "in_standard_filter": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_work_schedule",
+  "dt": "Task",
+  "fieldname": "kanzlei_work_schedule",
+  "fieldtype": "Link",
+  "label": "Work Schedule",
+  "options": "Work Schedule",
+  "insert_after": "kanzlei_customer",
+  "read_only": 1,
+  "no_copy": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_occurrence_key",
+  "dt": "Task",
+  "fieldname": "kanzlei_occurrence_key",
+  "fieldtype": "Data",
+  "label": "Occurrence Key",
+  "insert_after": "kanzlei_work_schedule",
+  "unique": 1,
+  "hidden": 1,
+  "no_copy": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_calendar_title",
+  "dt": "Task",
+  "fieldname": "kanzlei_calendar_title",
+  "fieldtype": "Data",
+  "label": "Calendar Title",
+  "insert_after": "kanzlei_occurrence_key",
+  "length": 255,
+  "read_only": 1,
+  "hidden": 1,
+  "no_copy": 1
+ }
+]
