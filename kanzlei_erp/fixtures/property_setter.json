@@ -1,0 +1,9 @@
+[
+ {"doctype": "Property Setter", "name": "Customer-loyalty_points_tab-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "loyalty_points_tab", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-sales_team_tab-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "sales_team_tab", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-portal_users_tab-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "portal_users_tab", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-references_section-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "references_section", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-market_segment-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "market_segment", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-customer_pos_id-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "customer_pos_id", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"},
+ {"doctype": "Property Setter", "name": "Customer-supplier_numbers_section-hidden", "doctype_or_field": "DocField", "doc_type": "Customer", "field_name": "supplier_numbers_section", "property": "hidden", "property_type": "Check", "value": "1", "module": "Kanzlei ERP"}
+]

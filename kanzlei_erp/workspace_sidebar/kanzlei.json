@@ -1,0 +1,17 @@
+{
+ "doctype": "Workspace Sidebar",
+ "name": "Kanzlei",
+ "title": "Kanzlei",
+ "app": "kanzlei_erp",
+ "module": "Kanzlei ERP",
+ "standard": 1,
+ "header_icon": "briefcase",
+ "items": [
+  {"label": "Mandanten", "type": "Link", "link_type": "DocType", "link_to": "Customer", "icon": "users"},
+  {"label": "Aufgaben", "type": "Link", "link_type": "DocType", "link_to": "Task", "icon": "clipboard"},
+  {"label": "Kalender", "type": "Link", "link_type": "URL", "url": "/desk/task/view/calendar/default", "icon": "calendar"},
+  {"label": "Wiederholungen", "type": "Link", "link_type": "DocType", "link_to": "Work Schedule", "icon": "repeat"},
+  {"label": "Zeiterfassung", "type": "Link", "link_type": "DocType", "link_to": "Timesheet", "icon": "clock"},
+  {"label": "Rechnungen", "type": "Link", "link_type": "DocType", "link_to": "Sales Invoice", "icon": "receipt"}
+ ]
+}

@@ -1,0 +1,15 @@
+{
+ "doctype": "Desktop Icon",
+ "name": "Einstellungen",
+ "label": "Einstellungen",
+ "app": "kanzlei_erp",
+ "standard": 1,
+ "icon_type": "Link",
+ "link_type": "Workspace Sidebar",
+ "link_to": "Einstellungen",
+ "parent_icon": "Kanzlei",
+ "icon": "settings",
+ "hidden": 0,
+ "idx": 1,
+ "roles": [{"role": "System Manager"}]
+}

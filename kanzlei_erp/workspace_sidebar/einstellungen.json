@@ -1,0 +1,22 @@
+{
+ "doctype": "Workspace Sidebar",
+ "name": "Einstellungen",
+ "title": "Einstellungen",
+ "app": "kanzlei_erp",
+ "module": "Kanzlei ERP",
+ "standard": 1,
+ "header_icon": "settings",
+ "items": [
+  {"label": "Kanzlei", "type": "Link", "link_type": "DocType", "link_to": "Company", "icon": "building"},
+  {"label": "Leistungen", "type": "Link", "link_type": "DocType", "link_to": "Item", "icon": "list"},
+  {"label": "Tätigkeiten", "type": "Link", "link_type": "DocType", "link_to": "Activity Type", "icon": "clipboard"},
+  {"label": "Steuerkonfiguration", "type": "Link", "link_type": "DocType", "link_to": "Sales Taxes and Charges Template", "icon": "percent"},
+  {"label": "Zahlungsbedingungen", "type": "Link", "link_type": "DocType", "link_to": "Payment Terms Template", "icon": "calendar"},
+  {"label": "Kontenplan", "type": "Link", "link_type": "DocType", "link_to": "Account", "icon": "book"},
+  {"label": "Benutzer", "type": "Link", "link_type": "DocType", "link_to": "User", "icon": "users"},
+  {"label": "System", "type": "Link", "link_type": "DocType", "link_to": "System Settings", "icon": "settings"},
+  {"label": "Druckvorlagen", "type": "Link", "link_type": "DocType", "link_to": "Print Format", "icon": "printer"},
+  {"label": "Datenimport", "type": "Link", "link_type": "DocType", "link_to": "Data Import", "icon": "upload"},
+  {"label": "Zur Kanzlei", "type": "Link", "link_type": "URL", "url": "/desk/customer", "icon": "arrow-left"}
+ ]
+}

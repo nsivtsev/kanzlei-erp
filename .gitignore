@@ -7,3 +7,4 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 node_modules/
+kanzlei_erp/public/dist/

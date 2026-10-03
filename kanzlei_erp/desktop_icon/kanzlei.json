@@ -1,0 +1,14 @@
+{
+ "doctype": "Desktop Icon",
+ "name": "Kanzlei",
+ "label": "Kanzlei",
+ "app": "kanzlei_erp",
+ "standard": 1,
+ "icon_type": "App",
+ "link_type": "Workspace Sidebar",
+ "link_to": "Kanzlei",
+ "icon": "briefcase",
+ "hidden": 0,
+ "idx": 0,
+ "roles": []
+}

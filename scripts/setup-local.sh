@@ -59,6 +59,7 @@ if [[ "$(readlink apps/kanzlei_erp)" != "/workspace" ]]; then
 fi
 grep -qxF kanzlei_erp sites/apps.txt || printf "kanzlei_erp\n" >> sites/apps.txt
 uv pip install --quiet -e /workspace --python env/bin/python
+bench build --app kanzlei_erp > /tmp/kanzlei-build.log 2>&1
 if ! bench --site development.localhost list-apps | grep -q "^kanzlei_erp"; then
   bench --site development.localhost install-app kanzlei_erp
 fi

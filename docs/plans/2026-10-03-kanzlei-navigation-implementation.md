@@ -8,12 +8,13 @@
 
 ## Task 1: Navigation and boot
 
-Files: `kanzlei_erp/tests/test_navigation.py`, `kanzlei_erp/navigation.py`, `kanzlei_erp/hooks.py`, `kanzlei_erp/workspace_sidebar/kanzlei.json`, `kanzlei_erp/workspace_sidebar/einstellungen.json`, and `kanzlei_erp/desktop_icon/*.json`.
+Files: `kanzlei_erp/tests/test_navigation.py`, `kanzlei_erp/navigation.py`, `kanzlei_erp/hooks.py`, `kanzlei_erp/public/js/kanzlei_navigation.bundle.js`, `kanzlei_erp/workspace_sidebar/kanzlei.json`, `kanzlei_erp/workspace_sidebar/einstellungen.json`, and `kanzlei_erp/desktop_icon/*.json`.
 
 1. Add failing integration tests for the six real navigation targets, filtered Desk boot output, and settings visible only to administrators.
 2. Run `bench --site development.localhost run-tests --module kanzlei_erp.tests.test_navigation` in the Frappe container and verify the expected failures.
 3. Add standard sidebar/icon documents and the supported `boot_session` hook. Do not modify standard ERPNext documents.
 4. Migrate the development site, rerun tests, and verify the actual boot output.
+5. Build the navigation bundle with a content hash. Keep internal URL links in the current tab, resolve ERPNext entities to the Kanzlei sidebar, and select Mandants before the first Desk route renders.
 
 ## Task 2: Terminology
 

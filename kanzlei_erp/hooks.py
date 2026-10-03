@@ -9,8 +9,15 @@ app_license = "mit"
 # ------------------
 
 required_apps = ["erpnext"]
+app_home = "/desk/customer"
+boot_session = "kanzlei_erp.navigation.configure_desk"
+app_include_js = ["kanzlei_navigation.bundle.js"]
 
-fixtures = [{"dt": "Custom Field", "filters": [["name", "like", "Task-kanzlei_%"]]}]
+fixtures = [
+	{"dt": "Custom Field", "filters": [["name", "like", "Task-kanzlei_%"]]},
+	{"dt": "Property Setter", "filters": [["module", "=", "Kanzlei ERP"]]},
+]
+override_doctype_dashboards = {"Customer": "kanzlei_erp.navigation.customer_dashboard"}
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {"Task": {"validate": "kanzlei_erp.work_schedule.set_task_calendar_title"}}
