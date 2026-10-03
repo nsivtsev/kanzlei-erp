@@ -12,6 +12,7 @@ required_apps = ["erpnext"]
 app_home = "/desk/customer"
 boot_session = "kanzlei_erp.navigation.configure_desk"
 app_include_js = ["kanzlei_navigation.bundle.js"]
+has_permission = {"Communication": "kanzlei_erp.navigation.communication_has_permission"}
 
 fixtures = [
 	{"dt": "Custom Field", "filters": [["name", "like", "Task-kanzlei_%"]]},

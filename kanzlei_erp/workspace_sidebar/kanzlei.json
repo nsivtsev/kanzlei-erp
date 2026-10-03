@@ -12,6 +12,7 @@
   {"label": "Kalender", "type": "Link", "link_type": "URL", "url": "/desk/task/view/calendar/default", "icon": "calendar"},
   {"label": "Wiederholungen", "type": "Link", "link_type": "DocType", "link_to": "Work Schedule", "icon": "repeat"},
   {"label": "Zeiterfassung", "type": "Link", "link_type": "DocType", "link_to": "Timesheet", "icon": "clock"},
-  {"label": "Rechnungen", "type": "Link", "link_type": "DocType", "link_to": "Sales Invoice", "icon": "receipt"}
+  {"label": "Rechnungen", "type": "Link", "link_type": "DocType", "link_to": "Sales Invoice", "icon": "receipt"},
+  {"label": "E-Mail", "type": "Link", "link_type": "URL", "url": "/desk/communication/view/inbox", "icon": "email"}
  ]
 }
