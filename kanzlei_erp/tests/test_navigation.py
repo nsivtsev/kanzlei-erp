@@ -72,11 +72,40 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(labels.count("Einstellungen"), 1)
 
 	def test_customer_is_presented_as_mandant(self):
-		for language in ("en", "de"):
-			translations = get_translations_from_apps(language)
-			self.assertEqual(translations.get("Customer"), "Mandant")
-			self.assertEqual(translations.get("Customers"), "Mandanten")
-			self.assertEqual(translations.get("Customer Name"), "Mandantenname")
+		translations = get_translations_from_apps("de")
+		self.assertEqual(translations.get("Customer"), "Mandant")
+		self.assertEqual(translations.get("Customers"), "Mandanten")
+		self.assertEqual(translations.get("Customer Name"), "Mandantenname")
+
+	def test_work_schedule_fields_have_german_translations(self):
+		terms = get_translations_from_apps("de")
+		translations = {source: terms.get(source) for source in ("Work", "First Due Date", "Last Due Date")}
+		del terms
+		for source, expected in (
+			("Work", "Tätigkeit"),
+			("First Due Date", "Erste Fälligkeit"),
+			("Last Due Date", "Letzte Fälligkeit"),
+		):
+			self.assertEqual(translations.get(source), expected)
+
+	def test_english_does_not_contain_german_overrides(self):
+		translations = get_translations_from_apps("en")
+		self.assertNotEqual(translations.get("Customers"), "Mandanten")
+		self.assertNotEqual(translations.get("Customer Name"), "Mandantenname")
+		self.assertNotEqual(translations.get("Add {0}"), "{0} anlegen")
+
+	def test_services_and_filter_helpers_have_german_translations(self):
+		terms = get_translations_from_apps("de")
+		translations = {
+			source: terms.get(source)
+			for source in ("Item", "Item Name", "Item Group", "Clear all filters", "Begin typing for results.")
+		}
+		del terms
+		self.assertEqual(translations["Item"], "Leistung")
+		self.assertEqual(translations["Item Name"], "Leistungsname")
+		self.assertEqual(translations["Item Group"], "Leistungsgruppe")
+		self.assertEqual(translations["Clear all filters"], "Alle Filter löschen")
+		self.assertEqual(translations["Begin typing for results."], "Für Ergebnisse bitte Text eingeben.")
 
 	def test_mandant_connections_use_work_and_billing_links(self):
 		data = frappe.get_meta("Customer").get_dashboard_data()

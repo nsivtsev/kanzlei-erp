@@ -13,3 +13,13 @@ Work Schedule,Wiederholung
 Payment Entry,Zahlung
 Add {0},{0} anlegen
 {0} Calendar,Kalender
+Work,Tätigkeit
+First Due Date,Erste Fälligkeit
+Last Due Date,Letzte Fälligkeit
+Last Due Date cannot be before First Due Date,Die letzte Fälligkeit darf nicht vor der ersten Fälligkeit liegen
+Item,Leistung
+Items,Leistungen
+Item Name,Leistungsname
+Item Group,Leistungsgruppe
+Clear all filters,Alle Filter löschen
+Begin typing for results.,Für Ergebnisse bitte Text eingeben.

@@ -66,6 +66,7 @@ fi
 bench --site development.localhost set-config developer_mode 1
 bench --site development.localhost set-config allow_tests true
 bench --site development.localhost migrate > /tmp/kanzlei-migrate.log 2>&1
+bench --site development.localhost execute kanzlei_erp.localization.configure_german_language --kwargs "{\"user\": \"Administrator\"}"
 bench --site development.localhost clear-cache
 touch .kanzlei-ready
 '

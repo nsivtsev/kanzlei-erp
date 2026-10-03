@@ -51,6 +51,8 @@ The seed script is safe to rerun and only accepts the `development.localhost` si
 
 The focused interface is part of the app and activates on installation/migration. ERPNext's underlying modules remain installed for billing and data dependencies. Hiding navigation does not change document permissions; staff roles must still grant the intended access to Customer, Task, Work Schedule, Timesheet, and Sales Invoice.
 
+Local setup selects German (`de`) in System Settings and for Administrator. Users without an explicit language preference inherit the site's German default. Kanzlei translations extend ERPNext's German localization; English translations are not replaced with German text. An administrator can change a user's language in **Einstellungen → Benutzer**. Migrations do not overwrite language preferences.
+
 ## Development and production
 
 The local stack is for development. Keep this app in Git and use the same Frappe/ERPNext major version in both environments. See [production notes](docs/production.md) for the deployment path.

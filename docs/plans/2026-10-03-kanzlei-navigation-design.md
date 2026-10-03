@@ -6,4 +6,6 @@ Customer remains the single Mandant record and the billing party. User-facing Cu
 
 The Kanzlei app ships standard Workspace Sidebar and Desktop Icon documents, terminology translations, and a boot-session hook that exposes only the two Kanzlei sidebars and their desktop icons. Settings are omitted for users without System Manager. Default landing is the Mandant list. No existing ERPNext source or user data is changed. Installation and migration activate the interface in both development and production.
 
+The interface language is German. Local setup selects German in System Settings and for Administrator; users without an explicit language inherit that default. Kanzlei terminology and its custom schedule labels extend the German translation dictionary. Language configuration is an explicit setup step, so normal migrations preserve subsequent user choices.
+
 Validation checks the six navigation targets, administrator versus staff settings visibility, actual boot output with no standard modules, translations, and browser navigation through Mandants, time tracking, billing, and the calendar. Existing work-calendar tests remain green. Billing configuration and automated conversion of time entries into invoices are outside this navigation change.

@@ -7,3 +7,11 @@ Before deployment, decide the hosting provider and region, domain and TLS termin
 The local `development/frappe-bench` directory and MariaDB volume are development data. They are not deployment artifacts. Production receives versioned code and configuration; any real data migration requires a separate, tested backup and restore procedure.
 
 Installing and migrating the Kanzlei app also activates its focused Desk navigation, Mandant terminology, and form customizations. No manual workspace edits are required on production. The application exposes standard Customer, Task, Timesheet, and Sales Invoice workflows through its own sidebar. Set staff document permissions during onboarding; the navigation allowlist is not a permission boundary. The administrator's Einstellungen section contains the company and billing setup required before issuing real invoices.
+
+Select German for the site during onboarding. To reproduce the local default and Administrator preference, run once after migration:
+
+```bash
+bench --site <site-name> execute kanzlei_erp.localization.configure_german_language --kwargs '{"user": "Administrator"}'
+```
+
+The command uses standard System Settings and User language fields. New users without a language preference inherit German; existing users keep their own preferences. Normal migrations do not reset these choices.

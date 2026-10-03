@@ -18,11 +18,12 @@ Files: `kanzlei_erp/tests/test_navigation.py`, `kanzlei_erp/navigation.py`, `kan
 
 ## Task 2: Terminology
 
-Files: `kanzlei_erp/translations/en.csv`, `kanzlei_erp/translations/de.csv`, `kanzlei_erp/translations/ru.csv`, and `kanzlei_erp/tests/test_navigation.py`.
+Files: `kanzlei_erp/translations/de.csv`, `kanzlei_erp/translations/ru.csv`, `kanzlei_erp/localization.py`, `scripts/setup-local.sh`, and `kanzlei_erp/tests/test_navigation.py`.
 
 1. Verify Customer terminology tests fail before translations exist.
 2. Add user-facing Mandant terms and consistent titles for the six sections.
 3. Clear caches and verify list/form/Link field terminology in the browser.
+4. Configure German through the standard System Settings and User language fields. Keep language changes out of migration hooks and keep German translations out of the English dictionary.
 
 ## Task 3: Verification and documentation
 
