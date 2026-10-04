@@ -25,17 +25,16 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(apps, ["kanzlei_erp"])
 		self.assertEqual(pages, [])
 
-	def test_sidebar_links_to_work_time_and_billing(self):
+	def test_sidebar_focuses_on_daily_work(self):
 		items = get_bootinfo().workspace_sidebar_item.get("kanzlei", {}).get("items", [])
 		self.assertEqual(
 			[(item["label"], item["link_to"] or item["url"]) for item in items],
 			[
 				("Mandanten", "Customer"),
+				("FiBu-Perioden", "FiBu Package"),
 				("Aufgaben", "Task"),
 				("Kalender", "/desk/task/view/calendar/default"),
-				("Wiederholungen", "Work Schedule"),
 				("Zeiterfassung", "Timesheet"),
-				("Rechnungen", "Sales Invoice"),
 				("Einstellungen", "/desk/company"),
 			],
 		)
@@ -103,6 +102,8 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(icons, {"Kanzlei"})
 		self.assertNotIn("Einstellungen", labels)
 		self.assertNotIn("Einstellungen", persisted_labels)
+		self.assertNotIn("Rechnungen", labels)
+		self.assertNotIn("Wiederholungen", labels)
 
 	def test_admin_settings_link_is_not_duplicated(self):
 		boot = get_bootinfo()
@@ -118,6 +119,10 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertIn("E-Mail-Konto", labels)
 		self.assertIn("E-Mail-Domain", labels)
 		self.assertIn("E-Mail-Queue", labels)
+		links = {item["label"]: item["link_to"] for item in boot.workspace_sidebar_item["einstellungen"]["items"]}
+		self.assertEqual(links["Wiederholungen"], "Work Schedule")
+		self.assertEqual(links["Rechnungen"], "Sales Invoice")
+		self.assertEqual(links["Zahlungen"], "Payment Entry")
 
 	def test_linked_mandant_readers_can_open_mail_and_private_attachments(self):
 		communication = frappe._dict(
@@ -192,10 +197,16 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(translations["Clear all filters"], "Alle Filter löschen")
 		self.assertEqual(translations["Begin typing for results."], "Für Ergebnisse bitte Text eingeben.")
 
-	def test_mandant_connections_use_work_and_billing_links(self):
+	def test_fibu_work_has_german_labels(self):
+		terms = get_translations_from_apps("de")
+		self.assertEqual(terms.get("FiBu Package"), "FiBu-Paket")
+		self.assertEqual(terms.get("FiBu Supplement"), "FiBu-Ergänzung")
+		self.assertEqual(terms.get("New Question"), "Neue Rückfrage")
+
+	def test_mandant_connections_focus_on_work(self):
 		data = frappe.get_meta("Customer").get_dashboard_data()
 		self.assertEqual(
 			[item for group in data.transactions for item in group["items"]],
-			["Task", "Work Schedule", "Timesheet", "Sales Invoice", "Payment Entry"],
+			["FiBu Package", "Task", "Work Schedule", "Timesheet"],
 		)
 		self.assertEqual(data.non_standard_fieldnames["Task"], "kanzlei_customer")

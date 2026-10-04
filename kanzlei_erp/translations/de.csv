@@ -23,3 +23,64 @@ Item Name,Leistungsname
 Item Group,Leistungsgruppe
 Clear all filters,Alle Filter löschen
 Begin typing for results.,Für Ergebnisse bitte Text eingeben.
+Billing,Abrechnung
+Advanced,Erweitert
+Work Schedules,Wiederholungen
+New Work Schedule,Wiederholung anlegen
+FiBu Package,FiBu-Paket
+FiBu Packages,FiBu-Pakete
+FiBu Supplement,FiBu-Ergänzung
+FiBu Supplements,FiBu-Ergänzungen
+FiBu Periods,FiBu-Perioden
+New FiBu Package,FiBu-Paket anlegen
+New Supplement,Ergänzung anlegen
+Accounting Period,Buchungszeitraum
+Period Type,Zeitraumtyp
+Period Year,Zeitraumjahr
+Month or Quarter,Monat oder Quartal
+Period Start,Zeitraumbeginn
+Period End,Zeitraumende
+Work Package,Arbeitspaket
+Service,Leistung
+Responsible,Verantwortlich
+Deputy,Vertretung
+Responsibility,Zuständigkeit
+Deadlines,Fristen
+Documents Due,Belege fällig
+Internal Due,Interne Fertigstellung
+External Deadline,Externe Frist
+External Deadline Source,Grundlage der externen Frist
+Work Status,Arbeitsstand
+Closure Note,Abschlussvermerk
+Closed By,Abgeschlossen von
+Closed At,Abgeschlossen am
+Open Supplements,Offene Ergänzungen
+Tasks and Questions,Aufgaben und Rückfragen
+Questions,Rückfragen
+New Task,Neue Aufgabe
+New Question,Neue Rückfrage
+No entries,Keine Einträge
+Documents and Communications,Belege und Kommunikation
+Documents,Belege
+Communications,Kommunikation
+Source Communication,Quellnachricht
+Transfer History,Übergabehistorie
+Transfer Date,Übergabedatum
+Transfer Note,Übergabevermerk
+Evidence File,Nachweisdatei
+Evidence Communication,Nachricht als Nachweis
+Recorded By,Erfasst von
+Recorded At,Erfasst am
+Supplements,Ergänzungen
+Supplement,Ergänzung
+Supplement Number,Ergänzungsnummer
+Reason,Grund
+No supplements,Keine Ergänzungen
+Upload document,Beleg hochladen
+Close FiBu Package,FiBu-Paket abschließen
+Close Supplement,Ergänzung abschließen
+Work Kind,Arbeitsart
+Question,Rückfrage
+Monthly,Monatlich
+Quarterly,Vierteljährlich
+Yearly,Jährlich

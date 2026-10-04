@@ -1,0 +1,10 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Message Link",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": ["communication"],
+ "fields": [
+  {"fieldname": "communication", "fieldtype": "Link", "label": "Communication", "options": "Communication", "reqd": 1, "in_list_view": 1}
+ ]
+}

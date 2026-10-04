@@ -1,0 +1,15 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Transfer Entry",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": ["event_date", "note", "evidence_file", "evidence_communication", "recorded_by", "recorded_at"],
+ "fields": [
+  {"fieldname": "event_date", "fieldtype": "Date", "label": "Transfer Date", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "note", "fieldtype": "Small Text", "label": "Transfer Note", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "evidence_file", "fieldtype": "Link", "label": "Evidence File", "options": "File"},
+  {"fieldname": "evidence_communication", "fieldtype": "Link", "label": "Evidence Communication", "options": "Communication"},
+  {"fieldname": "recorded_by", "fieldtype": "Link", "label": "Recorded By", "options": "User", "read_only": 1},
+  {"fieldname": "recorded_at", "fieldtype": "Datetime", "label": "Recorded At", "read_only": 1}
+ ]
+}

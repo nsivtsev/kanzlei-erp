@@ -1,0 +1,11 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu File Link",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": ["file", "source_communication"],
+ "fields": [
+  {"fieldname": "file", "fieldtype": "Link", "label": "File", "options": "File", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "source_communication", "fieldtype": "Link", "label": "Source Communication", "options": "Communication", "in_list_view": 1}
+ ]
+}

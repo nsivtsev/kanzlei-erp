@@ -6,7 +6,24 @@ Before deployment, decide the hosting provider and region, domain and TLS termin
 
 The local `development/frappe-bench` directory and MariaDB volume are development data. They are not deployment artifacts. Production receives versioned code and configuration; any real data migration requires a separate, tested backup and restore procedure.
 
-Installing and migrating the Kanzlei app also activates its focused Desk navigation, Mandant terminology, and form customizations. No manual workspace edits are required on production. The application exposes standard Customer, Task, Timesheet, and Sales Invoice workflows through its own sidebar. Set staff document permissions during onboarding; the navigation allowlist is not a permission boundary. The administrator's Einstellungen section contains the company and billing setup required before issuing real invoices.
+Installing and migrating the Kanzlei app also activates its focused Desk navigation, Mandant terminology, and form customizations. No manual workspace edits are required on production. Daily navigation contains Mandanten, FiBu-Perioden, Aufgaben, Kalender, Zeiterfassung, and E-Mail for assigned mailbox users. Einstellungen is available under the existing System Manager condition and contains the general Work Schedule, Sales Invoice, and Payment Entry lists. A saved Mandant provides filtered Wiederholungen and FiBu packages with permission-dependent creation actions. Mandanten remains the home page until the planned Übersicht exists.
+
+Mandant billing defaults and standard receivable/credit settings are on Abrechnung, displayed for Administrator and System Manager. Task's extended fields and dependencies are on Erweitert. These are interface changes: standard DocTypes, stored values, modules, and permissions remain intact. Hidden tabs and navigation are not a permission boundary; configure staff document permissions during onboarding. Validate the Kanzlei's billing process before issuing real invoices through Einstellungen.
+
+For an application update, deploy the reviewed revision and run these commands in the site's Bench environment (the production image build may perform the asset build):
+
+```bash
+bench --site <site-name> migrate
+bench build --app kanzlei_erp
+```
+
+The migration imports the app's Property Setter and Task Custom Field fixtures, including supported `field_order` overrides containing all standard and Kanzlei custom fields. It creates the FiBu Package and FiBu Supplement DocTypes and their database uniqueness constraints. Customer, package, supplement, and Task actions load through `doctype_js`; refresh Desk after updating assets. Repeated migrations must retain field order, unique constraints, and existing FiBu records without duplicate sidebar links/setters. App-owned fixtures overwrite their corresponding customizations, so review local form customizations before rollout.
+
+In staging, create/save/reopen a Mandant and a Task; check both main and Erweitert tabs, template parameters, dependencies, and completion. Confirm that Wiederholungen filters by the selected Mandant and creation prefills it; save a disposable schedule and verify generated Tasks. Create a September FiBu package with an October internal deadline, reject a duplicate, add a Task and a Question, verify closure is blocked until both are completed or cancelled, and close it with a note. Add a late private document in a numbered supplement, close that supplement, and confirm the original period, closure, and transfer history remain unchanged. Check a Projects User with Customer read permission and another without it; the latter must not see the package, linked Task, or private file. Check the employee/admin navigation and Abrechnung visibility with existing authorized test accounts, administrative invoice/payment access, calendar, Timesheet, and mailbox-assignment behavior. Save and refresh a Mandant to ensure sales actions and financial indicators remain absent. Run the app tests on a test-enabled staging site:
+
+```bash
+bench --site <staging-site> run-tests --app kanzlei_erp
+```
 
 Select German for the site during onboarding. To reproduce the local default and Administrator preference, run once after migration:
 

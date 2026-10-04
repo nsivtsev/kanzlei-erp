@@ -84,13 +84,11 @@ def configure_desk(bootinfo):
 
 
 def customer_dashboard(data):
-	"""Show a Mandant's work and billing through existing ERPNext records."""
+	"""Show a Mandant's work through existing ERPNext records."""
 	return {
 		"fieldname": "customer",
-		"non_standard_fieldnames": {"Task": "kanzlei_customer", "Payment Entry": "party"},
-		"dynamic_links": {"party": ["Customer", "party_type"]},
+		"non_standard_fieldnames": {"Task": "kanzlei_customer"},
 		"transactions": [
-			{"label": "Arbeiten", "items": ["Task", "Work Schedule", "Timesheet"]},
-			{"label": "Abrechnung", "items": ["Sales Invoice", "Payment Entry"]},
+			{"label": "Arbeiten", "items": ["FiBu Package", "Task", "Work Schedule", "Timesheet"]},
 		],
 	}

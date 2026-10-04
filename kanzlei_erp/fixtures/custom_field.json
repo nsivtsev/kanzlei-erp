@@ -7,8 +7,41 @@
   "fieldtype": "Link",
   "label": "Mandant",
   "options": "Customer",
-  "insert_after": "project",
+  "insert_after": "subject",
   "in_list_view": 1,
+  "in_standard_filter": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_fibu_package",
+  "dt": "Task",
+  "fieldname": "kanzlei_fibu_package",
+  "fieldtype": "Link",
+  "label": "FiBu Package",
+  "options": "FiBu Package",
+  "insert_after": "kanzlei_customer",
+  "in_standard_filter": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_fibu_supplement",
+  "dt": "Task",
+  "fieldname": "kanzlei_fibu_supplement",
+  "fieldtype": "Link",
+  "label": "FiBu Supplement",
+  "options": "FiBu Supplement",
+  "insert_after": "kanzlei_fibu_package"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_work_kind",
+  "dt": "Task",
+  "fieldname": "kanzlei_work_kind",
+  "fieldtype": "Select",
+  "label": "Work Kind",
+  "options": "Task\nQuestion",
+  "default": "Task",
+  "insert_after": "kanzlei_fibu_supplement",
   "in_standard_filter": 1
  },
  {
