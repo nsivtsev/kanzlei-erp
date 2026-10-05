@@ -1,6 +1,24 @@
 [
  {
   "doctype": "Custom Field",
+  "name": "Customer-kanzlei_documents_tab",
+  "dt": "Customer",
+  "fieldname": "kanzlei_documents_tab",
+  "fieldtype": "Tab Break",
+  "label": "Mandant Documents",
+  "insert_after": "last_name"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_documents_html",
+  "dt": "Customer",
+  "fieldname": "kanzlei_documents_html",
+  "fieldtype": "HTML",
+  "label": "Mandant Documents",
+  "insert_after": "kanzlei_documents_tab"
+ },
+ {
+  "doctype": "Custom Field",
   "name": "Task-kanzlei_customer",
   "dt": "Task",
   "fieldname": "kanzlei_customer",
@@ -9,7 +27,8 @@
   "options": "Customer",
   "insert_after": "subject",
   "in_list_view": 1,
-  "in_standard_filter": 1
+  "in_standard_filter": 1,
+  "search_index": 1
  },
  {
   "doctype": "Custom Field",

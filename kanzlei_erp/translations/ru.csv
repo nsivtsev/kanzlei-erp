@@ -5,3 +5,82 @@ Customer Type,Тип манданта
 Customer Group,Группа мандантов
 Add Customer,Добавить манданта
 New Customer,Новый мандант
+Mandant Documents,Документы
+Client,Мандант
+Accounting,Бухгалтерия
+All,Все
+All sources,Все источники
+"Search files, mail subjects, or addresses",Поиск по файлам; темам писем и адресам
+File format,Формат файла
+Date from,Дата с
+Date to,Дата по
+Accounting period,Бухгалтерский период
+Sort order,Сортировка
+Newest first,Сначала новые
+Oldest first,Сначала старые
+Refresh,Обновить
+Reset filters,Сбросить фильтры
+Email,Электронная почта
+Received,Входящие
+Sent,Исходящие
+Incoming email,Входящие письма
+Select loaded files,Выбрать загруженные файлы
+Selected: {0},Выбрано: {0}
+Known total size: {0},Известный общий размер: {0}
+Download ZIP,Скачать ZIP
+File,Файл
+Date,Дата
+Source,Источник
+Context,Контекст
+Size,Размер
+Actions,Действия
+Open,Открыть
+Download,Скачать
+Open source,Открыть источник
+{0} more,Ещё: {0}
+Show less,Свернуть
+Showing {0} loaded files,Загружено файлов: {0}
+Load more,Загрузить ещё
+Loading documents…,Загрузка документов…
+Loading more documents…,Загрузка следующих документов…
+Preparing ZIP download…,Подготовка ZIP-архива…
+No documents are available for this client.,Для этого манданта нет доступных документов.
+No documents match these filters.,Документы по заданным фильтрам не найдены.
+Could not load documents. Please try again.,Не удалось загрузить документы. Попробуйте ещё раз.
+Save this client before viewing documents.,"Сохраните манданта, чтобы просмотреть документы."
+Task,Задача
+Question,Обратный запрос
+Email date for email attachments; otherwise the file upload date. This is not an accounting document date.,Для вложения письма указана дата письма; для остальных файлов — дата загрузки. Это не дата бухгалтерского документа.
+Choose at least one local file.,Выберите хотя бы один локальный файл.
+ZIP supports up to 100 local files and 100 MiB.,В ZIP можно включить до 100 локальных файлов общим размером до 100 МиБ.
+PDF,PDF
+Images,Изображения
+Spreadsheets,Таблицы
+Text documents,Текстовые документы
+XML,XML
+Archives,Архивы
+Other,Прочее
+No extension,Без расширения
+Select {0},Выбрать {0}
+Document filters must be valid JSON,Фильтры документов должны быть корректным JSON
+Document filters must be an object,Фильтры документов должны быть объектом
+Unknown document filter: {0},Неизвестный фильтр документов: {0}
+Invalid value for document filter {0},Недопустимое значение фильтра документов {0}
+Email direction can only be filtered for email documents,Направление можно выбирать только для документов электронной почты
+Document search can contain at most {0} characters,Поисковый запрос может содержать не более {0} символов
+Document dates must use YYYY-MM-DD format,Дата должна быть в формате YYYY-MM-DD
+Start date must not be after end date,Начальная дата не может быть позже конечной
+Mandant is required,Нужно указать манданта
+Page length must be between 1 and {0},Размер страницы должен быть от 1 до {0}
+The selected accounting package is not available for this client,Выбранный бухгалтерский пакет недоступен для этого манданта
+Please log in to view client documents,"Войдите, чтобы просмотреть документы манданта"
+Please log in to download client documents,"Войдите, чтобы скачать документы манданта"
+Client is required,Нужно указать манданта
+This document list changed. Refresh it and try again.,Список документов изменился. Обновите его и повторите попытку.
+Document is no longer available,Документ больше недоступен
+This document cannot be downloaded,Этот документ нельзя скачать
+Invalid download disposition,Недопустимый режим скачивания
+File IDs must be a valid JSON array,ID файлов должны быть корректным JSON-массивом
+Choose between 1 and {0} local files,Выберите от 1 до {0} локальных файлов
+The selected files exceed the 100 MiB ZIP limit,Выбранные файлы превышают ограничение ZIP в 100 МиБ
+The File URL you've entered is incorrect,Указан неверный URL файла

@@ -5,6 +5,7 @@ from frappe.boot import get_bootinfo
 from frappe.tests.utils import FrappeTestCase
 from frappe.translate import get_translations_from_apps
 
+from kanzlei_erp import navigation
 from kanzlei_erp.navigation import communication_has_permission, configure_desk
 
 
@@ -27,21 +28,27 @@ class TestKanzleiNavigation(FrappeTestCase):
 
 	def test_sidebar_focuses_on_daily_work(self):
 		items = get_bootinfo().workspace_sidebar_item.get("kanzlei", {}).get("items", [])
+		links = [(item["label"], item["link_to"] or item["url"]) for item in items]
 		self.assertEqual(
-			[(item["label"], item["link_to"] or item["url"]) for item in items],
+			links[:5],
 			[
 				("Mandanten", "Customer"),
 				("FiBu-Perioden", "FiBu Package"),
 				("Aufgaben", "Task"),
 				("Kalender", "/desk/task/view/calendar/default"),
 				("Zeiterfassung", "Timesheet"),
-				("Einstellungen", "/desk/company"),
 			],
 		)
+		if navigation._has_assigned_email_account(frappe.session.user):
+			self.assertEqual(links[5], ("E-Mail", "/desk/communication/view/inbox"))
+			links.pop(5)
+		self.assertEqual(links[5], ("Einstellungen", "/desk/company"))
+		self.assertEqual(len(links), 6)
 
 	def test_email_inbox_is_hidden_without_a_user_email_assignment(self):
 		boot = get_bootinfo()
-		configure_desk(boot)
+		with patch.object(navigation, "_has_assigned_email_account", return_value=False):
+			configure_desk(boot)
 		labels = [item["label"] for item in boot.workspace_sidebar_item["kanzlei"]["items"]]
 		self.assertNotIn("E-Mail", labels)
 

@@ -84,3 +84,80 @@ Question,Rückfrage
 Monthly,Monatlich
 Quarterly,Vierteljährlich
 Yearly,Jährlich
+Mandant Documents,Dokumente
+Client,Mandant
+Accounting,FiBu
+All,Alle
+All sources,Alle Quellen
+"Search files, mail subjects, or addresses",Dateien; Betreff oder Adressen suchen
+File format,Dateiformat
+Date from,Datum von
+Date to,Datum bis
+Accounting period,FiBu-Zeitraum
+Sort order,Sortierung
+Newest first,Neueste zuerst
+Oldest first,Älteste zuerst
+Refresh,Aktualisieren
+Reset filters,Filter zurücksetzen
+Email,E-Mail
+Received,Eingang
+Sent,Ausgang
+Incoming email,E-Mail-Eingang
+Select loaded files,Geladene Dateien auswählen
+Selected: {0},Ausgewählt: {0}
+Known total size: {0},Bekannte Gesamtgröße: {0}
+Download ZIP,ZIP herunterladen
+File,Datei
+Date,Datum
+Source,Quelle
+Context,Kontext
+Size,Größe
+Actions,Aktionen
+Open,Öffnen
+Download,Herunterladen
+Open source,Quelle öffnen
+{0} more,{0} weitere
+Show less,Weniger anzeigen
+Showing {0} loaded files,{0} geladene Dateien angezeigt
+Load more,Mehr laden
+Loading documents…,Dokumente werden geladen …
+Loading more documents…,Weitere Dokumente werden geladen …
+Preparing ZIP download…,ZIP-Datei wird vorbereitet …
+No documents are available for this client.,Für diesen Mandanten sind keine Dokumente verfügbar.
+No documents match these filters.,Keine Dokumente entsprechen diesen Filtern.
+Could not load documents. Please try again.,Dokumente konnten nicht geladen werden. Bitte versuchen Sie es erneut.
+Save this client before viewing documents.,"Speichern Sie den Mandanten, um Dokumente anzuzeigen."
+Email date for email attachments; otherwise the file upload date. This is not an accounting document date.,Bei E-Mail-Anhängen das E-Mail-Datum; sonst das Upload-Datum. Es ist kein Buchungsbelegdatum.
+Choose at least one local file.,Wählen Sie mindestens eine lokale Datei aus.
+ZIP supports up to 100 local files and 100 MiB.,ZIP unterstützt bis zu 100 lokale Dateien und 100 MiB.
+PDF,PDF
+Images,Bilder
+Spreadsheets,Tabellen
+Text documents,Textdokumente
+XML,XML
+Archives,Archive
+Other,Sonstige
+No extension,Keine Dateiendung
+Select {0},{0} auswählen
+Document filters must be valid JSON,Dokumentfilter müssen gültiges JSON sein
+Document filters must be an object,Dokumentfilter müssen ein Objekt sein
+Unknown document filter: {0},Unbekannter Dokumentfilter: {0}
+Invalid value for document filter {0},Ungültiger Wert für Dokumentfilter {0}
+Email direction can only be filtered for email documents,Die E-Mail-Richtung kann nur für E-Mail-Dokumente gefiltert werden
+Document search can contain at most {0} characters,Die Dokumentsuche darf höchstens {0} Zeichen enthalten
+Document dates must use YYYY-MM-DD format,Das Dokumentdatum muss das Format JJJJ-MM-TT haben
+Start date must not be after end date,Das Startdatum darf nicht nach dem Enddatum liegen
+Mandant is required,Mandant ist erforderlich
+Page length must be between 1 and {0},Die Seitengröße muss zwischen 1 und {0} liegen
+The selected accounting package is not available for this client,Das ausgewählte FiBu-Paket ist für diesen Mandanten nicht verfügbar
+Please log in to view client documents,"Bitte melden Sie sich an, um die Dokumente des Mandanten anzuzeigen"
+Please log in to download client documents,"Bitte melden Sie sich an, um die Dokumente des Mandanten herunterzuladen"
+Client is required,Mandant ist erforderlich
+This document list changed. Refresh it and try again.,Die Dokumentliste hat sich geändert. Aktualisieren Sie sie und versuchen Sie es erneut.
+Document is no longer available,Das Dokument ist nicht mehr verfügbar
+This document cannot be downloaded,Dieses Dokument kann nicht heruntergeladen werden
+Invalid download disposition,Ungültige Download-Art
+File IDs must be a valid JSON array,Datei-IDs müssen ein gültiges JSON-Array sein
+Choose between 1 and {0} local files,Wählen Sie zwischen 1 und {0} lokalen Dateien aus
+The selected files exceed the 100 MiB ZIP limit,Die ausgewählten Dateien überschreiten das ZIP-Limit von 100 MiB
+The File URL you've entered is incorrect,Die eingegebene Datei-URL ist ungültig
