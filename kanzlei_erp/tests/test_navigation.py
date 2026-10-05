@@ -209,6 +209,9 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(terms.get("FiBu Package"), "FiBu-Paket")
 		self.assertEqual(terms.get("FiBu Supplement"), "FiBu-Ergänzung")
 		self.assertEqual(terms.get("New Question"), "Neue Rückfrage")
+		self.assertEqual(terms.get("Preparation Stage"), "Bearbeitungsphase")
+		self.assertEqual(terms.get("Waiting for Mandant"), "Warten auf Mandant")
+		self.assertEqual(terms.get("Next Action Assignee"), "Zuständig für nächsten Schritt")
 
 	def test_mandant_connections_focus_on_work(self):
 		data = frappe.get_meta("Customer").get_dashboard_data()

@@ -1,0 +1,27 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Workflow Event",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": ["event_type", "from_stage", "to_stage", "from_waiting_for_mandant", "to_waiting_for_mandant", "previous_waiting_reason", "waiting_reason", "previous_blocking_reason", "blocking_reason", "previous_action", "next_action", "previous_assignee", "next_action_assignee", "previous_task", "next_action_task", "note", "recorded_by", "recorded_at"],
+ "fields": [
+  {"fieldname": "event_type", "fieldtype": "Select", "label": "Event", "options": "Stage Changed\nWaiting Changed\nWork Context Changed", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "from_stage", "fieldtype": "Data", "label": "From Stage"},
+  {"fieldname": "to_stage", "fieldtype": "Data", "label": "To Stage"},
+  {"fieldname": "from_waiting_for_mandant", "fieldtype": "Check", "label": "Previously Waiting"},
+  {"fieldname": "to_waiting_for_mandant", "fieldtype": "Check", "label": "Waiting for Mandant"},
+  {"fieldname": "previous_waiting_reason", "fieldtype": "Small Text", "label": "Previous Waiting Reason"},
+  {"fieldname": "waiting_reason", "fieldtype": "Small Text", "label": "Waiting Reason"},
+  {"fieldname": "previous_blocking_reason", "fieldtype": "Small Text", "label": "Previous Blocking Reason"},
+  {"fieldname": "blocking_reason", "fieldtype": "Small Text", "label": "Blocking Reason"},
+  {"fieldname": "previous_action", "fieldtype": "Small Text", "label": "Previous Next Action"},
+  {"fieldname": "next_action", "fieldtype": "Small Text", "label": "Next Action"},
+  {"fieldname": "previous_assignee", "fieldtype": "Link", "label": "Previous Assignee", "options": "User"},
+  {"fieldname": "next_action_assignee", "fieldtype": "Link", "label": "Next Action Assignee", "options": "User"},
+  {"fieldname": "previous_task", "fieldtype": "Link", "label": "Previous Task", "options": "Task"},
+  {"fieldname": "next_action_task", "fieldtype": "Link", "label": "Next Action Task", "options": "Task"},
+  {"fieldname": "note", "fieldtype": "Small Text", "label": "Note"},
+  {"fieldname": "recorded_by", "fieldtype": "Link", "label": "Recorded By", "options": "User", "read_only": 1, "in_list_view": 1},
+  {"fieldname": "recorded_at", "fieldtype": "Datetime", "label": "Recorded At", "read_only": 1}
+ ]
+}

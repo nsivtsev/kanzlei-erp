@@ -161,3 +161,55 @@ File IDs must be a valid JSON array,Datei-IDs müssen ein gültiges JSON-Array s
 Choose between 1 and {0} local files,Wählen Sie zwischen 1 und {0} lokalen Dateien aus
 The selected files exceed the 100 MiB ZIP limit,Die ausgewählten Dateien überschreiten das ZIP-Limit von 100 MiB
 The File URL you've entered is incorrect,Die eingegebene Datei-URL ist ungültig
+Preparation Workflow,Vorbereitung
+Preparation Stage,Bearbeitungsphase
+Historical Preparation Stage,Bisheriger Vorbereitungsstand
+Preparation stage was not recorded before workflow rollout.,Der Vorbereitungsstand wurde vor Einführung dieses Ablaufs nicht erfasst.
+Collection,Belege sammeln
+Review,Prüfung
+Clarification,Rückfragen klären
+Ready,Bereit zur Übermittlung
+Transfer,Übermittlung
+Receipt Confirmed,Eingang bestätigt
+Waiting for Mandant,Warten auf Mandant
+Waiting Reason,Grund für das Warten
+Blocking Reason,Blockierungsgrund
+Next Action,Nächster Schritt
+Next Action Assignee,Zuständig für nächsten Schritt
+Next Action Task,Aufgabe für nächsten Schritt
+Workflow History,Verlauf der Vorbereitung
+Event,Ereignis
+From Stage,Voriges Stadium
+To Stage,Neues Stadium
+Previously Waiting,Zuvor auf Mandant gewartet
+Previous Waiting Reason,Bisheriger Wartegrund
+Previous Blocking Reason,Bisheriger Blockierungsgrund
+Previous Next Action,Bisheriger nächster Schritt
+Previous Assignee,Bisher zuständig
+Previous Task,Bisherige Aufgabe
+Stage Changed,Stadium geändert
+Waiting Changed,Wartezustand geändert
+Work Context Changed,Arbeitskontext geändert
+Change Preparation Stage,Bearbeitungsphase ändern
+Change Stage,Phase ändern
+Update Workflow Context,Arbeitskontext aktualisieren
+Workflow,Arbeitsablauf
+Update,Ändern
+Note,Vermerk
+Unknown preparation stage,Unbekannte Bearbeitungsphase
+The preparation stage transition must change the stage,Die Bearbeitungsphase muss geändert werden
+Receipt confirmation is a terminal preparation stage,Der bestätigte Eingang ist die letzte Bearbeitungsphase
+The preparation stage transition is not allowed,Dieser Wechsel der Bearbeitungsphase ist nicht zulässig
+A reason is required when returning to an earlier stage,Für die Rückkehr zu einer früheren Phase ist eine Begründung erforderlich
+A waiting reason is required while waiting for Mandant,Beim Warten auf den Mandanten ist eine Begründung erforderlich
+An open period needs a next action and an assignee,Für einen offenen Zeitraum müssen ein nächster Schritt und eine zuständige Person festgelegt sein
+Waiting for Mandant must be enabled or disabled,Der Wartezustand muss aktiviert oder deaktiviert sein
+Use the workflow actions to change preparation state,Ändern Sie den Vorbereitungsstand über die Arbeitsablauf-Aktionen
+Workflow history is maintained by the system,Der Verlauf wird vom System geführt
+Closed work cannot change preparation stage,Abgeschlossene Arbeit kann die Bearbeitungsphase nicht ändern
+Closed work cannot change its preparation context,Abgeschlossene Arbeit kann den Arbeitskontext nicht ändern
+Reload the record before changing workflow state,Laden Sie den Datensatz vor der Änderung erneut
+This record changed. Reload it before applying the workflow action,Der Datensatz wurde geändert. Laden Sie ihn vor der Aktion erneut
+A note is required to confirm receipt,Für die Bestätigung des Eingangs ist ein Vermerk erforderlich
+Next action Task must belong to this FiBu work context,Die Aufgabe für den nächsten Schritt muss zu diesem FiBu-Arbeitskontext gehören
+Next action Task must still be open,Die Aufgabe für den nächsten Schritt muss noch offen sein

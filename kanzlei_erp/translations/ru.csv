@@ -84,3 +84,55 @@ File IDs must be a valid JSON array,ID файлов должны быть кор
 Choose between 1 and {0} local files,Выберите от 1 до {0} локальных файлов
 The selected files exceed the 100 MiB ZIP limit,Выбранные файлы превышают ограничение ZIP в 100 МиБ
 The File URL you've entered is incorrect,Указан неверный URL файла
+Preparation Workflow,Подготовка периода
+Preparation Stage,Этап подготовки
+Historical Preparation Stage,Прежний этап подготовки
+Preparation stage was not recorded before workflow rollout.,До появления этого процесса этап подготовки не фиксировался.
+Collection,Сбор документов
+Review,Проверка
+Clarification,Уточнения
+Ready,Готово к передаче
+Transfer,Передача
+Receipt Confirmed,Прием подтвержден
+Waiting for Mandant,Ожидаем манданта
+Waiting Reason,Причина ожидания
+Blocking Reason,Причина блокировки
+Next Action,Следующее действие
+Next Action Assignee,Исполнитель следующего действия
+Next Action Task,Задача следующего действия
+Workflow History,История подготовки
+Event,Событие
+From Stage,Предыдущий этап
+To Stage,Новый этап
+Previously Waiting,Ранее ожидали манданта
+Previous Waiting Reason,Предыдущая причина ожидания
+Previous Blocking Reason,Предыдущая причина блокировки
+Previous Next Action,Предыдущее следующее действие
+Previous Assignee,Предыдущий исполнитель
+Previous Task,Предыдущая задача
+Stage Changed,Этап изменен
+Waiting Changed,Состояние ожидания изменено
+Work Context Changed,Рабочий контекст изменен
+Change Preparation Stage,Изменить этап подготовки
+Change Stage,Изменить этап
+Update Workflow Context,Изменить рабочий контекст
+Workflow,Рабочий процесс
+Update,Обновить
+Note,Примечание
+Unknown preparation stage,Неизвестный этап подготовки
+The preparation stage transition must change the stage,Нужно выбрать другой этап подготовки
+Receipt confirmation is a terminal preparation stage,Подтверждение приема завершает этапы подготовки
+The preparation stage transition is not allowed,Такой переход между этапами не разрешен
+A reason is required when returning to an earlier stage,Для возврата к предыдущему этапу укажите причину
+A waiting reason is required while waiting for Mandant,Укажите причину ожидания манданта
+An open period needs a next action and an assignee,Для открытого периода укажите следующее действие и исполнителя
+Waiting for Mandant must be enabled or disabled,Отметьте ожидание манданта
+Use the workflow actions to change preparation state,Меняйте этап подготовки через действия рабочего процесса
+Workflow history is maintained by the system,История этапов заполняется автоматически
+Closed work cannot change preparation stage,Этап закрытой работы нельзя изменить
+Closed work cannot change its preparation context,Рабочий контекст закрытого периода нельзя изменить
+Reload the record before changing workflow state,Перед изменением обновите запись
+This record changed. Reload it before applying the workflow action,Запись изменилась. Обновите ее перед выполнением действия
+A note is required to confirm receipt,Для подтверждения приема укажите примечание
+Next action Task must belong to this FiBu work context,Задача следующего действия должна относиться к этому FiBu-периоду
+Next action Task must still be open,Задача следующего действия должна оставаться открытой

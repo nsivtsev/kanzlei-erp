@@ -11,7 +11,7 @@ app_license = "mit"
 required_apps = ["erpnext"]
 app_home = "/desk/customer"
 boot_session = "kanzlei_erp.navigation.configure_desk"
-app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js"]
+app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "fibu_workflow.js"]
 has_permission = {
 	"Communication": "kanzlei_erp.navigation.communication_has_permission",
 	"FiBu Package": "kanzlei_erp.fibu_permissions.package_has_permission",

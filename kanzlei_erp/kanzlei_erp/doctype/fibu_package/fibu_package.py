@@ -6,6 +6,12 @@ from frappe.utils import now_datetime
 
 from kanzlei_erp.fibu_materials import validate_materials
 from kanzlei_erp.fibu_period import period_bounds, period_label
+from kanzlei_erp.fibu_workflow import (
+	change_preparation_stage,
+	initialize_work_context,
+	update_work_context,
+	validate_workflow_document,
+)
 
 
 class FiBuPackage(Document):
@@ -29,6 +35,7 @@ class FiBuPackage(Document):
 	def before_validate(self):
 		if self.is_new() and not self.responsible:
 			self.responsible = frappe.session.user
+		initialize_work_context(self)
 
 	def validate(self):
 		previous = self.get_doc_before_save() if not self.is_new() else None
@@ -76,6 +83,35 @@ class FiBuPackage(Document):
 		):
 			frappe.throw(frappe._("A FiBu package already exists for this Mandant, service, and period"))
 		validate_materials(self)
+		validate_workflow_document(self)
+
+	@frappe.whitelist()
+	def change_preparation_stage(self, target_stage: str, note: str = "", expected_modified: str = ""):
+		return change_preparation_stage(self, target_stage, note, expected_modified)
+
+	@frappe.whitelist()
+	def update_work_context(
+		self,
+		waiting_for_mandant,
+		waiting_reason: str = "",
+		blocking_reason: str = "",
+		next_action: str = "",
+		next_action_assignee: str = "",
+		next_action_task: str = "",
+		expected_modified: str = "",
+		note: str = "",
+	):
+		return update_work_context(
+			self,
+			waiting_for_mandant,
+			waiting_reason,
+			blocking_reason,
+			next_action,
+			next_action_assignee,
+			next_action_task,
+			expected_modified,
+			note,
+		)
 
 	@frappe.whitelist()
 	def close(self, note: str):
