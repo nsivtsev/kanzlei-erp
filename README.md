@@ -97,7 +97,7 @@ After the archive is reconciled, enable **Incoming** again and leave synchroniza
 
 The focused interface is part of the app and activates on installation/migration. ERPNext's underlying modules remain installed for billing and data dependencies. Hiding navigation does not change document permissions; staff roles must still grant the intended access to Customer, Task, Work Schedule, Timesheet, and Sales Invoice.
 
-Local setup selects German (`de`) in System Settings and for Administrator. Users without an explicit language preference inherit the site's German default. Kanzlei translations extend ERPNext's German localization; English translations are not replaced with German text. An administrator can change a user's language in **Einstellungen → Benutzer**. Migrations do not overwrite language preferences.
+Local setup selects German (`de`) in System Settings and for Administrator. Users without an explicit language preference inherit the site's German default. Kanzlei ERP provides German and Russian translations for its interface; the Russian dictionary covers every source string in the German dictionary. Russian-speaking staff can select Russian (`ru`) per user in **Einstellungen → Benutzer**. ERPNext's own interface uses the translations supplied by the installed ERPNext version. Migrations do not overwrite language preferences.
 
 ## Development and production
 

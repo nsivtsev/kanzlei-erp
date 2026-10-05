@@ -1,12 +1,12 @@
-Customer,Мандант
-Customers,Манданты
-Customer Name,Имя манданта
-Customer Type,Тип манданта
-Customer Group,Группа мандантов
-Add Customer,Добавить манданта
-New Customer,Новый мандант
+Customer,Клиент
+Customers,Клиенты
+Customer Name,Имя клиента
+Customer Type,Тип клиента
+Customer Group,Группа клиентов
+Add Customer,Добавить клиента
+New Customer,Новый клиент
 Mandant Documents,Документы
-Client,Мандант
+Client,Клиент
 Accounting,Бухгалтерия
 All,Все
 All sources,Все источники
@@ -44,12 +44,12 @@ Load more,Загрузить ещё
 Loading documents…,Загрузка документов…
 Loading more documents…,Загрузка следующих документов…
 Preparing ZIP download…,Подготовка ZIP-архива…
-No documents are available for this client.,Для этого манданта нет доступных документов.
+No documents are available for this client.,Для этого клиента нет доступных документов.
 No documents match these filters.,Документы по заданным фильтрам не найдены.
 Could not load documents. Please try again.,Не удалось загрузить документы. Попробуйте ещё раз.
-Save this client before viewing documents.,"Сохраните манданта, чтобы просмотреть документы."
+Save this client before viewing documents.,"Сохраните клиента, чтобы просмотреть документы."
 Task,Задача
-Question,Обратный запрос
+Question,Уточнение
 Email date for email attachments; otherwise the file upload date. This is not an accounting document date.,Для вложения письма указана дата письма; для остальных файлов — дата загрузки. Это не дата бухгалтерского документа.
 Choose at least one local file.,Выберите хотя бы один локальный файл.
 ZIP supports up to 100 local files and 100 MiB.,В ZIP можно включить до 100 локальных файлов общим размером до 100 МиБ.
@@ -70,12 +70,12 @@ Email direction can only be filtered for email documents,Направление 
 Document search can contain at most {0} characters,Поисковый запрос может содержать не более {0} символов
 Document dates must use YYYY-MM-DD format,Дата должна быть в формате YYYY-MM-DD
 Start date must not be after end date,Начальная дата не может быть позже конечной
-Mandant is required,Нужно указать манданта
+Mandant is required,Нужно указать клиента
 Page length must be between 1 and {0},Размер страницы должен быть от 1 до {0}
-The selected accounting package is not available for this client,Выбранный бухгалтерский пакет недоступен для этого манданта
-Please log in to view client documents,"Войдите, чтобы просмотреть документы манданта"
-Please log in to download client documents,"Войдите, чтобы скачать документы манданта"
-Client is required,Нужно указать манданта
+The selected accounting package is not available for this client,Выбранный бухгалтерский пакет недоступен для этого клиента
+Please log in to view client documents,"Войдите, чтобы просмотреть документы клиента"
+Please log in to download client documents,"Войдите, чтобы скачать документы клиента"
+Client is required,Нужно указать клиента
 This document list changed. Refresh it and try again.,Список документов изменился. Обновите его и повторите попытку.
 Document is no longer available,Документ больше недоступен
 This document cannot be downloaded,Этот документ нельзя скачать
@@ -94,7 +94,7 @@ Clarification,Уточнения
 Ready,Готово к передаче
 Transfer,Передача
 Receipt Confirmed,Прием подтвержден
-Waiting for Mandant,Ожидаем манданта
+Waiting for Mandant,Ожидаем клиента
 Waiting Reason,Причина ожидания
 Blocking Reason,Причина блокировки
 Next Action,Следующее действие
@@ -104,7 +104,7 @@ Workflow History,История подготовки
 Event,Событие
 From Stage,Предыдущий этап
 To Stage,Новый этап
-Previously Waiting,Ранее ожидали манданта
+Previously Waiting,Ранее ожидали клиента
 Previous Waiting Reason,Предыдущая причина ожидания
 Previous Blocking Reason,Предыдущая причина блокировки
 Previous Next Action,Предыдущее следующее действие
@@ -124,9 +124,9 @@ The preparation stage transition must change the stage,Нужно выбрать
 Receipt confirmation is a terminal preparation stage,Подтверждение приема завершает этапы подготовки
 The preparation stage transition is not allowed,Такой переход между этапами не разрешен
 A reason is required when returning to an earlier stage,Для возврата к предыдущему этапу укажите причину
-A waiting reason is required while waiting for Mandant,Укажите причину ожидания манданта
+A waiting reason is required while waiting for Mandant,Укажите причину ожидания клиента
 An open period needs a next action and an assignee,Для открытого периода укажите следующее действие и исполнителя
-Waiting for Mandant must be enabled or disabled,Отметьте ожидание манданта
+Waiting for Mandant must be enabled or disabled,"Укажите, ожидается ли ответ клиента"
 Use the workflow actions to change preparation state,Меняйте этап подготовки через действия рабочего процесса
 Workflow history is maintained by the system,История этапов заполняется автоматически
 Closed work cannot change preparation stage,Этап закрытой работы нельзя изменить
@@ -134,5 +134,82 @@ Closed work cannot change its preparation context,Рабочий контекс�
 Reload the record before changing workflow state,Перед изменением обновите запись
 This record changed. Reload it before applying the workflow action,Запись изменилась. Обновите ее перед выполнением действия
 A note is required to confirm receipt,Для подтверждения приема укажите примечание
-Next action Task must belong to this FiBu work context,Задача следующего действия должна относиться к этому FiBu-периоду
+Next action Task must belong to this FiBu work context,Задача следующего действия должна относиться к этому пакету бухгалтерского учёта
 Next action Task must still be open,Задача следующего действия должна оставаться открытой
+Tasks,Задачи
+Timesheet,Учёт времени
+Sales Invoice,Счёт на оплату
+Work Schedule,Повторение
+Payment Entry,Платёж
+Add {0},Создать: {0}
+{0} Calendar,Календарь: {0}
+Work,Работа
+First Due Date,Первая дата выполнения
+Last Due Date,Последняя дата выполнения
+Last Due Date cannot be before First Due Date,Последняя дата выполнения не может предшествовать первой
+Item,Услуга
+Items,Услуги
+Item Name,Название услуги
+Item Group,Группа услуг
+Clear all filters,Очистить все фильтры
+Begin typing for results.,Начните вводить текст для поиска.
+Billing,Выставление счетов
+Advanced,Дополнительно
+Work Schedules,Повторения
+New Work Schedule,Создать повторение
+FiBu Package,Пакет бухгалтерского учёта
+FiBu Packages,Пакеты бухгалтерского учёта
+FiBu Supplement,Дополнение к пакету бухгалтерского учёта
+FiBu Supplements,Дополнения к пакетам бухгалтерского учёта
+FiBu Periods,Бухгалтерские периоды
+New FiBu Package,Создать пакет бухгалтерского учёта
+New Supplement,Создать дополнение
+Accounting Period,Период бухгалтерского учёта
+Period Type,Тип периода
+Period Year,Год периода
+Month or Quarter,Месяц или квартал
+Period Start,Начало периода
+Period End,Конец периода
+Work Package,Пакет работ
+Service,Услуга
+Responsible,Ответственный
+Deputy,Заместитель
+Responsibility,Ответственность
+Deadlines,Сроки
+Documents Due,Срок предоставления документов
+Internal Due,Внутренний срок
+External Deadline,Внешний срок
+External Deadline Source,Основание внешнего срока
+Work Status,Статус работы
+Closure Note,Примечание о закрытии
+Closed By,Кем закрыто
+Closed At,Дата закрытия
+Open Supplements,Открытые дополнения
+Tasks and Questions,Задачи и уточнения
+Questions,Уточнения
+New Task,Новая задача
+New Question,Новое уточнение
+No entries,Нет записей
+Documents and Communications,Документы и переписка
+Documents,Документы
+Communications,Переписка
+Source Communication,Исходное сообщение
+Transfer History,История передачи
+Transfer Date,Дата передачи
+Transfer Note,Примечание о передаче
+Evidence File,Файл-подтверждение
+Evidence Communication,Сообщение в подтверждение
+Recorded By,Автор записи
+Recorded At,Время записи
+Supplements,Дополнения
+Supplement,Дополнение
+Supplement Number,Номер дополнения
+Reason,Причина
+No supplements,Нет дополнений
+Upload document,Загрузить документ
+Close FiBu Package,Закрыть пакет бухгалтерского учёта
+Close Supplement,Закрыть дополнение
+Work Kind,Вид работы
+Monthly,Ежемесячно
+Quarterly,Ежеквартально
+Yearly,Ежегодно

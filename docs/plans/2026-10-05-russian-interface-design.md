@@ -10,7 +10,7 @@ Use Frappe's existing translation dictionaries and complete `kanzlei_erp/transla
 
 ## Scope
 
-Translate all German-localized Kanzlei ERP terms, workspace and form labels, actions, workflow states, validation messages, and document-browser text represented by the app's German dictionary. Keep source strings and formatting placeholders intact, and use consistent Russian terminology across navigation, FiBu, Mandanten, Tasks, schedules, and documents.
+Translate all German-localized Kanzlei ERP terms, workspace and form labels, actions, workflow states, validation messages, and document-browser text represented by the app's German dictionary. Russian values should use natural Russian equivalents rather than German loan terms: `Mandant` becomes `клиент`, and `FiBu` becomes `бухгалтерский учёт` or a context-appropriate form. Keep source strings and formatting placeholders intact.
 
 ## Compatibility
 

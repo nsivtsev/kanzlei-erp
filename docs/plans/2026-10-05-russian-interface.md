@@ -25,7 +25,7 @@ Expected: a finite list of missing source strings; no files are changed by this 
 
 **Step 2: Add a Russian translation for each missing source string**
 
-Append rows to `ru.csv` for every missing key. Match established app terminology: `Mandant` → `мандант`, `FiBu` → `FiBu`, `Task` → `задача`, `Work Schedule` → `повторение`, and `Preparation Stage` → `этап подготовки`. Preserve punctuation, capitalization where it carries UI meaning, and every `{0}`-style placeholder.
+Append rows to `ru.csv` for every missing key. Use natural Russian terminology consistently: `Mandant` → `клиент`, `FiBu` → `бухгалтерский учёт` or an appropriate contextual form, `Task` → `задача`, `Work Schedule` → `повторение`, and `Preparation Stage` → `этап подготовки`. Update any existing Russian values that still contain German loan terms. Preserve punctuation, capitalization where it carries UI meaning, and every `{0}`-style placeholder.
 
 **Step 3: Verify dictionary parity and placeholders**
 
