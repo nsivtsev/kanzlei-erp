@@ -380,6 +380,7 @@ def _collect_documents(customer, filters, permission_cache):
 	communication_packages = {}
 	fibu_file_links = []
 	fibu_transfer_entries = []
+	fibu_checklist_evidence = []
 	for doctype, contexts in (("FiBu Package", package_contexts), ("FiBu Supplement", supplement_contexts)):
 		for chunk in _chunks(contexts):
 			for row in frappe.get_all(
@@ -405,6 +406,18 @@ def _collect_documents(customer, filters, permission_cache):
 					fibu_attachment_communications.add(row.evidence_communication)
 					communication_contexts.setdefault(row.evidence_communication, set()).add((doctype, row.parent))
 					communication_packages.setdefault(row.evidence_communication, set()).add(contexts[row.parent].package)
+			for row in frappe.get_all(
+				"FiBu Checklist Evidence",
+				filters={"parent": ["in", chunk], "parenttype": doctype, "parentfield": "checklist_evidence"},
+				fields=["parent", "evidence_type", "file", "communication"],
+			):
+				fibu_checklist_evidence.append((doctype, row.parent, row.evidence_type, row.file, row.communication))
+				if row.communication:
+					communication_names.add(row.communication)
+					include_communication_files.add(row.communication)
+					fibu_attachment_communications.add(row.communication)
+					communication_contexts.setdefault(row.communication, set()).add((doctype, row.parent))
+					communication_packages.setdefault(row.communication, set()).add(contexts[row.parent].package)
 	for doctype, names in (
 		("Customer", {customer.name}),
 		("FiBu Package", set(package_docs)),
@@ -579,6 +592,16 @@ def _collect_documents(customer, filters, permission_cache):
 			):
 				_append_context(file_contexts, file.name, context)
 				_append_context(file_contexts, file.name, comm_context)
+
+	for doctype, parent, evidence_type, evidence_file, evidence_communication in fibu_checklist_evidence:
+		context = package_contexts[parent] if doctype == "FiBu Package" else supplement_contexts[parent]
+		if evidence_file:
+			_append_context(file_contexts, evidence_file, context)
+		if evidence_communication in valid_communications:
+			communication = valid_communications[evidence_communication]
+			comm_context = _communication_context(communication, package_docs.get(context.package))
+			if evidence_file:
+				_append_context(file_contexts, evidence_file, comm_context)
 
 	return file_contexts, valid_communications, package_docs
 

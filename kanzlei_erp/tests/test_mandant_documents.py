@@ -370,6 +370,26 @@ class TestMandantDocuments(FrappeTestCase):
 		self.assertEqual({first.name, second.name}, {first_page["items"][0]["file_id"], second_page["items"][0]["file_id"]})
 		self.assertFalse(second_page["has_more"])
 
+	def test_checklist_evidence_adds_period_context_to_a_mandant_file(self):
+		package = self.make_package()
+		file = self.make_file("bank-statement.txt", "Customer", self.customer.name)
+		self.add_child(
+			package,
+			"checklist_evidence",
+			{
+				"source_id": "source-bank-a",
+				"evidence_type": "File",
+				"file": file.name,
+				"covered_from": "2026-09-01",
+				"covered_through": "2026-09-30",
+			},
+		)
+
+		result = get_documents(self.customer.name, filters={"source": "fibu", "package": package.name})
+
+		self.assertEqual([row["file_id"] for row in result["items"]], [file.name])
+		self.assertTrue(any(context["source"] == "fibu" for context in result["items"][0]["contexts"]))
+
 	def test_unreadable_mandant_is_rejected_before_any_document_metadata_is_returned(self):
 		user = frappe.get_doc(
 			{

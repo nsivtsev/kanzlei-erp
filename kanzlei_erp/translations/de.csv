@@ -213,3 +213,122 @@ This record changed. Reload it before applying the workflow action,Der Datensatz
 A note is required to confirm receipt,Für die Bestätigung des Eingangs ist ein Vermerk erforderlich
 Next action Task must belong to this FiBu work context,Die Aufgabe für den nächsten Schritt muss zu diesem FiBu-Arbeitskontext gehören
 Next action Task must still be open,Die Aufgabe für den nächsten Schritt muss noch offen sein
+Data Sources,Datenquellen
+Source List Confirmed,Quellenliste bestätigt
+Expected Data Sources,Erwartete Datenquellen
+Source ID,Quellen-ID
+Category,Kategorie
+Source Name,Quelle
+Valid From,Gültig ab
+Valid Until,Gültig bis
+Checklist not initialized,Checkliste nicht eingerichtet
+No configured sources,Keine Quellen eingerichtet
+Completeness Checklist,Vollständigkeits-Checkliste
+Checklist Initialized,Checkliste eingerichtet
+Expected Sources,Erwartete Quellen
+Source Evidence,Quellnachweise
+Checklist History,Checklistenverlauf
+Expected,Erwartet
+Partially Received,Teilweise erhalten
+Received in Full,Vollständig erhalten
+Reviewed,Geprüft
+Not Applicable,Nicht zutreffend
+Incoming Invoices,Eingangsrechnungen
+Outgoing Invoices,Ausgangsrechnungen
+Bank Account,Bankkonto
+Card,Karte
+Cash Register,Kasse
+Payment Service,Zahlungsdienst
+Marketplace,Marktplatz
+Contract,Vertrag
+Assets,Anlagen
+Expected From,Erwartet ab
+Expected Through,Erwartet bis
+Reason Not Applicable,Begründung für Nichtzutreffen
+Evidence Type,Nachweistyp
+External URL,Externer Link
+Covered From,Abgedeckt ab
+Covered Through,Abgedeckt bis
+Evidence Note,Anmerkung zum Nachweis
+Reason for Change,Änderungsgrund
+Add Expected Source,Erwartete Quelle hinzufügen
+Add Source,Quelle hinzufügen
+Update Checklist Source,Checklistenquelle bearbeiten
+Add Evidence,Nachweis hinzufügen
+Save Checklist Entry,Checklisteneintrag speichern
+Select Sources Affected by this Supplement,Von dieser Ergänzung betroffene Quellen auswählen
+Affected Sources,Betroffene Quellen
+Initialize Checklist,Checkliste einrichten
+Confirm source list,Quellenliste bestätigen
+Save source changes before confirming the list,Speichern Sie die Änderungen an Quellen vor der Bestätigung
+I confirm this list is complete,Ich bestätige die Vollständigkeit dieser Liste
+Confirm,Bestätigen
+Invalid accounting period,Ungültiger Buchungszeitraum
+Unknown checklist status,Unbekannter Checklistenstatus
+Expected coverage dates are invalid,Der erwartete Zeitraum ist ungültig
+Evidence coverage dates are invalid,Der Nachweiszeitraum ist ungültig
+Evidence dates must be within the expected period,Nachweiszeiträume müssen innerhalb des erwarteten Zeitraums liegen
+Evidence is required for received or reviewed sources,Für erhaltene oder geprüfte Quellen ist ein Nachweis erforderlich
+Evidence must cover the expected period,Nachweise müssen den erwarteten Zeitraum vollständig abdecken
+A reason is required for a source that is not applicable,Für eine nicht zutreffende Quelle ist eine Begründung erforderlich
+A reason is required when changing a checklist status backward,Für eine Rückstufung des Checklistenstatus ist eine Begründung erforderlich
+A Mandant source identifier cannot be changed,Die Kennung einer Mandantenquelle kann nicht geändert werden
+Choose a valid source category,Wählen Sie eine gültige Quellenkategorie
+A source name is required,Die Quelle muss benannt werden
+Source start date cannot be after its end date,Der Quellenbeginn darf nicht nach dem Quellenende liegen
+The selected service does not exist,Die gewählte Leistung ist nicht vorhanden
+A source can only be linked to a non-stock service,Eine Quelle kann nur einer Dienstleistung zugeordnet werden
+Reload the record before changing the checklist,Laden Sie den Datensatz vor der Änderung der Checkliste neu
+This record changed. Reload it before updating the checklist,Der Datensatz wurde geändert. Laden Sie ihn vor der Checklistenänderung neu
+A closed accounting period checklist cannot be changed,Die Checkliste eines abgeschlossenen Zeitraums kann nicht geändert werden
+A reason is required for checklist changes,Für Änderungen der Checkliste ist eine Begründung erforderlich
+The period checklist is initialized by the system,Die Periodencheckliste wird vom System eingerichtet
+The period checklist is already initialized,Die Periodencheckliste ist bereits eingerichtet
+"Confirm the Mandant source list before initializing the period checklist","Bestätigen Sie die Quellenliste des Mandanten, bevor Sie die Periodencheckliste einrichten"
+The supplement checklist is already initialized,Die Ergänzungscheckliste ist bereits eingerichtet
+Choose sources from the original period checklist,Wählen Sie Quellen aus der ursprünglichen Periodencheckliste
+Choose a valid evidence type,Wählen Sie einen gültigen Nachweistyp
+"Provide exactly one file, communication, or external URL","Geben Sie genau eine Datei, Kommunikation oder externe URL an"
+Evidence links must be valid HTTP or HTTPS URLs,Nachweislinks müssen gültige HTTP- oder HTTPS-Adressen sein
+Choose exactly one private evidence file,Wählen Sie genau eine private Nachweisdatei aus
+Checklist evidence files must be private,Checklisten-Nachweisdateien müssen privat sein
+Evidence must belong to the same Mandant,Der Nachweis muss zum selben Mandanten gehören
+Evidence must belong to the same accounting period,Der Nachweis muss zum selben Buchungszeitraum gehören
+Evidence must belong to this supplement,Der Nachweis muss zu dieser Ergänzung gehören
+"Link the evidence file to this Mandant, period, supplement, or Communication","Verknüpfen Sie die Nachweisdatei mit diesem Mandanten, Zeitraum, dieser Ergänzung oder Kommunikation"
+Choose exactly one Communication as evidence,Wählen Sie genau eine Kommunikation als Nachweis aus
+Evidence coverage dates are required,Der Nachweiszeitraum muss angegeben werden
+Source details are invalid,Die Quellenangaben sind ungültig
+Choose a source category and enter its name,Wählen Sie eine Quellenkategorie und geben Sie den Namen ein
+This source is already in the checklist,Diese Quelle ist bereits in der Checkliste enthalten
+Expected coverage dates are required,Der erwartete Zeitraum muss angegeben werden
+Expected dates must be within the accounting period,Erwartete Daten müssen innerhalb des Buchungszeitraums liegen
+Checklist update is invalid,Die Checklistenänderung ist ungültig
+Checklist source was not found,Die Checklistenquelle wurde nicht gefunden
+A checklist source identifier cannot be changed,Die Kennung einer Checklistenquelle kann nicht geändert werden
+Reload the Mandant before confirming its source list,Laden Sie den Mandanten vor Bestätigung der Quellenliste neu
+This Mandant changed. Reload it before confirming its source list,Der Mandant wurde geändert. Laden Sie ihn vor Bestätigung der Quellenliste neu
+Complete every source before confirming the source list,Vervollständigen Sie alle Quellen vor der Bestätigung der Liste
+The supplement checklist is initialized by the system,Die Ergänzungscheckliste wird vom System eingerichtet
+Use checklist actions to change the period checklist,Ändern Sie die Periodencheckliste über die Checklistenaktionen
+Communication,Kommunikation
+The source list was confirmed as empty for this period,Für diesen Zeitraum wurde eine leere Quellenliste bestätigt
+Use the source list confirmation action to confirm this list,Bestätigen Sie die Quellenliste über die Bestätigungsaktion
+Evidence must belong to the same Mandant and period,Der Nachweis muss zum selben Mandanten und Zeitraum gehören
+This period predates source tracking. The checklist will use the Mandant's currently confirmed source list,Für diesen Zeitraum wurden noch keine Quellen erfasst. Die Checkliste verwendet die aktuell bestätigte Quellenliste des Mandanten
+I understand this uses the current source list,Ich bestätige die Verwendung der aktuellen Quellenliste
+"Category, service, and source note cannot be changed in a checklist","Kategorie, Leistung und Quellenhinweis können im Checklisten-Snapshot nicht geändert werden"
+"A source can only be linked to an active non-stock service","Eine Quelle kann nur einer aktiven Dienstleistung ohne Lagerartikelbezug zugeordnet werden"
+"Checklist evidence must belong to the same Mandant","Der Checklisten-Nachweis muss zum selben Mandanten gehören"
+"Initialize the checklist before adding a source","Richten Sie zuerst die Checkliste ein, bevor Sie eine Quelle hinzufügen"
+"Missing or partial","Fehlt oder teilweise erhalten"
+"Received, awaiting review","Erhalten, Prüfung ausstehend"
+"No evidence","Kein Nachweis"
+"No configured sources apply to this period","Für diesen Zeitraum gelten keine eingerichteten Quellen"
+"Initial source snapshot at package creation","Erste Quellenkopie bei Anlage des FiBu-Zeitraums"
+"This action captures the Mandant's currently confirmed source list. It cannot reconstruct which sources applied when the period began.","Diese Aktion übernimmt die aktuell bestätigte Quellenliste des Mandanten. Sie kann nicht rekonstruieren, welche Quellen zu Beginn des Zeitraums galten."
+Source Note,Quellenhinweis
+Status,Status
+FiBu,FiBu
+Create,Erstellen
+View,Anzeigen

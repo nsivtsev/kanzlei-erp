@@ -234,3 +234,122 @@ Benutzer,Пользователи
 Druckvorlagen,Шаблоны печати
 Datenimport,Импорт данных
 Zur Kanzlei,На главную
+Data Sources,Источники данных
+Source List Confirmed,Список источников подтверждён
+Expected Data Sources,Ожидаемые источники данных
+Source ID,Идентификатор источника
+Category,Категория
+Source Name,Источник
+Valid From,Действует с
+Valid Until,Действует до
+Checklist not initialized,Чек-лист не инициализирован
+No configured sources,Источники не настроены
+Completeness Checklist,Комплектность периода
+Checklist Initialized,Чек-лист инициализирован
+Expected Sources,Ожидаемые источники
+Source Evidence,Подтверждения источников
+Checklist History,История чек-листа
+Expected,Ожидается
+Partially Received,Получено частично
+Received in Full,Получено полностью
+Reviewed,Проверено
+Not Applicable,Не применяется
+Incoming Invoices,Входящие счета
+Outgoing Invoices,Исходящие счета
+Bank Account,Банковский счёт
+Card,Карта
+Cash Register,Касса
+Payment Service,Платёжный сервис
+Marketplace,Маркетплейс
+Contract,Договор
+Assets,Активы
+Expected From,Ожидается с
+Expected Through,Ожидается по
+Reason Not Applicable,Причина неприменимости
+Evidence Type,Тип подтверждения
+External URL,Внешняя ссылка
+Covered From,Покрывает с
+Covered Through,Покрывает по
+Evidence Note,Примечание к подтверждению
+Reason for Change,Причина изменения
+Add Expected Source,Добавить ожидаемый источник
+Add Source,Добавить источник
+Update Checklist Source,Изменить источник в чек-листе
+Add Evidence,Добавить подтверждение
+Save Checklist Entry,Сохранить строку чек-листа
+Select Sources Affected by this Supplement,Выберите источники для дополнения
+Affected Sources,Затронутые источники
+Initialize Checklist,Инициализировать чек-лист
+Confirm source list,Подтвердить список источников
+Save source changes before confirming the list,Сохраните изменения источников перед подтверждением списка
+"I confirm this list is complete","Подтверждаю, что список полон"
+Confirm,Подтвердить
+Invalid accounting period,Некорректный учётный период
+Unknown checklist status,Неизвестный статус чек-листа
+Expected coverage dates are invalid,Некорректный ожидаемый период
+Evidence coverage dates are invalid,Некорректный период подтверждения
+Evidence dates must be within the expected period,Даты подтверждения должны находиться внутри ожидаемого периода
+Evidence is required for received or reviewed sources,Для полученных и проверенных источников нужно подтверждение
+Evidence must cover the expected period,Подтверждения должны покрывать весь ожидаемый период
+"A reason is required for a source that is not applicable","Укажите причину, по которой источник не применяется"
+A reason is required when changing a checklist status backward,Для возврата к предыдущему статусу нужна причина
+A Mandant source identifier cannot be changed,Идентификатор источника клиента нельзя менять
+Choose a valid source category,Выберите допустимую категорию источника
+A source name is required,Укажите название источника
+Source start date cannot be after its end date,Дата начала действия источника не может быть позже даты окончания
+The selected service does not exist,Выбранная услуга не найдена
+"A source can only be linked to a non-stock service","Источник можно связать только с услугой, не являющейся складским товаром"
+Reload the record before changing the checklist,Перед изменением чек-листа обновите запись
+This record changed. Reload it before updating the checklist,Запись изменилась. Обновите её перед изменением чек-листа
+A closed accounting period checklist cannot be changed,Чек-лист закрытого периода нельзя изменить
+A reason is required for checklist changes,Для изменений чек-листа нужна причина
+The period checklist is initialized by the system,Чек-лист периода формируется системой
+The period checklist is already initialized,Чек-лист периода уже инициализирован
+Confirm the Mandant source list before initializing the period checklist,Перед инициализацией чек-листа подтвердите список источников клиента
+The supplement checklist is already initialized,Чек-лист дополнения уже инициализирован
+Choose sources from the original period checklist,Выберите источники из исходного чек-листа периода
+Choose a valid evidence type,Выберите допустимый тип подтверждения
+"Provide exactly one file, communication, or external URL","Укажите ровно одно: файл, сообщение или внешнюю ссылку"
+Evidence links must be valid HTTP or HTTPS URLs,Ссылки подтверждения должны быть корректными адресами HTTP или HTTPS
+Choose exactly one private evidence file,Выберите ровно один закрытый файл подтверждения
+Checklist evidence files must be private,Файлы подтверждения чек-листа должны быть закрытыми
+Evidence must belong to the same Mandant,Подтверждение должно относиться к тому же клиенту
+Evidence must belong to the same accounting period,Подтверждение должно относиться к тому же учётному периоду
+Evidence must belong to this supplement,Подтверждение должно относиться к этому дополнению
+"Link the evidence file to this Mandant, period, supplement, or Communication","Свяжите файл подтверждения с этим клиентом, периодом, дополнением или сообщением"
+Choose exactly one Communication as evidence,Выберите ровно одно сообщение в качестве подтверждения
+"Evidence coverage dates are required","Укажите даты периода, который покрывает подтверждение"
+Source details are invalid,Некорректные сведения об источнике
+Choose a source category and enter its name,Выберите категорию и укажите название источника
+This source is already in the checklist,Этот источник уже есть в чек-листе
+Expected coverage dates are required,Укажите ожидаемые даты
+Expected dates must be within the accounting period,Ожидаемые даты должны находиться внутри учётного периода
+Checklist update is invalid,Некорректные данные изменения чек-листа
+Checklist source was not found,Источник не найден в чек-листе
+A checklist source identifier cannot be changed,Идентификатор источника в чек-листе нельзя изменить
+Reload the Mandant before confirming its source list,Перед подтверждением списка обновите карточку клиента
+This Mandant changed. Reload it before confirming its source list,Карточка клиента изменилась. Обновите её перед подтверждением списка
+Complete every source before confirming the source list,Заполните каждый источник перед подтверждением списка
+The supplement checklist is initialized by the system,Чек-лист дополнения формируется системой
+Use checklist actions to change the period checklist,Для изменения чек-листа используйте его действия
+Communication,Сообщение
+The source list was confirmed as empty for this period,Для этого периода подтверждено отсутствие применимых источников
+Use the source list confirmation action to confirm this list,Подтвердите список источников отдельным действием
+Evidence must belong to the same Mandant and period,Подтверждение должно относиться к тому же клиенту и периоду
+This period predates source tracking. The checklist will use the Mandant's currently confirmed source list,Источники для этого периода не фиксировались. Чек-лист будет сформирован по текущему подтверждённому списку клиента
+I understand this uses the current source list,Подтверждаю использование текущего списка источников
+"A source can only be linked to an active non-stock service","Источник можно связать только с активной услугой, не являющейся складским товаром"
+"Checklist evidence must belong to the same Mandant","Подтверждение чек-листа должно относиться к тому же клиенту"
+"Initialize the checklist before adding a source","Сначала инициализируйте чек-лист, затем добавляйте источник"
+"Missing or partial","Не получено или получено частично"
+"Received, awaiting review","Получено, ожидает проверки"
+"No evidence","Нет подтверждения"
+"No configured sources apply to this period","Для этого периода нет применимых настроенных источников"
+"Initial source snapshot at package creation","Начальная копия источников при создании периода"
+"This action captures the Mandant's currently confirmed source list. It cannot reconstruct which sources applied when the period began.","Это действие использует текущий подтверждённый список клиента. Оно не восстановит, какие источники действовали в начале периода."
+Source Note,Примечание к источнику
+Status,Статус
+FiBu,FiBu
+Create,Создать
+View,Просмотр
+"Category, service, and source note cannot be changed in a checklist","Категорию, услугу и примечание источника в снимке чек-листа нельзя изменить"

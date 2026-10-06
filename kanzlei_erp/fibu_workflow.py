@@ -1,5 +1,7 @@
 """Shared preparation stages for FiBu packages and late supplements."""
 
+from datetime import datetime
+
 PREPARATION_STAGES = (
 	"Collection",
 	"Review",
@@ -46,6 +48,22 @@ _EVENT_FIELDS = (
 	"recorded_by",
 	"recorded_at",
 )
+
+
+def _workflow_event_rows(rows):
+	return [
+		(
+			row.name,
+			row.idx,
+			*(
+				datetime.fromisoformat(str(row.get(field)).replace("Z", "+00:00"))
+				if field == "recorded_at" and row.get(field) and not isinstance(row.get(field), datetime)
+				else row.get(field)
+				for field in _EVENT_FIELDS
+			),
+		)
+		for row in rows or []
+	]
 
 
 def validate_stage_transition(current: str, target: str, note: str = "") -> None:
@@ -120,14 +138,8 @@ def validate_workflow_document(doc) -> None:
 	else:
 		previous = doc.get_doc_before_save()
 		context_changed = any(doc.get(field) != previous.get(field) for field in _CONTEXT_FIELDS)
-		old_events = [
-			(row.name, row.idx, *(row.get(field) for field in _EVENT_FIELDS))
-			for row in previous.get("workflow_events") or []
-		]
-		new_events = [
-			(row.name, row.idx, *(row.get(field) for field in _EVENT_FIELDS))
-			for row in doc.get("workflow_events") or []
-		]
+		old_events = _workflow_event_rows(previous.get("workflow_events"))
+		new_events = _workflow_event_rows(doc.get("workflow_events"))
 		history_is_append_only = len(new_events) >= len(old_events) and new_events[: len(old_events)] == old_events
 		history_changed = old_events != new_events
 		workflow_action = doc.flags.get("fibu_workflow_action")

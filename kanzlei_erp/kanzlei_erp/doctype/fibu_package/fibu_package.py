@@ -5,6 +5,13 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from kanzlei_erp.fibu_materials import validate_materials
+from kanzlei_erp.fibu_checklist import (
+	add_entry,
+	initialize_existing_package,
+	initialize_new_package,
+	protect_checklist_changes,
+	update_entry,
+)
 from kanzlei_erp.fibu_period import period_bounds, period_label
 from kanzlei_erp.fibu_workflow import (
 	change_preparation_stage,
@@ -36,6 +43,7 @@ class FiBuPackage(Document):
 		if self.is_new() and not self.responsible:
 			self.responsible = frappe.session.user
 		initialize_work_context(self)
+		initialize_new_package(self)
 
 	def validate(self):
 		previous = self.get_doc_before_save() if not self.is_new() else None
@@ -83,7 +91,27 @@ class FiBuPackage(Document):
 		):
 			frappe.throw(frappe._("A FiBu package already exists for this Mandant, service, and period"))
 		validate_materials(self)
+		protect_checklist_changes(self)
 		validate_workflow_document(self)
+
+	@frappe.whitelist()
+	def initialize_checklist(self, reason: str = "", expected_modified: str = ""):
+		return initialize_existing_package(self, reason, expected_modified)
+
+	@frappe.whitelist()
+	def add_checklist_entry(self, source_json, reason: str = "", expected_modified: str = ""):
+		return add_entry(self, source_json, reason, expected_modified)
+
+	@frappe.whitelist()
+	def update_checklist_entry(
+		self,
+		source_id: str,
+		values_json,
+		evidence_json=None,
+		reason: str = "",
+		expected_modified: str = "",
+	):
+		return update_entry(self, source_id, values_json, evidence_json, reason, expected_modified)
 
 	@frappe.whitelist()
 	def change_preparation_stage(self, target_stage: str, note: str = "", expected_modified: str = ""):

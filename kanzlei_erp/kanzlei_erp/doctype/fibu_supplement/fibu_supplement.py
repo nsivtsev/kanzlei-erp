@@ -5,6 +5,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from kanzlei_erp.fibu_materials import validate_materials
+from kanzlei_erp.fibu_checklist import add_entry, initialize_supplement, protect_checklist_changes, update_entry
 from kanzlei_erp.fibu_workflow import (
 	change_preparation_stage,
 	initialize_work_context,
@@ -54,7 +55,44 @@ class FiBuSupplement(Document):
 		parent.check_permission("read")
 		self.display_title = f"{parent.display_title} — {self.sequence}"
 		validate_materials(self)
+		protect_checklist_changes(self)
 		validate_workflow_document(self)
+
+	@frappe.whitelist()
+	def get_checklist_sources(self):
+		self.check_permission("write")
+		parent = frappe.get_doc("FiBu Package", self.package)
+		parent.check_permission("read")
+		return [
+			{
+				"source_id": row.source_id,
+				"category": row.category,
+				"source_name": row.source_name,
+				"service": row.service,
+				"expected_from": row.expected_from,
+				"expected_through": row.expected_through,
+			}
+			for row in parent.get("checklist_entries") or []
+		]
+
+	@frappe.whitelist()
+	def initialize_checklist(self, source_ids, reason: str = "", expected_modified: str = ""):
+		return initialize_supplement(self, source_ids, reason, expected_modified)
+
+	@frappe.whitelist()
+	def add_checklist_entry(self, source_json, reason: str = "", expected_modified: str = ""):
+		return add_entry(self, source_json, reason, expected_modified)
+
+	@frappe.whitelist()
+	def update_checklist_entry(
+		self,
+		source_id: str,
+		values_json,
+		evidence_json=None,
+		reason: str = "",
+		expected_modified: str = "",
+	):
+		return update_entry(self, source_id, values_json, evidence_json, reason, expected_modified)
 
 	def on_update(self):
 		self.update_parent_indicator()

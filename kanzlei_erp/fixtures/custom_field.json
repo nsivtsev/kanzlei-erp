@@ -1,6 +1,36 @@
 [
  {
   "doctype": "Custom Field",
+  "name": "Customer-kanzlei_sources_tab",
+  "dt": "Customer",
+  "fieldname": "kanzlei_sources_tab",
+  "fieldtype": "Tab Break",
+  "label": "Data Sources",
+  "insert_after": "tax_withholding_category"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_sources_reviewed",
+  "dt": "Customer",
+  "fieldname": "kanzlei_sources_reviewed",
+  "fieldtype": "Check",
+  "label": "Source List Confirmed",
+  "default": "0",
+  "read_only": 1,
+  "insert_after": "kanzlei_sources_tab"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_data_sources",
+  "dt": "Customer",
+  "fieldname": "kanzlei_data_sources",
+  "fieldtype": "Table",
+  "label": "Expected Data Sources",
+  "options": "FiBu Data Source",
+  "insert_after": "kanzlei_sources_reviewed"
+ },
+ {
+  "doctype": "Custom Field",
   "name": "Customer-kanzlei_documents_tab",
   "dt": "Customer",
   "fieldname": "kanzlei_documents_tab",

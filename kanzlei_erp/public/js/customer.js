@@ -7,6 +7,9 @@ function ensureMandantDocuments(frm) {
 }
 
 frappe.ui.form.on("Customer", {
+	setup(frm) {
+		frm.set_query("service", "kanzlei_data_sources", () => ({ filters: { disabled: 0, is_stock_item: 0 } }));
+	},
 	refresh(frm) {
 		frm.toggle_display(
 			"accounting_tab",
@@ -25,6 +28,26 @@ frappe.ui.form.on("Customer", {
 		frm.dashboard.stats_area_row.empty();
 		frm.dashboard.stats_area.hide();
 		ensureMandantDocuments(frm);
+		if (!frm.is_new() && !frm.doc.kanzlei_sources_reviewed && frappe.model.can_write("Customer")) {
+			frm.add_custom_button(__("Confirm source list"), () => {
+				if (frm.is_dirty()) {
+					frappe.msgprint(__("Save source changes before confirming the list"));
+					return;
+				}
+				frappe.prompt(
+					[{ fieldname: "confirmed", fieldtype: "Check", label: __("I confirm this list is complete"), reqd: 1 }],
+					(values) => {
+						if (!values.confirmed) return;
+						frappe.call("kanzlei_erp.api.confirm_customer_sources", {
+							customer_name: frm.doc.name,
+							expected_modified: frm.doc.modified,
+						}).then(() => frm.reload_doc());
+					},
+					__("Confirm source list"),
+					__("Confirm")
+				);
+			}, __("FiBu"));
+		}
 
 		if (frm.is_new()) return;
 		if (frappe.model.can_read("FiBu Package")) {
