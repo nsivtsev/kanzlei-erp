@@ -11,7 +11,7 @@ app_license = "mit"
 required_apps = ["erpnext"]
 app_home = "/desk/customer"
 boot_session = "kanzlei_erp.navigation.configure_desk"
-app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "fibu_workflow.js"]
+app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {
 	"Communication": "kanzlei_erp.navigation.communication_has_permission",
 	"FiBu Package": "kanzlei_erp.fibu_permissions.package_has_permission",
@@ -38,6 +38,7 @@ doctype_js = {
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
+	"Customer": {"validate": "kanzlei_erp.fibu_checklist.validate_customer_sources"},
 	"Task": {
 		"validate": ["kanzlei_erp.fibu_task.validate_task_package_link", "kanzlei_erp.work_schedule.set_task_calendar_title"],
 		"on_trash": "kanzlei_erp.fibu_task.protect_closed_task",

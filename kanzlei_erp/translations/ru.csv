@@ -234,3 +234,93 @@ Benutzer,Пользователи
 Druckvorlagen,Шаблоны печати
 Datenimport,Импорт данных
 Zur Kanzlei,На главную
+Accounting Sources,Источники учета
+FiBu Data Source,Источник учета клиента
+FiBu Checklist Item,Пункт чек-листа учета
+FiBu Checklist Evidence,Подтверждение комплектности
+FiBu Checklist Event,Изменение чек-листа
+Source ID,Идентификатор источника
+Source Category,Категория источника
+Source Name,Название источника
+Incoming Invoices,Входящие счета
+Outgoing Invoices,Исходящие счета
+Bank Account,Банковский счет
+Card,Карта
+Cash,Касса
+Payment Service,Платежный сервис
+Marketplace,Маркетплейс
+Contracts,Договоры
+Assets,Активы
+Valid From,Действует с
+Valid To,Действует по
+Completeness,Комплектность
+Checklist Initialized,Чек-лист сформирован
+Checklist Entry ID,Идентификатор пункта
+Source Checklist,Чек-лист источников
+Checklist Evidence,Подтверждения комплектности
+Checklist History,История чек-листа
+Completeness Status,Статус комплектности
+Expected,Ожидается
+Partially Received,Получено частично
+Checked,Проверено
+Not Applicable,Неприменимо
+Expected From,Ожидается с
+Expected To,Ожидается по
+Checked By,Проверил
+Checked At,Дата проверки
+External Evidence URL,Ссылка на подтверждение
+Covered From,Покрывает с
+Covered To,Покрывает по
+Action,Действие
+Previous Checklist Values,Предыдущие значения чек-листа
+New Checklist Values,Новые значения чек-листа
+Source Added,Источник добавлен
+Entry Updated,Пункт обновлен
+Change Details,Подробности изменения
+Update Source Completeness,Обновить комплектность источника
+"Choose one file, communication, or external link per evidence row. Enter the dates actually covered.","Для каждого подтверждения выберите файл, сообщение или внешнюю ссылку. Укажите фактически покрываемые даты."
+Upload evidence file,Загрузить подтверждение
+Add Checklist Source,Добавить источник в чек-лист
+Source Origin,Откуда добавить источник
+Client Profile,Профиль клиента
+Original Package,Исходный пакет
+Manual,Вручную
+Expected Interval,Ожидаемый период
+Missing Dates / Review,Недостающие даты / проверка
+Awaiting review,Ожидает проверки
+Initialize Checklist,Сформировать чек-лист
+Sources are not configured,Источники не настроены
+Completeness was not recorded before checklist rollout.,Комплектность ранее не фиксировалась.
+The source checklist is created when the period is saved.,Чек-лист источников формируется при сохранении периода.
+The source checklist is incomplete. Missing or unchecked sources remain visible.,Чек-лист не завершен. Недостающие и непроверенные источники остаются видимыми.
+Add,Добавить
+Save,Сохранить
+Communication,Сообщение
+Source identity cannot be changed,Идентификатор источника нельзя изменить
+Source IDs must be unique,Идентификаторы источников должны быть уникальными
+Choose a source category and enter a source name,Выберите категорию и введите название источника
+Expected dates must be within the accounting period,Ожидаемые даты должны находиться в пределах учетного периода
+This source is already in the checklist,Этот источник уже есть в чек-листе
+Use checklist actions to change completeness,Изменяйте комплектность через действия чек-листа
+Checklist entry IDs must be unique,Идентификаторы пунктов должны быть уникальными
+Unknown completeness status,Неизвестный статус комплектности
+A reason is required for a source that is not applicable,Для неприменимого источника требуется причина
+Received sources require evidence,Полученные источники требуют подтверждения
+Evidence does not cover the full expected interval,Подтверждения не покрывают весь ожидаемый период
+Evidence must belong to a checklist entry,Подтверждение должно относиться к пункту чек-листа
+Evidence dates must be within the expected interval,Даты подтверждения должны находиться в пределах ожидаемого периода
+"Choose exactly one evidence file, communication, or external URL","Выберите одно подтверждение: файл, сообщение или внешнюю ссылку"
+External evidence must use an HTTP or HTTPS URL,Внешняя ссылка должна использовать HTTP или HTTPS
+Closed work cannot change completeness,Комплектность закрытой работы нельзя изменить
+Initialize the checklist before adding sources,Сформируйте чек-лист перед добавлением источников
+Choose one source origin,Выберите один вариант происхождения источника
+Only supplements can select sources from the original package,Источники из исходного пакета можно выбирать только для дополнений
+Source not found in the original package,Источник не найден в исходном пакете
+Source not found for this client,Источник не найден у этого клиента
+Checklist entry not found,Пункт чек-листа не найден
+Evidence must be a list of at most 100 entries,Список подтверждений может содержать не более 100 записей
+Unknown evidence fields,Неизвестные поля подтверждения
+Received in full,Получено
+Before Change,До изменения
+After Change,После изменения
+Choose a FiBu package or supplement,Выберите пакет учета или дополнение

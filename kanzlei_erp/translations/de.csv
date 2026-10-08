@@ -213,3 +213,93 @@ This record changed. Reload it before applying the workflow action,Der Datensatz
 A note is required to confirm receipt,Für die Bestätigung des Eingangs ist ein Vermerk erforderlich
 Next action Task must belong to this FiBu work context,Die Aufgabe für den nächsten Schritt muss zu diesem FiBu-Arbeitskontext gehören
 Next action Task must still be open,Die Aufgabe für den nächsten Schritt muss noch offen sein
+Accounting Sources,Buchhaltungsquellen
+FiBu Data Source,FiBu-Datenquelle
+FiBu Checklist Item,FiBu-Checklistenpunkt
+FiBu Checklist Evidence,FiBu-Vollständigkeitsnachweis
+FiBu Checklist Event,FiBu-Checklistenereignis
+Source ID,Quellen-ID
+Source Category,Quellenkategorie
+Source Name,Quellenname
+Incoming Invoices,Eingangsrechnungen
+Outgoing Invoices,Ausgangsrechnungen
+Bank Account,Bankkonto
+Card,Karte
+Cash,Kasse
+Payment Service,Zahlungsdienst
+Marketplace,Marktplatz
+Contracts,Verträge
+Assets,Anlagen
+Valid From,Gültig ab
+Valid To,Gültig bis
+Completeness,Vollständigkeit
+Checklist Initialized,Checkliste initialisiert
+Checklist Entry ID,Checklistenpunkt-ID
+Source Checklist,Quellencheckliste
+Checklist Evidence,Vollständigkeitsnachweise
+Checklist History,Checklistenverlauf
+Completeness Status,Vollständigkeitsstatus
+Expected,Erwartet
+Partially Received,Teilweise erhalten
+Checked,Geprüft
+Not Applicable,Nicht zutreffend
+Expected From,Erwartet ab
+Expected To,Erwartet bis
+Checked By,Geprüft von
+Checked At,Geprüft am
+External Evidence URL,Externe Nachweis-URL
+Covered From,Abgedeckt ab
+Covered To,Abgedeckt bis
+Action,Aktion
+Previous Checklist Values,Vorherige Checklistenwerte
+New Checklist Values,Neue Checklistenwerte
+Source Added,Quelle hinzugefügt
+Entry Updated,Eintrag aktualisiert
+Change Details,Änderungsdetails
+Update Source Completeness,Quellenvollständigkeit aktualisieren
+"Choose one file, communication, or external link per evidence row. Enter the dates actually covered.","Wählen Sie je Nachweis eine Datei, Nachricht oder einen externen Link. Geben Sie den tatsächlich abgedeckten Zeitraum an."
+Upload evidence file,Nachweisdatei hochladen
+Add Checklist Source,Checklistenquelle hinzufügen
+Source Origin,Herkunft der Quelle
+Client Profile,Mandantenprofil
+Original Package,Ursprüngliches Paket
+Manual,Manuell
+Expected Interval,Erwarteter Zeitraum
+Missing Dates / Review,Fehlende Zeiträume / Prüfung
+Awaiting review,Prüfung ausstehend
+Initialize Checklist,Checkliste initialisieren
+Sources are not configured,Quellen sind nicht eingerichtet
+Completeness was not recorded before checklist rollout.,Die Vollständigkeit wurde vor Einführung der Checkliste nicht erfasst.
+The source checklist is created when the period is saved.,Die Quellencheckliste wird beim Speichern des Zeitraums erstellt.
+The source checklist is incomplete. Missing or unchecked sources remain visible.,Die Quellencheckliste ist unvollständig. Fehlende oder ungeprüfte Quellen bleiben sichtbar.
+Add,Hinzufügen
+Save,Speichern
+Communication,Nachricht
+Source identity cannot be changed,Die Quellenidentität kann nicht geändert werden
+Source IDs must be unique,Quellen-IDs müssen eindeutig sein
+Choose a source category and enter a source name,Wählen Sie eine Quellenkategorie und geben Sie einen Quellennamen ein
+Expected dates must be within the accounting period,Erwartete Daten müssen innerhalb des Buchhaltungszeitraums liegen
+This source is already in the checklist,Diese Quelle ist bereits in der Checkliste
+Use checklist actions to change completeness,Ändern Sie die Vollständigkeit über die Checklistenaktionen
+Checklist entry IDs must be unique,Checklistenpunkt-IDs müssen eindeutig sein
+Unknown completeness status,Unbekannter Vollständigkeitsstatus
+A reason is required for a source that is not applicable,Für eine nicht zutreffende Quelle ist eine Begründung erforderlich
+Received sources require evidence,Erhaltene Quellen benötigen einen Nachweis
+Evidence does not cover the full expected interval,Die Nachweise decken den erwarteten Zeitraum nicht vollständig ab
+Evidence must belong to a checklist entry,Ein Nachweis muss zu einem Checklistenpunkt gehören
+Evidence dates must be within the expected interval,Nachweisdaten müssen innerhalb des erwarteten Zeitraums liegen
+"Choose exactly one evidence file, communication, or external URL","Wählen Sie genau einen Nachweis: Datei, Nachricht oder externe URL"
+External evidence must use an HTTP or HTTPS URL,Externe Nachweise müssen eine HTTP- oder HTTPS-URL verwenden
+Closed work cannot change completeness,Die Vollständigkeit abgeschlossener Arbeit kann nicht geändert werden
+Initialize the checklist before adding sources,Initialisieren Sie die Checkliste vor dem Hinzufügen von Quellen
+Choose one source origin,Wählen Sie genau eine Quellenherkunft
+Only supplements can select sources from the original package,Nur Ergänzungen können Quellen aus dem ursprünglichen Paket auswählen
+Source not found in the original package,Quelle im ursprünglichen Paket nicht gefunden
+Source not found for this client,Quelle für diesen Mandanten nicht gefunden
+Checklist entry not found,Checklistenpunkt nicht gefunden
+Evidence must be a list of at most 100 entries,Die Nachweisliste darf höchstens 100 Einträge enthalten
+Unknown evidence fields,Unbekannte Nachweisfelder
+Received in full,Erhalten
+Before Change,Vor der Änderung
+After Change,Nach der Änderung
+Choose a FiBu package or supplement,Wählen Sie ein FiBu-Paket oder eine Ergänzung

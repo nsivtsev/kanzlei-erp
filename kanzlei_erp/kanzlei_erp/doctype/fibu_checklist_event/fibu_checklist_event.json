@@ -1,0 +1,50 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Checklist Event",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": [
+  "entry_key",
+  "action",
+  "before_json",
+  "after_json",
+  "recorded_by",
+  "recorded_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "entry_key",
+   "fieldtype": "Data",
+   "label": "Checklist Entry ID"
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Data",
+   "label": "Action"
+  },
+  {
+   "fieldname": "before_json",
+   "fieldtype": "Code",
+   "label": "Previous Checklist Values",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "after_json",
+   "fieldtype": "Code",
+   "label": "New Checklist Values",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "recorded_by",
+   "fieldtype": "Link",
+   "label": "Recorded By",
+   "options": "User"
+  },
+  {
+   "fieldname": "recorded_at",
+   "fieldtype": "Datetime",
+   "label": "Recorded At",
+   "read_only": 1
+  }
+ ]
+}

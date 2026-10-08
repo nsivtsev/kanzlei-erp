@@ -4,6 +4,11 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
+from kanzlei_erp.fibu_checklist import (
+	FiBuChecklistMixin,
+	validate_checklist,
+	warn_incomplete,
+)
 from kanzlei_erp.fibu_materials import validate_materials
 from kanzlei_erp.fibu_workflow import (
 	change_preparation_stage,
@@ -13,7 +18,7 @@ from kanzlei_erp.fibu_workflow import (
 )
 
 
-class FiBuSupplement(Document):
+class FiBuSupplement(FiBuChecklistMixin, Document):
 	def before_insert(self):
 		frappe.db.sql("SELECT name FROM `tabFiBu Package` WHERE name=%s FOR UPDATE", self.package)
 		parent = frappe.get_doc("FiBu Package", self.package)
@@ -53,6 +58,7 @@ class FiBuSupplement(Document):
 		parent = frappe.get_doc("FiBu Package", self.package)
 		parent.check_permission("read")
 		self.display_title = f"{parent.display_title} — {self.sequence}"
+		validate_checklist(self)
 		validate_materials(self)
 		validate_workflow_document(self)
 
@@ -108,6 +114,7 @@ class FiBuSupplement(Document):
 		)
 		if unfinished:
 			frappe.throw(frappe._("The supplement has unfinished Tasks or Questions"))
+		warn_incomplete(self)
 		self.status = "Closed"
 		self.closure_note = note
 		self.closed_by = frappe.session.user

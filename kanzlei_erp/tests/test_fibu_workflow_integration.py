@@ -50,7 +50,8 @@ class TestFiBuWorkflowIntegration(FrappeTestCase):
 			self.assertTrue(meta.get_field("workflow_events").read_only)
 			self.assertEqual(meta.get_field("workflow_events").options, "FiBu Workflow Event")
 			self.assertEqual(meta.get_field("workflow_untracked_html").fieldtype, "HTML")
-		self.assertIn("fibu_workflow.js", frappe.get_hooks("app_include_js"))
+		self.assertIn("/assets/kanzlei_erp/js/fibu_workflow.js", frappe.get_hooks("app_include_js"))
+		self.assertIn("/assets/kanzlei_erp/js/fibu_checklist.js", frappe.get_hooks("app_include_js"))
 
 	def test_backfill_initializes_open_work_and_leaves_closed_stage_unknown(self):
 		from kanzlei_erp.patches.backfill_fibu_workflow import execute

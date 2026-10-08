@@ -2,7 +2,6 @@
 
 import frappe
 
-
 EMAIL_INBOX_URL = "/desk/communication/view/inbox"
 
 
@@ -62,7 +61,7 @@ def configure_desk(bootinfo):
 			item
 			for item in bootinfo.workspace_sidebar_item["kanzlei"]["items"]
 			if item["label"] != "Einstellungen"
-			and (item["label"] != "E-Mail" or show_mail)
+			and (item.get("url") != EMAIL_INBOX_URL or show_mail)
 		]
 	if "einstellungen" in bootinfo.workspace_sidebar_item and "kanzlei" in bootinfo.workspace_sidebar_item:
 		bootinfo.workspace_sidebar_item["kanzlei"]["items"].append(

@@ -108,6 +108,19 @@ def initialize_work_context(doc) -> None:
 		doc.next_action_assignee = doc.get("responsible")
 
 
+def _workflow_values(row, fields):
+	"""Compare unchanged browser strings and database datetimes consistently."""
+	from frappe.utils import get_datetime
+
+	values = []
+	for field in fields:
+		value = row.get(field)
+		if field == "recorded_at" and value:
+			value = get_datetime(value)
+		values.append(value or "")
+	return tuple(values)
+
+
 def validate_workflow_document(doc) -> None:
 	"""Protect workflow fields and append-only history from ordinary saves."""
 	import frappe
@@ -119,13 +132,13 @@ def validate_workflow_document(doc) -> None:
 			frappe.throw(frappe._("Workflow history is maintained by the system"))
 	else:
 		previous = doc.get_doc_before_save()
-		context_changed = any(doc.get(field) != previous.get(field) for field in _CONTEXT_FIELDS)
+		context_changed = _workflow_values(doc, _CONTEXT_FIELDS) != _workflow_values(previous, _CONTEXT_FIELDS)
 		old_events = [
-			(row.name, row.idx, *(row.get(field) for field in _EVENT_FIELDS))
+			(row.name, row.idx, *_workflow_values(row, _EVENT_FIELDS))
 			for row in previous.get("workflow_events") or []
 		]
 		new_events = [
-			(row.name, row.idx, *(row.get(field) for field in _EVENT_FIELDS))
+			(row.name, row.idx, *_workflow_values(row, _EVENT_FIELDS))
 			for row in doc.get("workflow_events") or []
 		]
 		history_is_append_only = len(new_events) >= len(old_events) and new_events[: len(old_events)] == old_events
@@ -164,6 +177,10 @@ def change_preparation_stage(doc, target_stage: str, note: str, expected_modifie
 	if target_stage == "Receipt Confirmed" and not note:
 		frappe.throw(frappe._("A note is required to confirm receipt"))
 
+	if target_stage == "Ready":
+		from kanzlei_erp.fibu_checklist import warn_incomplete
+
+		warn_incomplete(doc)
 	before = _context_snapshot(doc)
 	doc.preparation_stage = target_stage
 	if target_stage == "Receipt Confirmed":
@@ -252,6 +269,8 @@ def _lock_workflow_document(doc, expected_modified: str) -> None:
 	)
 	if not row or str(row[0][0]) != str(expected_modified) or str(doc.modified) != str(expected_modified):
 		frappe.throw(frappe._("This record changed. Reload it before applying the workflow action"))
+	doc.reload()
+	doc.check_permission("write")
 
 
 def _context_snapshot(doc) -> dict:

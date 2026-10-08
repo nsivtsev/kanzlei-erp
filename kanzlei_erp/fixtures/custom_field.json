@@ -99,5 +99,24 @@
   "read_only": 1,
   "hidden": 1,
   "no_copy": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_sources_tab",
+  "dt": "Customer",
+  "insert_after": "kanzlei_documents_html",
+  "fieldname": "kanzlei_sources_tab",
+  "fieldtype": "Tab Break",
+  "label": "Accounting Sources"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_data_sources",
+  "dt": "Customer",
+  "insert_after": "kanzlei_sources_tab",
+  "fieldname": "kanzlei_data_sources",
+  "fieldtype": "Table",
+  "label": "Accounting Sources",
+  "options": "FiBu Data Source"
  }
 ]

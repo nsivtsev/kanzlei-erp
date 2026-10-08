@@ -1,0 +1,57 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Checklist Evidence",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": [
+  "entry_key",
+  "file",
+  "communication",
+  "external_url",
+  "covered_from",
+  "covered_to",
+  "note"
+ ],
+ "fields": [
+  {
+   "fieldname": "entry_key",
+   "fieldtype": "Data",
+   "label": "Checklist Entry ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "file",
+   "fieldtype": "Link",
+   "label": "File",
+   "options": "File"
+  },
+  {
+   "fieldname": "communication",
+   "fieldtype": "Link",
+   "label": "Communication",
+   "options": "Communication"
+  },
+  {
+   "fieldname": "external_url",
+   "fieldtype": "Data",
+   "label": "External Evidence URL"
+  },
+  {
+   "fieldname": "covered_from",
+   "fieldtype": "Date",
+   "label": "Covered From",
+   "reqd": 1
+  },
+  {
+   "fieldname": "covered_to",
+   "fieldtype": "Date",
+   "label": "Covered To",
+   "reqd": 1
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  }
+ ]
+}

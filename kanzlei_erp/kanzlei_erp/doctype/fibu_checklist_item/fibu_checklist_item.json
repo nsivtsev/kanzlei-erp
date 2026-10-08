@@ -1,0 +1,96 @@
+{
+ "doctype": "DocType",
+ "name": "FiBu Checklist Item",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "field_order": [
+  "entry_key",
+  "source_key",
+  "category",
+  "source_title",
+  "expected_from",
+  "expected_to",
+  "status",
+  "reason",
+  "note",
+  "checked_by",
+  "checked_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "entry_key",
+   "fieldtype": "Data",
+   "label": "Checklist Entry ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_key",
+   "fieldtype": "Data",
+   "label": "Source ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "Source Category",
+   "options": "Incoming Invoices\nOutgoing Invoices\nBank Account\nCard\nCash\nPayment Service\nMarketplace\nContracts\nAssets\nOther",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_title",
+   "fieldtype": "Data",
+   "label": "Source Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "expected_from",
+   "fieldtype": "Date",
+   "label": "Expected From",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "expected_to",
+   "fieldtype": "Date",
+   "label": "Expected To",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Completeness Status",
+   "options": "Expected\nPartially Received\nReceived\nChecked\nNot Applicable",
+   "default": "Expected",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "checked_by",
+   "fieldtype": "Link",
+   "label": "Checked By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checked_at",
+   "fieldtype": "Datetime",
+   "label": "Checked At",
+   "read_only": 1
+  }
+ ]
+}

@@ -380,6 +380,8 @@ def _collect_documents(customer, filters, permission_cache):
 	communication_packages = {}
 	fibu_file_links = []
 	fibu_transfer_entries = []
+	checklist_references = {}
+	checklist_communications = []
 	for doctype, contexts in (("FiBu Package", package_contexts), ("FiBu Supplement", supplement_contexts)):
 		for chunk in _chunks(contexts):
 			for row in frappe.get_all(
@@ -393,6 +395,27 @@ def _collect_documents(customer, filters, permission_cache):
 					fibu_attachment_communications.add(row.source_communication)
 					communication_contexts.setdefault(row.source_communication, set()).add((doctype, row.parent))
 					communication_packages.setdefault(row.source_communication, set()).add(contexts[row.parent].package)
+			for row in frappe.get_all(
+				"FiBu Checklist Evidence",
+				filters={"parent": ["in", chunk], "parenttype": doctype, "parentfield": "checklist_evidence"},
+				fields=["parent", "file", "communication", "external_url", "creation"],
+			):
+				context = contexts[row.parent]
+				if row.external_url:
+					key = "checklist-url:" + hashlib.sha256(row.external_url.encode()).hexdigest()
+					checklist_references[key] = frappe._dict(name=key, file_name=row.external_url,
+						file_url=row.external_url, file_size=None, creation=row.creation, is_remote_file=True,
+						attached_to_doctype=doctype, attached_to_name=row.parent)
+					_append_context(file_contexts, key, context)
+				if row.communication:
+					checklist_communications.append((doctype, row.parent, row.communication, row.creation))
+				fibu_transfer_entries.append((doctype, row.parent, row.file, row.communication))
+				if row.communication:
+					communication_names.add(row.communication)
+					include_communication_files.add(row.communication)
+					fibu_attachment_communications.add(row.communication)
+					communication_contexts.setdefault(row.communication, set()).add((doctype, row.parent))
+					communication_packages.setdefault(row.communication, set()).add(contexts[row.parent].package)
 			for row in frappe.get_all(
 				"FiBu Transfer Entry",
 				filters={"parent": ["in", chunk], "parenttype": doctype, "parentfield": "transfers"},
@@ -580,7 +603,20 @@ def _collect_documents(customer, filters, permission_cache):
 				_append_context(file_contexts, file.name, context)
 				_append_context(file_contexts, file.name, comm_context)
 
-	return file_contexts, valid_communications, package_docs
+	for doctype, parent, name, creation in checklist_communications:
+		communication = communication_docs.get(name)
+		if not communication or not _readable("Communication", name, permission_cache):
+			continue
+		key = "checklist-message:" + name
+		checklist_references[key] = frappe._dict(name=key, file_name=communication.subject or name,
+			file_url=frappe.utils.get_url() + "/desk/communication/" + name,
+			file_size=None, creation=creation, is_remote_file=True,
+			attached_to_doctype=doctype, attached_to_name=parent)
+		context = package_contexts[parent] if doctype == "FiBu Package" else supplement_contexts[parent]
+		_append_context(file_contexts, key, context)
+		if name in valid_communications:
+			_append_context(file_contexts, key, _communication_context(communication, package_docs.get(context.package)))
+	return file_contexts, valid_communications, package_docs, checklist_references
 
 
 def _cursor_fingerprint(customer, filters):
@@ -672,7 +708,7 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	state = _decode_cursor(cursor, customer_doc.name, filters)
 	snapshot = frappe.utils.get_datetime(state["snapshot"]) if state else frappe.utils.now_datetime()
 	permission_cache = {}
-	file_contexts, communication_docs, package_docs = _collect_documents(customer_doc, filters, permission_cache)
+	file_contexts, communication_docs, package_docs, checklist_references = _collect_documents(customer_doc, filters, permission_cache)
 	file_names = sorted(file_contexts)
 	metadata = {}
 	for chunk in _chunks(file_names):
@@ -686,11 +722,12 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 		):
 			metadata[file.name] = file
 
+	metadata.update(checklist_references)
 	rows = []
 	for name, file in metadata.items():
 		if file.creation > snapshot or not file_contexts.get(name):
 			continue
-		if not _readable("File", name, permission_cache):
+		if name not in checklist_references and not _readable("File", name, permission_cache):
 			continue
 		if file.attached_to_doctype and file.attached_to_name and not _readable(
 			file.attached_to_doctype, file.attached_to_name, permission_cache
@@ -759,7 +796,7 @@ def _authorized_files(customer, file_ids):
 	"""Re-evaluate current Customer, relation graph, and File permissions before serving bytes."""
 	customer_doc = _require_customer(customer)
 	permission_cache = {}
-	file_contexts, _, _ = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
+	file_contexts, _, _, _ = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
 	authorized = {}
 	for file_id in file_ids:
 		if not frappe.db.exists("File", file_id) or file_id not in file_contexts:

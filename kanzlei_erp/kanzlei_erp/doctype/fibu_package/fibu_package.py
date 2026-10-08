@@ -4,6 +4,11 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
+from kanzlei_erp.fibu_checklist import (
+	FiBuChecklistMixin,
+	validate_checklist,
+	warn_incomplete,
+)
 from kanzlei_erp.fibu_materials import validate_materials
 from kanzlei_erp.fibu_period import period_bounds, period_label
 from kanzlei_erp.fibu_workflow import (
@@ -14,7 +19,7 @@ from kanzlei_erp.fibu_workflow import (
 )
 
 
-class FiBuPackage(Document):
+class FiBuPackage(FiBuChecklistMixin, Document):
 	def on_trash(self):
 		if frappe.session.user != "Administrator" and "System Manager" not in frappe.get_roles():
 			frappe.throw(frappe._("Only a System Manager can delete an empty FiBu package"))
@@ -82,6 +87,7 @@ class FiBuPackage(Document):
 			},
 		):
 			frappe.throw(frappe._("A FiBu package already exists for this Mandant, service, and period"))
+		validate_checklist(self)
 		validate_materials(self)
 		validate_workflow_document(self)
 
@@ -131,6 +137,7 @@ class FiBuPackage(Document):
 		)
 		if unfinished:
 			frappe.throw(frappe._("The package has unfinished Tasks or Questions"))
+		warn_incomplete(self)
 		self.status = "Closed"
 		self.closure_note = note
 		self.closed_by = frappe.session.user

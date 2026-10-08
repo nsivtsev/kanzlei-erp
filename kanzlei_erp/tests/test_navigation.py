@@ -32,15 +32,15 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertEqual(
 			links[:5],
 			[
-				("Mandanten", "Customer"),
-				("FiBu-Perioden", "FiBu Package"),
-				("Aufgaben", "Task"),
-				("Kalender", "/desk/task/view/calendar/default"),
-				("Zeiterfassung", "Timesheet"),
+				(frappe._("Mandanten"), "Customer"),
+				(frappe._("FiBu-Perioden"), "FiBu Package"),
+				(frappe._("Aufgaben"), "Task"),
+				(frappe._("Kalender"), "/desk/task/view/calendar/default"),
+				(frappe._("Zeiterfassung"), "Timesheet"),
 			],
 		)
 		if navigation._has_assigned_email_account(frappe.session.user):
-			self.assertEqual(links[5], ("E-Mail", "/desk/communication/view/inbox"))
+			self.assertEqual(links[5], (frappe._("E-Mail"), "/desk/communication/view/inbox"))
 			links.pop(5)
 		self.assertEqual(links[5], ("Einstellungen", "/desk/company"))
 		self.assertEqual(len(links), 6)
@@ -50,7 +50,7 @@ class TestKanzleiNavigation(FrappeTestCase):
 		with patch.object(navigation, "_has_assigned_email_account", return_value=False):
 			configure_desk(boot)
 		labels = [item["label"] for item in boot.workspace_sidebar_item["kanzlei"]["items"]]
-		self.assertNotIn("E-Mail", labels)
+		self.assertNotIn(frappe._("E-Mail"), labels)
 
 	def test_email_inbox_is_visible_to_users_with_a_user_email_assignment(self):
 		user = frappe.get_doc(
@@ -77,7 +77,7 @@ class TestKanzleiNavigation(FrappeTestCase):
 			boot = get_bootinfo()
 			configure_desk(boot)
 			items = boot.workspace_sidebar_item["kanzlei"]["items"]
-			mail_links = [item for item in items if item["label"] == "E-Mail"]
+			mail_links = [item for item in items if item["label"] == frappe._("E-Mail")]
 			self.assertEqual(len(mail_links), 1)
 			self.assertEqual(mail_links[0]["url"], "/desk/communication/view/inbox")
 		finally:
@@ -123,13 +123,13 @@ class TestKanzleiNavigation(FrappeTestCase):
 		boot = get_bootinfo()
 		configure_desk(boot)
 		labels = [item["label"] for item in boot.workspace_sidebar_item["einstellungen"]["items"]]
-		self.assertIn("E-Mail-Konto", labels)
-		self.assertIn("E-Mail-Domain", labels)
-		self.assertIn("E-Mail-Queue", labels)
+		self.assertIn(frappe._("Email Account"), labels)
+		self.assertIn(frappe._("Email Domain"), labels)
+		self.assertIn(frappe._("Email Queue"), labels)
 		links = {item["label"]: item["link_to"] for item in boot.workspace_sidebar_item["einstellungen"]["items"]}
-		self.assertEqual(links["Wiederholungen"], "Work Schedule")
-		self.assertEqual(links["Rechnungen"], "Sales Invoice")
-		self.assertEqual(links["Zahlungen"], "Payment Entry")
+		self.assertEqual(links[frappe._("Wiederholungen")], "Work Schedule")
+		self.assertEqual(links[frappe._("Rechnungen")], "Sales Invoice")
+		self.assertEqual(links[frappe._("Zahlungen")], "Payment Entry")
 
 	def test_linked_mandant_readers_can_open_mail_and_private_attachments(self):
 		communication = frappe._dict(
