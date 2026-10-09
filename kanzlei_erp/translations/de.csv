@@ -303,3 +303,96 @@ Received in full,Erhalten
 Before Change,Vor der Änderung
 After Change,Nach der Änderung
 Choose a FiBu package or supplement,Wählen Sie ein FiBu-Paket oder eine Ergänzung
+Rückfragen,Rückfragen
+Draft,Entwurf
+Waiting,Antwort ausstehend
+Answer Received,Antwort erhalten
+Resolved,Gelöst
+Cancelled,Abgebrochen
+Historical,Bisher nicht erfasst
+Question Management,Rückfragenverwaltung
+Question State,Rückfragenstatus
+Question Responsible,Verantwortlicher der Rückfrage
+Question Recipient,Ansprechpartner der Rückfrage
+Question Document,Beleg der Rückfrage
+Operation Context,Geschäftsvorfall
+Requested On,Angefragt am
+Expected Response On,Antwort erwartet bis
+Answered On,Beantwortet am
+Remaining Question,Offene Punkte
+Question Reminder On,Erinnerung am
+Question Decision,Entscheidung zur Rückfrage
+Decided By,Entschieden von
+Decided At,Entschieden am
+Question History,Rückfragenverlauf
+Question Actions,Rückfragenaktionen
+Question Event,Rückfragenereignis
+Question Event Details,Ereignisdetails
+Question subject,Betreff der Rückfrage
+Question content,Inhalt der Rückfrage
+Work Context,Arbeitskontext
+FiBu Period or Supplement,FiBu-Periode oder Ergänzung
+Initialized,Initialisiert
+Initialize,Initialisierung
+Edit,Angaben geändert
+Request,Anfrage erfasst
+Response,Antwort erfasst
+Resolve,Entscheidung bestätigt
+Cancel,Abbruch
+Reopen,Wieder geöffnet
+Reminder Sent,Erinnerung erstellt
+Initialize Question,Rückfragenverwaltung starten
+Reopen Question,Rückfrage wieder öffnen
+Edit Question,Rückfrage bearbeiten
+Record Request,Anfrage erfassen
+Record Answer,Antwort erfassen
+Resolve Question,Rückfrage lösen
+Cancel Question,Rückfrage abbrechen
+Request description,Beschreibung der Anfrage
+Answer content,Inhalt der Antwort
+Partial answer,Teilweise beantwortet
+All active questions,Alle offenen Rückfragen
+Overdue answers,Überfällige Antworten
+Reminders due,Fällige Erinnerungen
+Include closed questions,Abgeschlossene Rückfragen anzeigen
+Total questions,Rückfragen insgesamt
+Questions awaiting an answer,Rückfragen mit ausstehender Antwort
+Responsible employee is disabled or has no access.,Verantwortlicher ist deaktiviert oder hat keinen Zugriff.
+Question management was not previously recorded.,Die Rückfragenverwaltung wurde bisher nicht erfasst.
+Save or reload the record before applying a question action.,Speichern oder laden Sie den Datensatz vor der Rückfragenaktion neu.
+Question values must be an object,Rückfragedaten müssen ein Objekt sein
+Managed questions require a FiBu period,Verwaltete Rückfragen benötigen eine FiBu-Periode
+The supplement belongs to another FiBu period,Die Ergänzung gehört zu einer anderen FiBu-Periode
+Questions in a closed FiBu context cannot be changed,Rückfragen in einem geschlossenen FiBu-Arbeitskontext können nicht geändert werden
+The question responsible must be an enabled employee with access to this period,Der Verantwortliche muss ein aktiver Mitarbeiter mit Zugriff auf diese Periode sein
+The checklist source belongs to another work context,Die Checklistenquelle gehört zu einem anderen Arbeitskontext
+The question recipient must be linked to this Mandant,Der Ansprechpartner muss mit diesem Mandanten verknüpft sein
+Question subject is required,Der Betreff der Rückfrage ist erforderlich
+Use the question actions to change question management,Verwenden Sie die Rückfragenaktionen zum Ändern der Rückfragenverwaltung
+A managed question cannot be changed to an ordinary Task,Eine verwaltete Rückfrage kann nicht in eine normale Aufgabe umgewandelt werden
+The context of a managed question cannot be changed,Der Arbeitskontext einer verwalteten Rückfrage kann nicht geändert werden
+Managed questions cannot be deleted; cancel the question with a reason,Verwaltete Rückfragen können nicht gelöscht werden; brechen Sie die Rückfrage mit einer Begründung ab
+Managed questions cannot be Task templates,Verwaltete Rückfragen können keine Aufgabenvorlagen sein
+Choose a FiBu period or supplement,Wählen Sie eine FiBu-Periode oder Ergänzung
+Choose a Question Task,Wählen Sie eine Aufgabe vom Typ Rückfrage
+Only an open historical question can be initialized,Nur eine offene bisherige Rückfrage kann initialisiert werden
+Initialize the question before using its actions,Initialisieren Sie die Rückfrage vor der Verwendung ihrer Aktionen
+Reopen the question before changing it,Öffnen Sie die Rückfrage vor einer Änderung wieder
+"Recipient, request date and expected response date are required","Ansprechpartner, Anfragedatum und erwartetes Antwortdatum sind erforderlich"
+Link a communication or describe the request,Verknüpfen Sie eine Kommunikation oder beschreiben Sie die Anfrage
+Expected response date cannot be before the request date,Das erwartete Antwortdatum darf nicht vor dem Anfragedatum liegen
+Record a request before recording its answer,"Erfassen Sie zuerst eine Anfrage, bevor Sie deren Antwort erfassen"
+Answer date and content are required,Antwortdatum und Inhalt sind erforderlich
+Describe what remains unanswered,Beschreiben Sie die noch offenen Punkte
+Answer date cannot be before the request date,Das Antwortdatum darf nicht vor dem Anfragedatum liegen
+A decision or reason is required,Eine Entscheidung oder Begründung ist erforderlich
+A closed question and reopening reason are required,Eine abgeschlossene Rückfrage und eine Begründung sind erforderlich
+This question was the next action of the period. Update the period work context.,Diese Rückfrage war die nächste Aktion der Periode. Aktualisieren Sie den Arbeitskontext der Periode.
+Question reminder,Erinnerung zur Rückfrage
+Question participants must be enabled employees with access to this period,Beteiligte an Rückfragen müssen aktive Mitarbeitende mit Zugriff auf diesen Zeitraum sein
+Open the question to review the next action.,Öffnen Sie die Rückfrage und prüfen Sie die nächste Aktion.
+Question history can only be recorded through question actions,Der Rückfragenverlauf kann nur über Rückfragenaktionen erfasst werden
+Question history cannot be deleted,Der Rückfragenverlauf kann nicht gelöscht werden
+Task Mandant does not match the FiBu package Mandant,Der Mandant der Aufgabe stimmt nicht mit dem Mandanten des FiBu-Zeitraums überein
+Remove question assignments or shares without period access before initialization,Entfernen Sie vor der Initialisierung Zuweisungen oder Freigaben ohne Zugriff auf den Zeitraum
+All Question States,Alle Rückfragenstatus,

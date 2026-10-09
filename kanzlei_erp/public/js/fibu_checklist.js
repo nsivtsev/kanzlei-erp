@@ -130,12 +130,19 @@
 					const doctype = row.file ? "File" : "Communication";
 					return `<a href="${escape(frappe.utils.get_form_link(doctype, row.file || row.communication))}">${label}</a>`;
 				}).join("<br>");
-				html += `<tr><td>${escape(item.source_title)}<br><small class="text-muted">${escape(__(item.category))}</small></td><td>${escape(item.expected_from)} — ${escape(item.expected_to)}</td><td>${escape(statusLabel(item.status))}</td><td>${details}</td><td>${evidence}</td>${writable ? `<td><button type="button" class="btn btn-xs btn-default" data-entry="${escape(item.entry_key)}">${escape(__("Update"))}</button></td>` : ""}</tr>`;
+				html += `<tr><td>${escape(item.source_title)}<br><small class="text-muted">${escape(__(item.category))}</small></td><td>${escape(item.expected_from)} — ${escape(item.expected_to)}</td><td>${escape(statusLabel(item.status))}</td><td>${details}</td><td>${evidence}</td>${writable ? `<td><button type="button" class="btn btn-xs btn-default" data-entry="${escape(item.entry_key)}">${escape(__("Update"))}</button> <button type="button" class="btn btn-xs btn-default" data-question-entry="${escape(item.entry_key)}">${escape(__("New Question"))}</button></td>` : ""}</tr>`;
 			}
 			html += "</tbody></table></div>";
 		}
 		wrapper.html(html);
 		wrapper.find("[data-entry]").on("click", (event) => editEntry(frm, items.find((row) => row.entry_key === event.currentTarget.dataset.entry)));
+		wrapper.find("[data-question-entry]").on("click", (event) => {
+			const item = items.find((row) => row.entry_key === event.currentTarget.dataset.questionEntry);
+			const pending = summary.pending.find((row) => row.entry_key === item.entry_key);
+			const missing = pending && pending.missing.length ? pending.missing.map(([a, b]) => `${a} — ${b}`).join(", ") : __("Awaiting review");
+			fibuQuestionCreate(frm.doctype, frm.doc.name, { subject: `${item.source_title}: ${missing}`, entry_key: item.entry_key,
+				description: `<p>${escape(item.source_title)}: ${escape(missing)}</p>` }, () => frm.reload_doc());
+		});
 		frm.add_custom_button(__("Checklist History"), () => history(frm), __("Completeness"));
 		if (writable) {
 			if (!summary.initialized) frm.add_custom_button(__("Initialize Checklist"), () => fibuWorkflowSaveThenCall(frm, "initialize_checklist", {}), __("Completeness"));

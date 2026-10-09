@@ -1,6 +1,6 @@
 function fibuPackageWorkList(frm) {
 	frappe.db.get_list("Task", {
-		fields: ["name", "subject", "status", "kanzlei_work_kind"],
+		fields: ["name", "subject", "status", "kanzlei_work_kind", "kanzlei_question_state", "kanzlei_question_responsible", "kanzlei_question_expected_response_on", "kanzlei_question_reminder_on", "kanzlei_question_remaining"],
 		filters: { kanzlei_fibu_package: frm.doc.name, kanzlei_fibu_supplement: ["is", "not set"] },
 		limit: 0,
 	}).then((tasks) => {
@@ -9,10 +9,11 @@ function fibuPackageWorkList(frm) {
 			["Task", __("Tasks")],
 			["Question", __("Questions")],
 		];
-		wrapper.html(groups.map(([kind, heading]) => {
+		const waiting = (tasks || []).filter((t) => t.kanzlei_question_state === "Waiting").length;
+		wrapper.html(`<p>${frappe.utils.escape_html(__("Questions awaiting an answer"))}: <strong>${waiting}</strong></p>` + groups.map(([kind, heading]) => {
 			const rows = (tasks || []).filter((task) => (task.kanzlei_work_kind || "Task") === kind);
 			return `<p><strong>${heading}</strong></p>${rows.length ? rows.map((task) =>
-				`<p><a href="#" data-task="${frappe.utils.escape_html(task.name)}">${frappe.utils.escape_html(task.subject)}</a> — ${frappe.utils.escape_html(__(task.status))}</p>`
+				`<p><a href="#" data-task="${frappe.utils.escape_html(task.name)}">${frappe.utils.escape_html(task.subject)}</a> — ${kind === "Question" ? fibuQuestionRow(task) : frappe.utils.escape_html(__(task.status))}</p>`
 			).join("") : `<p class="text-muted">${__("No entries")}</p>`}`;
 		}).join(""));
 		wrapper.find("a[data-task]").on("click", (event) => {
@@ -64,6 +65,7 @@ frappe.ui.form.on("FiBu Package", {
 		}
 		for (const [label, kind] of [["New Task", "Task"], ["New Question", "Question"]]) {
 			frm.add_custom_button(__(label), () => {
+				if (kind === "Question") return fibuQuestionCreate(frm.doctype, frm.doc.name, {}, () => frm.reload_doc());
 				frappe.new_doc("Task", {
 					kanzlei_customer: frm.doc.customer,
 					kanzlei_fibu_package: frm.doc.name,

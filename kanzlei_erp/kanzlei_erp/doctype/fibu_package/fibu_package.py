@@ -132,7 +132,9 @@ class FiBuPackage(FiBuChecklistMixin, Document):
 			"""SELECT name FROM `tabTask`
 			WHERE kanzlei_fibu_package=%s
 			AND (kanzlei_fibu_supplement IS NULL OR kanzlei_fibu_supplement='')
-			AND status NOT IN ('Completed', 'Cancelled') LIMIT 1""",
+			AND (status NOT IN ('Completed', 'Cancelled') OR
+			(COALESCE(kanzlei_question_state, '') != '' AND kanzlei_question_state NOT IN ('Resolved', 'Cancelled')))
+			LIMIT 1""",
 			self.name,
 		)
 		if unfinished:

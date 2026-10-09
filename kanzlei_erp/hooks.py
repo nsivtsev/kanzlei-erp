@@ -9,9 +9,12 @@ app_license = "mit"
 # ------------------
 
 required_apps = ["erpnext"]
+override_whitelisted_methods = {
+	"erpnext.projects.doctype.project.project.set_project_status": "kanzlei_erp.fibu_questions.set_project_status",
+}
 app_home = "/desk/customer"
 boot_session = "kanzlei_erp.navigation.configure_desk"
-app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
+app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {
 	"Communication": "kanzlei_erp.navigation.communication_has_permission",
 	"FiBu Package": "kanzlei_erp.fibu_permissions.package_has_permission",
@@ -38,12 +41,16 @@ doctype_js = {
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
+	"ToDo": {"validate": "kanzlei_erp.fibu_questions.validate_question_assignment"},
+	"DocShare": {"validate": "kanzlei_erp.fibu_questions.validate_question_share"},
 	"Customer": {"validate": "kanzlei_erp.fibu_checklist.validate_customer_sources"},
 	"Task": {
-		"validate": ["kanzlei_erp.fibu_task.validate_task_package_link", "kanzlei_erp.work_schedule.set_task_calendar_title"],
-		"on_trash": "kanzlei_erp.fibu_task.protect_closed_task",
+		"before_validate": "kanzlei_erp.fibu_questions.prepare_question",
+		"after_insert": "kanzlei_erp.fibu_questions.finish_question_creation",
+		"validate": ["kanzlei_erp.fibu_task.validate_task_package_link", "kanzlei_erp.fibu_questions.validate_question", "kanzlei_erp.work_schedule.set_task_calendar_title"],
+		"on_trash": ["kanzlei_erp.fibu_task.protect_closed_task", "kanzlei_erp.fibu_questions.protect_question"],
 	},
 	"File": {"validate": "kanzlei_erp.fibu_materials.validate_fibu_attachment", "on_trash": "kanzlei_erp.fibu_materials.validate_fibu_attachment"},
 }
-scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks"]}
+scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"]}
 after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles"]

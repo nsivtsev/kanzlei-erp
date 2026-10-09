@@ -7,15 +7,16 @@ frappe.ui.form.on("FiBu Supplement", {
 	refresh(frm) {
 		if (frm.is_new()) return;
 		frappe.db.get_list("Task", {
-			fields: ["name", "subject", "status", "kanzlei_work_kind"],
+			fields: ["name", "subject", "status", "kanzlei_work_kind", "kanzlei_question_state", "kanzlei_question_responsible", "kanzlei_question_expected_response_on", "kanzlei_question_reminder_on", "kanzlei_question_remaining"],
 			filters: { kanzlei_fibu_supplement: frm.doc.name },
 			limit: 0,
 		}).then((tasks) => {
 			const wrapper = frm.get_field("work_html").$wrapper;
-			wrapper.html([["Task", __("Tasks")], ["Question", __("Questions")]].map(([kind, heading]) => {
+			const waiting = (tasks || []).filter((t) => t.kanzlei_question_state === "Waiting").length;
+			wrapper.html(`<p>${frappe.utils.escape_html(__("Questions awaiting an answer"))}: <strong>${waiting}</strong></p>` + [["Task", __("Tasks")], ["Question", __("Questions")]].map(([kind, heading]) => {
 				const rows = (tasks || []).filter((task) => (task.kanzlei_work_kind || "Task") === kind);
 				return `<p><strong>${heading}</strong></p>${rows.length ? rows.map((task) =>
-					`<p><a href="#" data-task="${frappe.utils.escape_html(task.name)}">${frappe.utils.escape_html(task.subject)}</a> — ${frappe.utils.escape_html(__(task.status))}</p>`
+					`<p><a href="#" data-task="${frappe.utils.escape_html(task.name)}">${frappe.utils.escape_html(task.subject)}</a> — ${kind === "Question" ? fibuQuestionRow(task) : frappe.utils.escape_html(__(task.status))}</p>`
 				).join("") : `<p class="text-muted">${__("No entries")}</p>`}`;
 			}).join(""));
 			wrapper.find("a[data-task]").on("click", (event) => {
@@ -29,6 +30,7 @@ frappe.ui.form.on("FiBu Supplement", {
 		}
 		for (const [label, kind] of [["New Task", "Task"], ["New Question", "Question"]]) {
 			frm.add_custom_button(__(label), async () => {
+				if (kind === "Question") return fibuQuestionCreate(frm.doctype, frm.doc.name, {}, () => frm.reload_doc());
 				const { message: customer } = await frappe.db.get_value("FiBu Package", frm.doc.package, "customer");
 				frappe.new_doc("Task", {
 					kanzlei_customer: customer.customer,

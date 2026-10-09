@@ -211,8 +211,9 @@ class TestFiBuPackage(FrappeTestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "unfinished"):
 			package.close("Too early")
 		package.reload()
-		task.status = "Cancelled"
-		task.save()
+		from kanzlei_erp.fibu_questions import update_question
+		update_question(task.name, "cancel", {"reason": "Late issue resolved"}, str(task.modified))
+		task.reload()
 		package.close("Question resolved outside the package")
 		self.assertEqual(package.status, "Closed")
 		with self.assertRaisesRegex(frappe.ValidationError, "closed"):
@@ -242,8 +243,9 @@ class TestFiBuPackage(FrappeTestCase):
 		self.assertEqual(task.kanzlei_fibu_package, package.name)
 		with self.assertRaisesRegex(frappe.ValidationError, "unfinished"):
 			supplement.close("Too early")
-		task.status = "Cancelled"
-		task.save()
+		from kanzlei_erp.fibu_questions import update_question
+		update_question(task.name, "cancel", {"reason": "Late issue resolved"}, str(task.modified))
+		task.reload()
 		supplement.reload().close("Late issue resolved")
 		self.assertEqual(frappe.db.get_value("FiBu Package", package.name, "has_open_supplements"), 0)
 		with self.assertRaisesRegex(frappe.ValidationError, "closed"):

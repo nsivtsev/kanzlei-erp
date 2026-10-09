@@ -7,11 +7,54 @@
  "standard": 1,
  "header_icon": "briefcase",
  "items": [
-  {"label": "Mandanten", "type": "Link", "link_type": "DocType", "link_to": "Customer", "icon": "users"},
-  {"label": "FiBu-Perioden", "type": "Link", "link_type": "DocType", "link_to": "FiBu Package", "icon": "folder"},
-  {"label": "Aufgaben", "type": "Link", "link_type": "DocType", "link_to": "Task", "icon": "clipboard"},
-  {"label": "Kalender", "type": "Link", "link_type": "URL", "url": "/desk/task/view/calendar/default", "icon": "calendar"},
-  {"label": "Zeiterfassung", "type": "Link", "link_type": "DocType", "link_to": "Timesheet", "icon": "clock"},
-  {"label": "E-Mail", "type": "Link", "link_type": "URL", "url": "/desk/communication/view/inbox", "icon": "email"}
+  {
+   "label": "Mandanten",
+   "type": "Link",
+   "link_type": "DocType",
+   "link_to": "Customer",
+   "icon": "users"
+  },
+  {
+   "label": "FiBu-Perioden",
+   "type": "Link",
+   "link_type": "DocType",
+   "link_to": "FiBu Package",
+   "icon": "folder"
+  },
+  {
+   "label": "Rückfragen",
+   "type": "Link",
+   "link_type": "URL",
+   "url": "/desk/fibu-questions",
+   "icon": "message-circle"
+  },
+  {
+   "label": "Aufgaben",
+   "type": "Link",
+   "link_type": "DocType",
+   "link_to": "Task",
+   "icon": "clipboard"
+  },
+  {
+   "label": "Kalender",
+   "type": "Link",
+   "link_type": "URL",
+   "url": "/desk/task/view/calendar/default",
+   "icon": "calendar"
+  },
+  {
+   "label": "Zeiterfassung",
+   "type": "Link",
+   "link_type": "DocType",
+   "link_to": "Timesheet",
+   "icon": "clock"
+  },
+  {
+   "label": "E-Mail",
+   "type": "Link",
+   "link_type": "URL",
+   "url": "/desk/communication/view/inbox",
+   "icon": "email"
+  }
  ]
 }

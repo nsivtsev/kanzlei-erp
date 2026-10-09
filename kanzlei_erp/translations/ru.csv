@@ -324,3 +324,96 @@ Received in full,Получено
 Before Change,До изменения
 After Change,После изменения
 Choose a FiBu package or supplement,Выберите пакет учета или дополнение
+Rückfragen,Вопросы клиенту
+Draft,Черновик
+Waiting,Ждем ответа
+Answer Received,Ответ получен
+Resolved,Решено
+Cancelled,Отменено
+Historical,Ранее не фиксировалось
+Question Management,Управление вопросом
+Question State,Состояние вопроса
+Question Responsible,Исполнитель вопроса
+Question Recipient,Адресат вопроса
+Question Document,Документ вопроса
+Operation Context,Описание операции
+Requested On,Дата запроса
+Expected Response On,Ожидаемый срок ответа
+Answered On,Дата ответа
+Remaining Question,Что осталось выяснить
+Question Reminder On,Дата напоминания по вопросу
+Question Decision,Итоговое решение
+Decided By,Решение подтвердил
+Decided At,Время решения
+Question History,История вопроса
+Question Actions,Действия по вопросу
+Question Event,Событие вопроса
+Question Event Details,Подробности события
+Question subject,Тема вопроса
+Question content,Содержание вопроса
+Work Context,Рабочий контекст
+FiBu Period or Supplement,Период FiBu или дополнение
+Initialized,Инициализировано
+Initialize,Инициализация
+Edit,Реквизиты изменены
+Request,Запрос зафиксирован
+Response,Ответ зафиксирован
+Resolve,Решение подтверждено
+Cancel,Отмена
+Reopen,Повторно открыто
+Reminder Sent,Напоминание создано
+Initialize Question,Начать управление вопросом
+Reopen Question,Открыть вопрос повторно
+Edit Question,Изменить вопрос
+Record Request,Зафиксировать запрос
+Record Answer,Зафиксировать ответ
+Resolve Question,Подтвердить решение
+Cancel Question,Отменить вопрос
+Request description,Описание обращения
+Answer content,Содержание ответа
+Partial answer,Частичный ответ
+All active questions,Все нерешенные вопросы
+Overdue answers,Ответ просрочен
+Reminders due,Напоминание наступило
+Include closed questions,Включить завершенные вопросы
+Total questions,Всего вопросов
+Questions awaiting an answer,Вопросы в ожидании ответа
+Responsible employee is disabled or has no access.,Исполнитель отключен или не имеет доступа.
+Question management was not previously recorded.,Управление вопросом ранее не фиксировалось.
+Save or reload the record before applying a question action.,Сохраните или обновите запись перед действием по вопросу.
+Question values must be an object,Данные вопроса должны быть объектом
+Managed questions require a FiBu period,Для управляемого вопроса нужен период FiBu
+The supplement belongs to another FiBu period,Дополнение относится к другому периоду FiBu
+Questions in a closed FiBu context cannot be changed,Вопросы закрытого периода или дополнения нельзя менять
+The question responsible must be an enabled employee with access to this period,Исполнитель должен быть активным сотрудником с доступом к этому периоду
+The checklist source belongs to another work context,Источник чек-листа относится к другой работе
+The question recipient must be linked to this Mandant,Адресат вопроса должен быть связан с этим клиентом
+Question subject is required,Укажите тему вопроса
+Use the question actions to change question management,Используйте действия по вопросу для изменения его состояния и истории
+A managed question cannot be changed to an ordinary Task,Управляемый вопрос нельзя превратить в обычную задачу
+The context of a managed question cannot be changed,Контекст управляемого вопроса нельзя менять
+Managed questions cannot be deleted; cancel the question with a reason,Управляемые вопросы нельзя удалять; отмените вопрос с указанием причины
+Managed questions cannot be Task templates,Управляемый вопрос нельзя сделать шаблоном задачи
+Choose a FiBu period or supplement,Выберите период FiBu или дополнение
+Choose a Question Task,Выберите задачу типа «Вопрос»
+Only an open historical question can be initialized,Управление можно включить только для открытого старого вопроса
+Initialize the question before using its actions,Сначала включите управление вопросом
+Reopen the question before changing it,Откройте вопрос повторно перед изменением
+"Recipient, request date and expected response date are required","Укажите адресата, дату запроса и ожидаемый срок ответа"
+Link a communication or describe the request,Свяжите переписку или опишите обращение
+Expected response date cannot be before the request date,Срок ответа не может предшествовать дате запроса
+Record a request before recording its answer,Зафиксируйте запрос перед его ответом
+Answer date and content are required,Укажите дату и содержание ответа
+Describe what remains unanswered,"Опишите, что осталось без ответа"
+Answer date cannot be before the request date,Дата ответа не может предшествовать дате запроса
+A decision or reason is required,Укажите решение или причину
+A closed question and reopening reason are required,Для повторного открытия нужен завершенный вопрос и причина
+This question was the next action of the period. Update the period work context.,Этот вопрос был следующим действием периода. Обновите рабочий контекст периода.
+Question reminder,Напоминание по вопросу
+Question participants must be enabled employees with access to this period,Участники вопроса должны быть активными сотрудниками с доступом к этому периоду
+Open the question to review the next action.,Откройте вопрос и проверьте следующее действие.
+Question history can only be recorded through question actions,Историю вопроса можно создавать только через действия по вопросу
+Question history cannot be deleted,Историю вопроса нельзя удалить
+Task Mandant does not match the FiBu package Mandant,Клиент задачи не соответствует клиенту периода бухучёта
+Remove question assignments or shares without period access before initialization,Перед инициализацией удалите назначения или общий доступ для участников без доступа к периоду
+All Question States,Все состояния вопросов,

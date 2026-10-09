@@ -30,20 +30,21 @@ class TestKanzleiNavigation(FrappeTestCase):
 		items = get_bootinfo().workspace_sidebar_item.get("kanzlei", {}).get("items", [])
 		links = [(item["label"], item["link_to"] or item["url"]) for item in items]
 		self.assertEqual(
-			links[:5],
+			links[:6],
 			[
 				(frappe._("Mandanten"), "Customer"),
 				(frappe._("FiBu-Perioden"), "FiBu Package"),
+				(frappe._("Rückfragen"), "/desk/fibu-questions"),
 				(frappe._("Aufgaben"), "Task"),
 				(frappe._("Kalender"), "/desk/task/view/calendar/default"),
 				(frappe._("Zeiterfassung"), "Timesheet"),
 			],
 		)
 		if navigation._has_assigned_email_account(frappe.session.user):
-			self.assertEqual(links[5], (frappe._("E-Mail"), "/desk/communication/view/inbox"))
-			links.pop(5)
-		self.assertEqual(links[5], ("Einstellungen", "/desk/company"))
-		self.assertEqual(len(links), 6)
+			self.assertEqual(links[6], (frappe._("E-Mail"), "/desk/communication/view/inbox"))
+			links.pop(6)
+		self.assertEqual(links[6], ("Einstellungen", "/desk/company"))
+		self.assertEqual(len(links), 7)
 
 	def test_email_inbox_is_hidden_without_a_user_email_assignment(self):
 		boot = get_bootinfo()

@@ -109,7 +109,9 @@ class FiBuSupplement(FiBuChecklistMixin, Document):
 		frappe.db.sql("SELECT name FROM `tabFiBu Supplement` WHERE name=%s FOR UPDATE", self.name)
 		unfinished = frappe.db.sql(
 			"""SELECT name FROM `tabTask` WHERE kanzlei_fibu_supplement=%s
-			AND status NOT IN ('Completed', 'Cancelled') LIMIT 1""",
+			AND (status NOT IN ('Completed', 'Cancelled') OR
+			(COALESCE(kanzlei_question_state, '') != '' AND kanzlei_question_state NOT IN ('Resolved', 'Cancelled')))
+			LIMIT 1""",
 			self.name,
 		)
 		if unfinished:
