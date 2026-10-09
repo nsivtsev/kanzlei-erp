@@ -119,9 +119,17 @@ Pause **Enable Incoming** on that account before the import so the scheduled rec
 bench --site SITE execute kanzlei_erp.email_archive.import_archive --kwargs '{"email_account_name":"SHARED ACCOUNT NAME","sender_aliases":["old-address@example.com"]}'
 ```
 
-The command is safe to rerun after a connection interruption or after adding Contacts. It uses a private, per-account checkpoint under the site's private files directory and reports imported and existing messages, unlinked messages, failures, and unsaved attachments. Treat the import as finished only when `complete` is `true`, `failures` is empty, and `unsaved_attachments` is zero; resolve the listed failures or raise file-size limits and rerun until the folders and attachments reconcile. Keep the private checkpoint with the site backup.
+The command is safe to rerun after a connection interruption or after adding Contacts. It uses a private, per-account checkpoint under the site's private files directory and reports imported and existing messages, unlinked messages, failures, and unsaved attachments. Every pass checks private attachment bytes against the MIME parts, including messages already in ERPNext or in the checkpoint. Missing originals are added without deleting earlier files. Encoded display names are decoded after parsing address boundaries, so commas inside names do not become extra recipients.
+
+Before importing original JPEG attachments, disable **Strip EXIF Metadata from Uploaded Images** in System Settings. This is a site-wide setting affecting future JPEG uploads; leaving it enabled can change attachment bytes. The importer reports transformed or missing originals as unsaved attachments instead of claiming completion. Previously transformed copies remain available when a rerun adds the originals.
+
+Treat the import as finished only when `complete` is `true`, `failures` is empty, and `unsaved_attachments` is zero; resolve the listed failures, file-processing settings, or file-size limits and rerun until the folders and attachments reconcile. Compare each folder's UID/UIDVALIDITY inventory with the checkpoint, accounting for the same Gmail message in several folders. A repeat pass over an unchanged inventory must not create new Communication or File records. Keep the private checkpoint with the site backup.
+
+For Gmail, first verify that a sent test message appears exactly once in the server Sent folder. Enable ERPNext **Append Emails to Sent Folder** only if the server does not save that copy, using the actual IMAP folder name. Assign the account through each employee's **User Email** table; Inbox visibility alone does not verify permission to open messages or private attachment URLs.
 
 After the archive is reconciled, enable **Incoming** again and leave synchronization set to **ALL** for new mail. Test the standard Inbox, Mandant timelines, Sent-folder behavior, and private attachment access with an assigned employee and a user without mailbox access before daily use.
+
+The local Gmail pilot and archive verification are recorded in [the BL-009 acceptance report](docs/reviews/2026-10-09-bl009-verification.md), with completed checks for delivery, server Sent copies, private attachment access, and the full archive snapshot.
 
 The focused interface is part of the app and activates on installation/migration. ERPNext's underlying modules remain installed for billing and data dependencies. Hiding navigation does not change document permissions; staff roles must still grant the intended access to Customer, Task, Work Schedule, Timesheet, and Sales Invoice.
 

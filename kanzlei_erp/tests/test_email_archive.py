@@ -340,3 +340,171 @@ class TestEmailArchiveImport(FrappeTestCase):
 			if frappe.db.exists("Email Account", account.name):
 				frappe.delete_doc("Email Account", account.name, ignore_permissions=True, force=True)
 			frappe.db.commit()
+
+
+class TestEmailArchiveOriginals(FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		from contextlib import ExitStack
+
+		self.original_strip = frappe.get_system_settings("strip_exif_metadata_from_uploaded_images")
+		self.account = frappe.get_doc({
+			"doctype": "Email Account",
+			"email_id": f"originals-{frappe.generate_hash(length=8)}@example.invalid",
+			"enable_incoming": 0, "enable_outgoing": 0,
+			"use_imap": 1, "use_ssl": 1, "create_contact": 0,
+		}).insert(ignore_permissions=True)
+		self.imap = FakeIMAP({"INBOX": {}, "Sent Items": {}})
+		server = frappe._dict(settings=frappe._dict(use_imap=1), imap=self.imap, logout=self.imap.logout)
+		self.stack = ExitStack()
+		temp_dir = self.stack.enter_context(TemporaryDirectory())
+		self.stack.enter_context(patch("kanzlei_erp.email_archive._connect", return_value=server))
+		self.stack.enter_context(patch("kanzlei_erp.email_archive._site_archive_dir", return_value=Path(temp_dir) / "archive.sqlite"))
+		self.sendmail = self.stack.enter_context(patch("frappe.sendmail"))
+		self.stack.enter_context(patch("frappe.log_error"))
+
+	def tearDown(self):
+		try:
+			self.sendmail.assert_not_called()
+		finally:
+			self.stack.close()
+			self.set_strip(self.original_strip)
+			for name in frappe.get_all("Communication", filters={"email_account": self.account.name}, pluck="name"):
+				for file_name in self.files(name):
+					frappe.delete_doc("File", file_name, ignore_permissions=True, force=True)
+				frappe.delete_doc("Communication", name, ignore_permissions=True, force=True)
+			frappe.delete_doc("Email Account", self.account.name, ignore_permissions=True, force=True)
+			frappe.db.commit()
+			super().tearDown()
+
+	def message(self, payload=b"Original fictitious XML bytes", jpeg=False):
+		message = EmailMessage()
+		message["From"] = "client@example.invalid"
+		message["To"] = self.account.email_id
+		message["Subject"] = "Fictitious BL009 regression"
+		message["Message-ID"] = f"<originals-{frappe.generate_hash(length=12)}@example.invalid>"
+		message.set_content("Test only")
+		message.add_attachment(payload, maintype="image" if jpeg else "application", subtype="jpeg" if jpeg else "xml", filename="original.jpg" if jpeg else "original.xml")
+		self.imap.messages_by_folder["INBOX"][1] = message.as_bytes()
+		return message
+
+	def files(self, communication=None):
+		communication = communication or frappe.db.get_value("Communication", {"email_account": self.account.name}, "name")
+		return frappe.get_all("File", filters={"attached_to_doctype": "Communication", "attached_to_name": communication}, pluck="name")
+
+	def set_strip(self, value):
+		from frappe.core.doctype.system_settings.system_settings import (
+			clear_system_settings_cache,
+		)
+
+		frappe.db.set_single_value("System Settings", "strip_exif_metadata_from_uploaded_images", value)
+		clear_system_settings_cache()
+		frappe.local.system_settings = None
+		self.assertEqual(frappe.get_system_settings("strip_exif_metadata_from_uploaded_images"), value)
+
+	def jpeg(self):
+		from io import BytesIO
+
+		from PIL import Image
+
+		image = Image.new("RGB", (4, 4), "red")
+		exif = Image.Exif()
+		exif[270] = "Fictitious original metadata"
+		buffer = BytesIO()
+		image.save(buffer, format="JPEG", exif=exif)
+		return buffer.getvalue()
+
+	def test_import_preserves_encoded_display_names_with_commas(self):
+		from email.utils import getaddresses
+
+		from kanzlei_erp.email_archive import _import_communication
+
+		raw = (
+			"From: =?utf-8?q?M=C3=BCller=2C_Example?= <client@example.invalid>\r\n"
+			"To: =?utf-8?q?B=C3=BCro=2C_Eins?= <office@example.invalid>\r\n"
+			"Cc: =?utf-8?q?B=C3=BCro=2C_Zwei?= <copy@example.invalid>\r\n"
+			"Bcc: =?utf-8?q?B=C3=BCro=2C_Drei?= <hidden@example.invalid>\r\n"
+			"Subject: Fictitious encoded display-name regression\r\n"
+			f"Message-ID: <encoded-{frappe.generate_hash(length=12)}@example.invalid>\r\n"
+			"Date: Fri, 09 Oct 2026 10:00:00 +0000\r\n\r\nTest only."
+		).encode("ascii")
+		communication, _, direction, _ = _import_communication(self.account, 1, 0, raw, [], True)
+		self.assertEqual(direction, "Received")
+		for field, expected in (
+			("sender", [("Müller, Example", "client@example.invalid")]),
+			("recipients", [("Büro, Eins", "office@example.invalid")]),
+			("cc", [("Büro, Zwei", "copy@example.invalid")]),
+			("bcc", [("Büro, Drei", "hidden@example.invalid")]),
+		):
+			self.assertEqual(getaddresses([communication.get(field)]), expected)
+		self.assertEqual(communication.sender_full_name, "Müller, Example")
+
+	def test_malformed_encoded_bare_address_is_rejected(self):
+		from kanzlei_erp.email_archive import _decode_address_header
+
+		self.assertEqual(_decode_address_header("=?utf-8?Q?admin=40example=2Ecom?="), "")
+
+	def test_rerun_restores_missing_attachments_on_checkpointed_messages(self):
+		self.message()
+		self.assertTrue(import_archive(self.account.name)["complete"])
+		frappe.delete_doc("File", self.files()[0], ignore_permissions=True, force=True)
+		frappe.db.commit()
+		with patch("kanzlei_erp.email_archive.get_max_file_size", return_value=1):
+			failed = import_archive(self.account.name)
+		self.assertFalse(failed["complete"])
+		self.assertEqual(failed["unsaved_attachments"], 1)
+		second = import_archive(self.account.name)
+		self.assertTrue(second["complete"])
+		self.assertEqual(second["failures"], [])
+		self.assertEqual(second["imported"], 0)
+		self.assertEqual(len(self.files()), 1)
+		self.assertEqual(Path(frappe.get_doc("File", self.files()[0]).get_full_path()).read_bytes(), b"Original fictitious XML bytes")
+		self.assertTrue(import_archive(self.account.name)["complete"])
+		self.assertEqual(len(self.files()), 1)
+		self.assertEqual(frappe.db.count("Communication", {"email_account": self.account.name}), 1)
+
+	def test_transformed_jpeg_is_reported_and_retried_with_original_bytes(self):
+		original = self.jpeg()
+		self.message(original, jpeg=True)
+		self.set_strip(1)
+		first = import_archive(self.account.name)
+		self.assertFalse(first["complete"])
+		self.assertEqual(first["unsaved_attachments"], 1)
+		self.set_strip(0)
+		self.assertTrue(import_archive(self.account.name)["complete"])
+		self.assertEqual(len(self.files()), 1)
+		self.assertEqual(Path(frappe.get_doc("File", self.files()[0]).get_full_path()).read_bytes(), original)
+
+	def test_existing_modified_jpeg_is_retained_when_original_is_restored(self):
+		from kanzlei_erp.email_archive import _ArchiveMail
+
+		original = self.jpeg()
+		message = self.message(original, jpeg=True)
+		self.set_strip(1)
+		legacy = frappe.get_doc({
+			"doctype": "Communication", "communication_type": "Communication",
+			"communication_medium": "Email", "sent_or_received": "Received",
+			"email_account": self.account.name, "message_id": str(message["Message-ID"]).strip("<>"),
+			"sender": "client@example.invalid", "subject": "Fictitious legacy JPEG",
+			"content": "Test only", "unread_notification_sent": 1,
+		})
+		legacy.flags.in_receive = True
+		legacy.insert(ignore_permissions=True)
+		old_file = _ArchiveMail(message.as_bytes(), self.account, uid=1, seen_status=0).save_attachments_in_doc(legacy)[0]
+		old_bytes = Path(old_file.get_full_path()).read_bytes()
+		self.assertNotEqual(old_bytes, original)
+		frappe.db.commit()
+		first = import_archive(self.account.name)
+		self.assertFalse(first["complete"])
+		self.assertEqual(first["unsaved_attachments"], 1)
+		self.set_strip(0)
+		second = import_archive(self.account.name)
+		self.assertTrue(second["complete"])
+		self.assertEqual(second["imported"], 0)
+		self.assertEqual(len(self.files(legacy.name)), 2)
+		self.assertIn(old_file.name, self.files(legacy.name))
+		self.assertEqual(Path(frappe.get_doc("File", old_file.name).get_full_path()).read_bytes(), old_bytes)
+		self.assertIn(original, [Path(frappe.get_doc("File", name).get_full_path()).read_bytes() for name in self.files(legacy.name)])
+		self.assertTrue(import_archive(self.account.name)["complete"])
+		self.assertEqual(len(self.files(legacy.name)), 2)
+		self.assertEqual(frappe.db.count("Communication", {"email_account": self.account.name}), 1)

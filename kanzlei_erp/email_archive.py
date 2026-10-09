@@ -8,7 +8,9 @@ import hashlib
 import html
 import re
 import sqlite3
+from collections import Counter
 from contextlib import suppress
+from email.header import decode_header, make_header
 from email.utils import getaddresses
 from pathlib import Path
 
@@ -17,7 +19,6 @@ from frappe import _
 from frappe.core.api.file import get_max_file_size
 from frappe.email.receive import InboundMail
 from frappe.utils.html_utils import clean_email_html
-
 
 _LIST_RE = re.compile(
 	rb'^\((?P<flags>[^)]*)\)\s+(?P<delimiter>NIL|"(?:\\.|[^"])*"|[^\s]+)\s+(?P<mailbox>"(?:\\.|[^"])*"|.+)$'
@@ -240,6 +241,12 @@ class ArchiveJournal:
 			(folder, uid_validity, uid),
 		)
 
+	def clear_failure(self, folder: str, uid_validity: str, uid: int):
+		self.connection.execute(
+			"DELETE FROM archive_failure WHERE folder=? AND uid_validity=? AND uid=?",
+			(folder, uid_validity, uid),
+		)
+
 	def record_failure(
 		self, folder: str, uid_validity: str, uid: int, reason: str, unsaved_attachments: int = 0
 	):
@@ -397,6 +404,65 @@ def _add_contact_links(communication):
 	return len(new_links - old_links)
 
 
+def _decode_address_header(value):
+	# Retain Frappe's rejection of malformed encoded addresses.
+	if not value or not InboundMail.decode_email(value):
+		return ""
+	addresses = []
+	for name, address in getaddresses([str(value)]):
+		name = str(make_header(decode_header(name)))
+		if name:
+			name = name.replace("\\", "\\\\").replace('"', '\\"')
+			addresses.append(f'"{name}" <{address}>')
+		else:
+			addresses.append(address)
+	return ", ".join(addresses)
+
+
+def _ensure_attachment_bytes(mail, communication, repair=True):
+	if mail.oversized_attachments:
+		raise ArchiveImportError(
+			_("Attachment size limits prevent verifying original email attachments."),
+			unsaved_attachments=len(mail.oversized_attachments),
+		)
+	expected = Counter(hashlib.sha256(part["fcontent"]).hexdigest() for part in mail.attachments)
+
+	def stored_hashes():
+		actual = Counter()
+		for row in frappe.get_all("File", filters={
+			"attached_to_doctype": "Communication", "attached_to_name": communication.name, "is_private": 1,
+		}, fields=["name", "file_url"]):
+			if not row.file_url or not row.file_url.startswith("/private/files/"):
+				continue
+			try:
+				data = Path(frappe.get_doc("File", row.name).get_full_path()).read_bytes()
+			except OSError:
+				continue
+			actual[hashlib.sha256(data).hexdigest()] += 1
+		return actual
+
+	missing = expected - stored_hashes()
+	if missing and repair:
+		original_parts = mail.attachments
+		parts = []
+		for part in original_parts:
+			digest = hashlib.sha256(part["fcontent"]).hexdigest()
+			if missing[digest]:
+				parts.append(part)
+				missing[digest] -= 1
+		try:
+			mail.attachments = parts
+			mail.save_attachments_in_doc(communication)
+		finally:
+			mail.attachments = original_parts
+		missing = expected - stored_hashes()
+	if missing:
+		raise ArchiveImportError(
+			_("Original attachment bytes are missing or changed; review file processing settings before retrying."),
+			unsaved_attachments=sum(missing.values()),
+		)
+
+
 def _import_communication(account, uid, seen_status, raw_message, sender_aliases, in_inbox):
 	mail = _ArchiveMail(raw_message, account, uid=uid if in_inbox else -1, seen_status=seen_status)
 	if mail.oversized_attachments:
@@ -406,7 +472,8 @@ def _import_communication(account, uid, seen_status, raw_message, sender_aliases
 			unsaved_attachments=len(mail.oversized_attachments),
 		)
 
-	actual_sender = mail.decode_email(mail.mail.get("X-Original-From") or mail.mail.get("From"))
+	actual_sender = _decode_address_header(mail.mail.get("X-Original-From") or mail.mail.get("From"))
+	sender = _decode_address_header(mail.mail.get("From")) or mail.from_email
 	direction = classify_message_direction(actual_sender, account.email_id, sender_aliases)
 	dedupe_key = message_dedupe_key(mail.message_id, raw_message)
 	content = (
@@ -425,11 +492,11 @@ def _import_communication(account, uid, seen_status, raw_message, sender_aliases
 			"subject": mail.subject,
 			"content": content,
 			"text_content": mail.text_content,
-			"sender": mail.decode_email(mail.mail.get("From")) or mail.from_email,
-			"sender_full_name": mail.from_real_name,
-			"recipients": mail.decode_email(mail.mail.get("To") or ""),
-			"cc": mail.decode_email(mail.mail.get("CC") or ""),
-			"bcc": mail.decode_email(mail.mail.get("BCC") or ""),
+			"sender": sender,
+			"sender_full_name": next(iter(getaddresses([sender or ""])), ("", ""))[0] or mail.from_real_name,
+			"recipients": _decode_address_header(mail.mail.get("To")),
+			"cc": _decode_address_header(mail.mail.get("CC")),
+			"bcc": _decode_address_header(mail.mail.get("BCC")),
 			"communication_date": mail.date,
 			"has_attachment": int(bool(mail.attachments)),
 			"seen": seen_status if direction == "Received" else 1,
@@ -455,6 +522,7 @@ def _import_communication(account, uid, seen_status, raw_message, sender_aliases
 			_("Some attachments were not saved for archived message {0}.").format(mail.message_id or uid),
 			unsaved_attachments=len(mail.attachments) - len(files),
 		)
+	_ensure_attachment_bytes(mail, communication, repair=False)
 	communication.save(ignore_permissions=True)
 	return communication, dedupe_key, direction, mail.in_reply_to
 
@@ -616,18 +684,18 @@ def import_archive(email_account_name: str, sender_aliases=None) -> dict:
 					for uid in batch:
 						frappe.db.savepoint("kanzlei_email_archive_message")
 						try:
+							raw_message, seen_status = messages.get(uid, (None, 0))
+							if raw_message is None:
+								raise ArchiveImportError(_("The IMAP server returned no content for UID {0}.").format(uid))
+							parsed = _ArchiveMail(raw_message, account, uid=uid if is_inbox else -1, seen_status=seen_status)
 							known_communication = journal.source_communication(folder["name"], validity, uid)
 							if known_communication:
 								communication = frappe.get_doc("Communication", known_communication)
+								_ensure_attachment_bytes(parsed, communication)
 								counts["existing"] += 1
 								counts["new_contact_links"] += _add_contact_links(communication)
+								journal.clear_failure(folder["name"], validity, uid)
 							else:
-								raw_message, seen_status = messages.get(uid, (None, 0))
-								if raw_message is None:
-									raise ArchiveImportError(_("The IMAP server returned no content for UID {0}.").format(uid))
-								parsed = _ArchiveMail(
-									raw_message, account, uid=uid if is_inbox else -1, seen_status=seen_status
-								)
 								key = message_dedupe_key(parsed.message_id, raw_message)
 								existing = journal.get_message(key)
 								communication = (
@@ -636,6 +704,7 @@ def import_archive(email_account_name: str, sender_aliases=None) -> dict:
 									else _find_existing_communication(account.name, parsed.message_id)
 								)
 								if communication:
+									_ensure_attachment_bytes(parsed, communication)
 									counts["existing"] += 1
 									counts["new_contact_links"] += _add_contact_links(communication)
 									message_id = communication.message_id or parsed.message_id
