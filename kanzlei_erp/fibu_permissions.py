@@ -6,6 +6,13 @@ import frappe
 def _allowed_names(doctype: str, user: str) -> list[str]:
 	if user == "Administrator":
 		return []
+	# Select permission for Link fields is not document read access.
+	if not frappe.permissions.get_role_permissions(doctype, user=user).get("read"):
+		return [
+			name
+			for name in frappe.share.get_shared(doctype, user)
+			if frappe.has_permission(doctype, "read", doc=name, user=user)
+		]
 	return [row.name for row in frappe.get_list(doctype, fields=["name"], limit=0, user=user)]
 
 
