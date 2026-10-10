@@ -138,3 +138,13 @@ Local setup selects German (`de`) in System Settings and for Administrator. User
 ## Development and production
 
 The local stack is for development. Keep this app in Git and use the same Frappe/ERPNext major version in both environments. See [production notes](docs/production.md) for the deployment path.
+
+### Work overview
+
+Kanzlei now opens `/desk/kanzlei-overview`. The standard Desk page combines permission-aware ordinary Task counts, upcoming task deadlines and the five latest open incoming emails from the current user's assigned mailboxes. Managed Questions, groups and templates are excluded; ordinary FiBu-linked Tasks remain subject to existing Customer/FiBu access rules. The calendar panel covers tomorrow through today + seven days, using the site's date and timezone. Opening the page does not change Tasks, assignments or mail read state.
+
+Mail opens the standard Communication form; full Task Calendar and Inbox remain available. Each block loads and retries independently. Counts show `—` while unavailable, and are never presented as zero on errors. Refresh happens on entry/return and with the Refresh button, without polling.
+
+For rollout, back up the site's database and files, run `bench --site <site> migrate`, `bench build --app kanzlei_erp`, then `bench --site <site> clear-cache`. The patch `detach_settings_icon` changes only the old Einstellungen → Kanzlei relationship in saved Desktop layouts. Repeat execution is safe and preserves other layout entries and ordering.
+
+Run the overview and navigation modules through Bench and the client checks with `node --test tests/*.test.cjs`. Development-only fictitious fixtures can be created with `env/bin/python /workspace/scripts/seed_overview_demo.py` from the container's Bench directory; pass `cleanup` afterward to remove the created records and restore the saved Administrator language, theme and email assignments. Do not run fixture setup on production. See [overview acceptance](docs/acceptance/kanzlei-overview.md) for validation and screenshots.
