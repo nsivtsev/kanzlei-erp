@@ -417,3 +417,48 @@ Question history cannot be deleted,Историю вопроса нельзя у
 Task Mandant does not match the FiBu package Mandant,Клиент задачи не соответствует клиенту периода бухучёта
 Remove question assignments or shares without period access before initialization,Перед инициализацией удалите назначения или общий доступ для участников без доступа к периоду
 All Question States,Все состояния вопросов,
+Work Overview,Рабочий обзор
+Your team at a glance,Дела команды — на одном экране
+"Emails, tasks and upcoming team deadlines","Письма, задачи и ближайшие сроки команды"
+Task summary,Сводка задач
+Overdue tasks,Просроченные задачи
+Due today,Срок сегодня
+Next seven days,Следующие семь дней
+Needs attention,Требуют внимания
+Keep today on track,План на сегодня
+Plan ahead,Планируйте заранее
+Team tasks,Задачи команды
+Focus on the work that needs attention,"Всё, что требует внимания сейчас"
+All tasks,Все задачи
+Task category,Категория задач
+Upcoming task deadlines,Ближайшие сроки задач
+Open calendar,Открыть календарь
+Latest incoming mail,Последние входящие
+Assigned mailboxes,Назначенные ящики
+Open mail,Открыть почту
+Loading…,Загрузка…
+Could not load this section.,Не удалось загрузить этот блок.
+Retry,Повторить
+Customer unavailable,Клиент недоступен
+No customer,Без клиента
+Unassigned,Не назначено
+Untitled task,Задача без темы
+No mailbox is assigned to you. Contact your administrator.,Вам не назначен почтовый ящик. Обратитесь к администратору.
+You do not have access to this section.,У вас нет доступа к этому разделу.
+No open incoming mail.,Нет открытых входящих писем.
+No deadlines in the next seven days.,В ближайшие семь дней сроков нет.
+No tasks in this category.,В этой категории задач нет.
+No subject,Без темы
+Has attachments,Есть вложения
+Show more,Показать ещё
+Urgent,Срочные
+Overdue,Просрочено
+Today,Сегодня
+Calendar,Календарь
+The work overview is available to Desk users only.,Рабочий обзор доступен только пользователям Desk.
+Invalid overview pagination.,Некорректные параметры страницы обзора.
+Invalid overview task category.,Некорректная категория задач обзора.
+Open,Открыта,Task status
+Working,В работе,Task status
+Pending Review,На проверке,Task status
+Overdue,Просрочена,Task status

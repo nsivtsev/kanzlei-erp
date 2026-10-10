@@ -1,0 +1,297 @@
+.kanzlei-overview {
+	--overview-green: #26715d;
+	--overview-red: var(--red-600);
+	padding: 16px 24px 32px;
+	color: var(--text-color);
+}
+.kanzlei-overview .overview-intro {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 20px;
+	margin-bottom: 24px;
+}
+.kanzlei-overview .overview-eyebrow {
+	font-size: 10px;
+	letter-spacing: 2px;
+	font-weight: 700;
+	color: var(--overview-green);
+}
+.kanzlei-overview h2 {
+	font-size: 26px;
+	font-weight: 650;
+	margin: 8px 0;
+}
+.kanzlei-overview p {
+	color: var(--text-muted);
+	margin: 0;
+}
+.kanzlei-overview .overview-date {
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+.kanzlei-overview .overview-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+}
+.kanzlei-overview button {
+	cursor: pointer;
+}
+.kanzlei-overview button:disabled {
+	cursor: default;
+}
+.kanzlei-overview button:focus-visible,
+.kanzlei-overview a:focus-visible {
+	outline: 2px solid var(--overview-green);
+	outline-offset: 3px;
+}
+.kanzlei-overview .overview-stat {
+	text-align: left;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 14px;
+	padding: 20px 24px;
+	color: var(--text-color);
+}
+.kanzlei-overview .overview-stat strong {
+	font-size: 34px;
+	line-height: 1.2;
+	font-weight: 650;
+}
+.kanzlei-overview .overview-stat-hint {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+.kanzlei-overview .overview-stat.overdue strong {
+	color: var(--overview-red);
+}
+.kanzlei-overview .overview-stat[aria-pressed="true"] {
+	border-color: var(--overview-green);
+	box-shadow: inset 0 0 0 1px var(--overview-green);
+}
+.kanzlei-overview .overview-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+	gap: 20px;
+	align-items: start;
+}
+.kanzlei-overview .overview-panel {
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 14px;
+	overflow: hidden;
+	min-width: 0;
+}
+.kanzlei-overview .overview-panel header {
+	display: flex;
+	justify-content: space-between;
+	align-items: start;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 22px 24px 16px;
+}
+.kanzlei-overview h3 {
+	font-size: 17px;
+	font-weight: 650;
+	margin: 0 0 6px;
+}
+.kanzlei-overview header p {
+	font-size: 12px;
+}
+.kanzlei-overview .overview-link {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--overview-green);
+	font-size: 12px;
+	text-align: left;
+}
+.kanzlei-overview .overview-link:disabled {
+	color: var(--text-muted);
+}
+.kanzlei-overview .overview-tabs {
+	display: flex;
+	gap: 4px;
+	margin: 0 24px 16px;
+	border-bottom: 1px solid var(--border-color);
+}
+.kanzlei-overview .overview-tabs button {
+	padding: 10px 12px;
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	color: var(--text-muted);
+}
+.kanzlei-overview .overview-tabs button[aria-pressed="true"] {
+	color: var(--overview-green);
+	border-bottom-color: var(--overview-green);
+	font-weight: 600;
+}
+.kanzlei-overview .overview-task-row {
+	display: flex;
+	gap: 16px;
+	padding: 16px 24px;
+	border-top: 1px solid var(--border-color);
+}
+.kanzlei-overview .overview-task-content {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.kanzlei-overview .overview-task-content > a,
+.kanzlei-overview .overview-mail-subject a {
+	font-weight: 600;
+	color: var(--text-color);
+}
+.kanzlei-overview .overview-task-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 8px;
+}
+.kanzlei-overview .overview-task-meta a {
+	color: var(--text-muted);
+}
+.kanzlei-overview .overview-task-status {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+	font-size: 11px;
+	text-align: right;
+	max-width: 35%;
+	overflow-wrap: anywhere;
+}
+.kanzlei-overview .overview-status {
+	background: var(--subtle-fg);
+	padding: 3px 8px;
+	border-radius: 6px;
+}
+.kanzlei-overview .overview-overdue {
+	color: var(--overview-red);
+}
+.kanzlei-overview .overview-day {
+	font-size: 12px;
+	color: var(--overview-green);
+	padding: 14px 24px 8px;
+	margin: 0;
+	font-weight: 650;
+}
+.kanzlei-overview .overview-agenda .overview-task-row {
+	border-top: 0;
+	padding-top: 10px;
+}
+.kanzlei-overview .overview-mail {
+	grid-column: 1 / -1;
+}
+.kanzlei-overview .overview-mail-row {
+	border-top: 1px solid var(--border-color);
+	padding: 16px 24px;
+	overflow-wrap: anywhere;
+}
+.kanzlei-overview .overview-mail-heading {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	font-size: 12px;
+	margin-bottom: 6px;
+}
+.kanzlei-overview .overview-mail-heading time {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+.kanzlei-overview .overview-mail-subject {
+	display: flex;
+	align-items: start;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+.kanzlei-overview .overview-mail-row p {
+	font-size: 12px;
+}
+.kanzlei-overview .overview-mail-row small {
+	display: block;
+	margin-top: 6px;
+	color: var(--text-muted);
+}
+.kanzlei-overview .overview-state {
+	padding: 36px 24px;
+	text-align: center;
+	color: var(--text-muted);
+	min-height: 130px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+}
+.kanzlei-overview .overview-empty-icon {
+	color: var(--overview-green);
+}
+.kanzlei-overview .overview-more {
+	border-top: 1px solid var(--border-color);
+	padding: 14px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+[data-theme="dark"] .kanzlei-overview {
+	--overview-green: #80c7af;
+	--overview-red: var(--red-400, #ff8d8d);
+}
+@media (max-width: 991px) {
+	.kanzlei-overview .overview-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.kanzlei-overview .overview-mail {
+		grid-column: auto;
+	}
+}
+@media (max-width: 575px) {
+	.kanzlei-overview {
+		padding: 12px 12px 24px;
+	}
+	.kanzlei-overview .overview-intro {
+		align-items: start;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.kanzlei-overview h2 {
+		font-size: 22px;
+	}
+	.kanzlei-overview .overview-summary {
+		gap: 8px;
+	}
+	.kanzlei-overview .overview-stat {
+		padding: 12px 10px;
+		font-size: 11px;
+	}
+	.kanzlei-overview .overview-stat strong {
+		font-size: 26px;
+	}
+	.kanzlei-overview .overview-stat-hint {
+		display: none;
+	}
+	.kanzlei-overview .overview-panel header,
+	.kanzlei-overview .overview-task-row,
+	.kanzlei-overview .overview-mail-row {
+		padding: 16px;
+	}
+	.kanzlei-overview .overview-tabs {
+		margin-left: 16px;
+		margin-right: 16px;
+	}
+	.kanzlei-overview .overview-mail-heading {
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+}

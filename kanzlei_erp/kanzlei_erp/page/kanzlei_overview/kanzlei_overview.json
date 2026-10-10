@@ -1,0 +1,9 @@
+{
+ "doctype": "Page",
+ "name": "kanzlei-overview",
+ "page_name": "kanzlei-overview",
+ "module": "Kanzlei ERP",
+ "standard": "Yes",
+ "title": "Work Overview",
+ "roles": []
+}

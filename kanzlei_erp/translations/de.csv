@@ -396,3 +396,48 @@ Question history cannot be deleted,Der Rückfragenverlauf kann nicht gelöscht w
 Task Mandant does not match the FiBu package Mandant,Der Mandant der Aufgabe stimmt nicht mit dem Mandanten des FiBu-Zeitraums überein
 Remove question assignments or shares without period access before initialization,Entfernen Sie vor der Initialisierung Zuweisungen oder Freigaben ohne Zugriff auf den Zeitraum
 All Question States,Alle Rückfragenstatus,
+Work Overview,Arbeitsübersicht
+Your team at a glance,Ihr Team im Überblick
+"Emails, tasks and upcoming team deadlines","E-Mails, Aufgaben und anstehende Termine im Team"
+Task summary,Aufgabenübersicht
+Overdue tasks,Überfällige Aufgaben
+Due today,Heute fällig
+Next seven days,Nächste sieben Tage
+Needs attention,Benötigen Aufmerksamkeit
+Keep today on track,Heute im Blick behalten
+Plan ahead,Vorausschauend planen
+Team tasks,Aufgaben des Teams
+Focus on the work that needs attention,Was jetzt Aufmerksamkeit braucht
+All tasks,Alle Aufgaben
+Task category,Aufgabenkategorie
+Upcoming task deadlines,Anstehende Aufgabenfristen
+Open calendar,Kalender öffnen
+Latest incoming mail,Neueste eingegangene E-Mails
+Assigned mailboxes,Zugewiesene Postfächer
+Open mail,Postfach öffnen
+Loading…,Wird geladen…
+Could not load this section.,Dieser Bereich konnte nicht geladen werden.
+Retry,Erneut versuchen
+Customer unavailable,Mandant nicht verfügbar
+No customer,Ohne Mandant
+Unassigned,Nicht zugewiesen
+Untitled task,Aufgabe ohne Betreff
+No mailbox is assigned to you. Contact your administrator.,Ihnen ist kein Postfach zugewiesen. Wenden Sie sich an Ihren Administrator.
+You do not have access to this section.,Sie haben keinen Zugriff auf diesen Bereich.
+No open incoming mail.,Keine offenen eingegangenen E-Mails.
+No deadlines in the next seven days.,Keine Fristen in den nächsten sieben Tagen.
+No tasks in this category.,Keine Aufgaben in dieser Kategorie.
+No subject,Kein Betreff
+Has attachments,Mit Anhängen
+Show more,Mehr anzeigen
+Urgent,Dringend
+Overdue,Überfällig
+Today,Heute
+Calendar,Kalender
+The work overview is available to Desk users only.,Die Arbeitsübersicht ist nur für Desk-Benutzer verfügbar.
+Invalid overview pagination.,Ungültige Seiteneinstellungen der Arbeitsübersicht.
+Invalid overview task category.,Ungültige Aufgabenkategorie der Arbeitsübersicht.
+Open,Offen,Task status
+Working,In Bearbeitung,Task status
+Pending Review,Zur Prüfung,Task status
+Overdue,Überfällig,Task status
