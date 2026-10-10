@@ -7,9 +7,12 @@
  "icon_type": "Link",
  "link_type": "Workspace Sidebar",
  "link_to": "Einstellungen",
- "parent_icon": "Kanzlei",
  "icon": "settings",
  "hidden": 0,
  "idx": 1,
- "roles": [{"role": "System Manager"}]
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ]
 }

@@ -12,7 +12,7 @@ required_apps = ["erpnext"]
 override_whitelisted_methods = {
 	"erpnext.projects.doctype.project.project.set_project_status": "kanzlei_erp.fibu_questions.set_project_status",
 }
-app_home = "/desk/customer"
+app_home = "/desk/kanzlei-overview"
 boot_session = "kanzlei_erp.navigation.configure_desk"
 app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {

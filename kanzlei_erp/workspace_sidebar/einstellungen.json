@@ -23,6 +23,6 @@
   {"label": "System", "type": "Link", "link_type": "DocType", "link_to": "System Settings", "icon": "settings"},
   {"label": "Druckvorlagen", "type": "Link", "link_type": "DocType", "link_to": "Print Format", "icon": "printer"},
   {"label": "Datenimport", "type": "Link", "link_type": "DocType", "link_to": "Data Import", "icon": "upload"},
-  {"label": "Zur Kanzlei", "type": "Link", "link_type": "URL", "url": "/desk/customer", "icon": "arrow-left"}
+  {"label": "Zur Kanzlei", "type": "Link", "link_type": "URL", "url": "/desk/kanzlei-overview", "icon": "arrow-left"}
  ]
 }

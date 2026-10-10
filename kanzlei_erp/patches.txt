@@ -5,3 +5,4 @@
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 kanzlei_erp.patches.backfill_fibu_workflow
+kanzlei_erp.patches.detach_settings_icon

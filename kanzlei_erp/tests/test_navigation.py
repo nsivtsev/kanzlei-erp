@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import frappe
@@ -30,21 +31,63 @@ class TestKanzleiNavigation(FrappeTestCase):
 		items = get_bootinfo().workspace_sidebar_item.get("kanzlei", {}).get("items", [])
 		links = [(item["label"], item["link_to"] or item["url"]) for item in items]
 		self.assertEqual(
-			links[:6],
+			[item for item in links if item[0] not in (frappe._("E-Mail"), "Einstellungen")],
 			[
+				(frappe._("Work Overview"), "kanzlei-overview"),
+				(frappe._("Aufgaben"), "Task"),
+				(frappe._("Kalender"), "/desk/task/view/calendar/default"),
 				(frappe._("Mandanten"), "Customer"),
 				(frappe._("FiBu-Perioden"), "FiBu Package"),
 				(frappe._("Rückfragen"), "/desk/fibu-questions"),
-				(frappe._("Aufgaben"), "Task"),
-				(frappe._("Kalender"), "/desk/task/view/calendar/default"),
 				(frappe._("Zeiterfassung"), "Timesheet"),
 			],
 		)
 		if navigation._has_assigned_email_account(frappe.session.user):
-			self.assertEqual(links[6], (frappe._("E-Mail"), "/desk/communication/view/inbox"))
-			links.pop(6)
-		self.assertEqual(links[6], ("Einstellungen", "/desk/company"))
-		self.assertEqual(len(links), 7)
+			self.assertEqual(links[1], (frappe._("E-Mail"), "/desk/communication/view/inbox"))
+		self.assertEqual(links[-1], ("Einstellungen", "/desk/company"))
+
+	def test_overview_route_and_separate_settings_icon(self):
+		from kanzlei_erp.hooks import app_home
+
+		boot = get_bootinfo()
+		self.assertEqual(app_home, "/desk/kanzlei-overview")
+		self.assertEqual(boot.app_data[0]["app_route"], app_home)
+		settings = boot.workspace_sidebar_item["einstellungen"]["items"]
+		self.assertEqual(next(item["url"] for item in settings if item.get("url")), app_home)
+		self.assertFalse(
+			next(icon for icon in boot.desktop_icons if icon.label == "Einstellungen").parent_icon
+		)
+
+	def test_layout_migration_preserves_preferences_and_is_idempotent(self):
+		from kanzlei_erp.patches.detach_settings_icon import execute
+
+		reader = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"layout-{frappe.generate_hash(length=8)}@example.invalid",
+				"first_name": "Layout Reader",
+				"send_welcome_email": 0,
+				"roles": [{"role": "Projects User"}],
+			}
+		).insert()
+		layout = [
+			{"label": "Kanzlei", "idx": 8},
+			{"label": "Einstellungen", "parent_icon": "Kanzlei", "idx": 3},
+			{"label": "Other", "parent_icon": "Personal", "idx": 5},
+		]
+		doc = frappe.get_doc(
+			{"doctype": "Desktop Layout", "user": reader.name, "layout": json.dumps(layout)}
+		).insert(ignore_permissions=True)
+		execute()
+		doc.reload()
+		first = doc.layout
+		execute()
+		doc.reload()
+		self.assertEqual(doc.layout, first)
+		result = json.loads(first)
+		self.assertEqual(result[0], layout[0])
+		self.assertEqual(result[2], layout[2])
+		self.assertEqual(result[1], {"label": "Einstellungen", "parent_icon": None, "idx": 3})
 
 	def test_email_inbox_is_hidden_without_a_user_email_assignment(self):
 		boot = get_bootinfo()
@@ -127,7 +170,9 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertIn(frappe._("Email Account"), labels)
 		self.assertIn(frappe._("Email Domain"), labels)
 		self.assertIn(frappe._("Email Queue"), labels)
-		links = {item["label"]: item["link_to"] for item in boot.workspace_sidebar_item["einstellungen"]["items"]}
+		links = {
+			item["label"]: item["link_to"] for item in boot.workspace_sidebar_item["einstellungen"]["items"]
+		}
 		self.assertEqual(links[frappe._("Wiederholungen")], "Work Schedule")
 		self.assertEqual(links[frappe._("Rechnungen")], "Sales Invoice")
 		self.assertEqual(links[frappe._("Zahlungen")], "Payment Entry")
@@ -152,7 +197,9 @@ class TestKanzleiNavigation(FrappeTestCase):
 				side_effect=lambda doctype, ptype, doc, user: doc == "MANDANT-B",
 			),
 		):
-			self.assertTrue(communication_has_permission(communication, "read", user="mail-reader@example.invalid"))
+			self.assertTrue(
+				communication_has_permission(communication, "read", user="mail-reader@example.invalid")
+			)
 
 	def test_unknown_mail_is_not_readable_to_staff_without_the_mailbox(self):
 		communication = frappe._dict(
@@ -167,7 +214,9 @@ class TestKanzleiNavigation(FrappeTestCase):
 			patch("kanzlei_erp.navigation.frappe.db.exists", return_value=False),
 			patch("kanzlei_erp.navigation.frappe.get_all", return_value=[]),
 		):
-			self.assertFalse(communication_has_permission(communication, "read", user="mail-reader@example.invalid"))
+			self.assertFalse(
+				communication_has_permission(communication, "read", user="mail-reader@example.invalid")
+			)
 
 	def test_customer_is_presented_as_mandant(self):
 		translations = get_translations_from_apps("de")
@@ -196,7 +245,13 @@ class TestKanzleiNavigation(FrappeTestCase):
 		terms = get_translations_from_apps("de")
 		translations = {
 			source: terms.get(source)
-			for source in ("Item", "Item Name", "Item Group", "Clear all filters", "Begin typing for results.")
+			for source in (
+				"Item",
+				"Item Name",
+				"Item Group",
+				"Clear all filters",
+				"Begin typing for results.",
+			)
 		}
 		del terms
 		self.assertEqual(translations["Item"], "Leistung")

@@ -49,7 +49,7 @@ def configure_desk(bootinfo):
 	allowed = {"kanzlei"}
 	if "System Manager" in frappe.get_roles():
 		allowed.add("einstellungen")
-	show_mail = _has_assigned_email_account(frappe.session.user)
+	show_mail = _has_assigned_email_account(frappe.session.user) and frappe.has_permission("Communication", "read")
 
 	bootinfo.workspace_sidebar_item = {
 		name: sidebar
