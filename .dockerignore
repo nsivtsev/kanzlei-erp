@@ -1,0 +1,11 @@
+**
+!pyproject.toml
+!README.md
+!license.txt
+!kanzlei_erp/
+!kanzlei_erp/**
+!deploy/
+!deploy/Dockerfile
+kanzlei_erp/**/__pycache__/
+kanzlei_erp/**/*.pyc
+kanzlei_erp/public/dist/

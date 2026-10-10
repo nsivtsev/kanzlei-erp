@@ -1,8 +1,8 @@
 # Production deployment path
 
-Production will use the [official Frappe Docker Compose stack](https://github.com/frappe/frappe_docker/blob/main/docs/01-getting-started/01-choosing-a-deployment-method.md), not the development Compose file. This repository itself is a Frappe app (the Python package and `pyproject.toml` are at its root). The production image will include Frappe, ERPNext, and a reviewed revision of this repository. The [official image build guide](https://github.com/frappe/frappe_docker/blob/main/docs/02-setup/02-build-setup.md) describes `apps.json` and the `compose.yaml` overrides.
+Production uses `deploy/compose.yml` with an image extending the pinned official Frappe/ERPNext v16 image. GitHub Actions builds and verifies the app and its assets, publishes the tested digest, and deploys over SSH to Hetzner. Follow the [deployment runbook](deployment.md) for bootstrap, GitHub environment settings, releases, backups and recovery. The development Compose file is for local use only.
 
-Before deployment, decide the hosting provider and region, domain and TLS termination, secret store, backup destination and restore test, monitoring, and update window. Prepare a persistent database and site volumes. Build the image in CI, verify it in a staging environment, then apply migrations and deploy the image to production. Keep production credentials outside Git and container image layers.
+This deployment uses a public domain with Caddy HTTPS, server-only credentials, persistent database/site volumes and seven local pre-update snapshots. Verification runs on a disposable CI site. Choose a maintenance window and arrange monitoring and off-server backups separately. Keep production credentials outside Git and container image layers.
 
 The local `development/frappe-bench` directory and MariaDB volume are development data. They are not deployment artifacts. Production receives versioned code and configuration; any real data migration requires a separate, tested backup and restore procedure.
 
@@ -12,7 +12,7 @@ The saved Customer form now includes a **Dokumente** tab. Its list is assembled 
 
 Mandant billing defaults and standard receivable/credit settings are on Abrechnung, displayed for Administrator and System Manager. Task's extended fields and dependencies are on Erweitert. These are interface changes: standard DocTypes, stored values, modules, and permissions remain intact. Hidden tabs and navigation are not a permission boundary; configure staff document permissions during onboarding. Validate the Kanzlei's billing process before issuing real invoices through Einstellungen.
 
-For an application update, deploy the reviewed revision and run these commands in the site's Bench environment (the production image build may perform the asset build):
+For an application update, create a reviewed release tag as described in the runbook. The pipeline runs migration in the new image, and builds app assets during image construction. The corresponding Bench operations are:
 
 ```bash
 bench --site <site-name> migrate

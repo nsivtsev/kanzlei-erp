@@ -137,4 +137,4 @@ Local setup selects German (`de`) in System Settings and for Administrator. User
 
 ## Development and production
 
-The local stack is for development. Keep this app in Git and use the same Frappe/ERPNext major version in both environments. See [production notes](docs/production.md) for the deployment path.
+The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
