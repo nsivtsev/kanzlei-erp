@@ -27,6 +27,12 @@ packages = []
 line-length = 110
 target-version = "py314"
 
+[tool.ruff.per-file-target-version]
+# Deployment tooling runs on the host's Python 3.9+, independently of Frappe.
+"deploy/**/*.py" = "py39"
+"scripts/release-image.py" = "py39"
+"tests/deploy/**/*.py" = "py39"
+
 [tool.ruff.lint]
 select = [
     "F",
