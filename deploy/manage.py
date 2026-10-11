@@ -565,7 +565,7 @@ bench --site "$SITE_NAME" execute kanzlei_erp.localization.configure_german_lang
 		for path in sorted((self.root / "backups").glob("*")):
 			try:
 				verify_backup(path.resolve())
-			except OSError, ValueError, KeyError, TypeError:
+			except (OSError, ValueError, KeyError, TypeError):
 				continue
 			backups.append(path)
 		for backup in backups[:-7]:
