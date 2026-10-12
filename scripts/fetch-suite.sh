@@ -16,6 +16,14 @@ else
   git -C apps/suite fetch --depth 1 origin "$SUITE_COMMIT"
   git -C apps/suite checkout --detach FETCH_HEAD
 fi
+patch_dir=$(realpath "$(dirname "$0")/../deploy")
+for app in frappe suite; do
+  patch_file="$patch_dir/$app-mandant-access.patch"
+  if ! git -C "apps/$app" apply --reverse --check "$patch_file" 2>/dev/null; then
+    git -C "apps/$app" apply --check "$patch_file"
+    git -C "apps/$app" apply "$patch_file"
+  fi
+done
 git -C apps/suite submodule update --init --recursive --depth 1
 grep -qxF suite sites/apps.txt || printf '\nsuite\n' >> sites/apps.txt
 bench pip install -e apps/suite

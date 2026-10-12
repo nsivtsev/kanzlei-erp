@@ -443,3 +443,19 @@ Pending Review,Zur Prüfung,Task status
 Overdue,Überfällig,Task status
 Files,Dateien
 Manage ERP attachments from their original document,Verwalten Sie ERP-Anhänge im zugehörigen Dokument
+Drive Folder,Drive-Ordner
+Create Drive Folder,Drive-Ordner anlegen
+Allow popups to open the Drive folder.,Erlauben Sie Popups zum Öffnen des Drive-Ordners.
+Could not open the Mandant folder. Check your access and try again.,Der Mandantenordner konnte nicht geöffnet werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.
+Please log in as a staff user,Melden Sie sich mit einem Mitarbeiterkonto an
+Drive is not installed,Drive ist nicht installiert
+The Mandant folder is unavailable. Contact an administrator.,Der Mandantenordner ist nicht verfügbar. Wenden Sie sich an einen Administrator.
+Manage the Mandant folder through its Drive action,Verwalten Sie den Mandantenordner über die Drive-Aktion im Mandanten
+No write access to this Mandant,Kein Schreibzugriff auf diesen Mandanten
+Mandant Drive files must remain private,Drive-Dateien eines Mandanten müssen privat bleiben
+The Mandant root folder cannot be moved or deleted,Der Mandantenordner kann nicht verschoben oder gelöscht werden
+Files can only be moved within the same Mandant,Dateien können nur innerhalb desselben Mandanten verschoben werden
+Drive access is managed through Mandant permissions,Der Drive-Zugriff wird über die Mandantenberechtigungen verwaltet
+Manage Mandant files through Drive,Verwalten Sie Mandantendateien über Drive
+Upload files to Mandant folders. Create Suite documents outside these folders.,Laden Sie Dateien in Mandantenordner hoch. Erstellen Sie Suite-Dokumente außerhalb dieser Ordner.
+Mandant Drive links must use HTTP or HTTPS,Links in Mandantenordnern müssen HTTP oder HTTPS verwenden

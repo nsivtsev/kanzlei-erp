@@ -7,6 +7,8 @@
 !deploy/
 !deploy/Dockerfile
 !deploy/suite.env
+!deploy/suite-mandant-access.patch
+!deploy/frappe-mandant-access.patch
 !scripts/
 !scripts/fetch-suite.sh
 kanzlei_erp/**/__pycache__/

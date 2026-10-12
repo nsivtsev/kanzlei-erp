@@ -1,6 +1,33 @@
 [
  {
   "doctype": "Custom Field",
+  "name": "Customer-kanzlei_drive_folder",
+  "dt": "Customer",
+  "fieldname": "kanzlei_drive_folder",
+  "fieldtype": "Link",
+  "options": "File",
+  "label": "Mandant Drive Folder",
+  "insert_after": "kanzlei_documents_html",
+  "read_only": 1,
+  "hidden": 1,
+  "no_copy": 1,
+  "unique": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "File-kanzlei_drive_customer",
+  "dt": "File",
+  "fieldname": "kanzlei_drive_customer",
+  "fieldtype": "Link",
+  "options": "Customer",
+  "label": "Mandant",
+  "read_only": 1,
+  "hidden": 1,
+  "no_copy": 1,
+  "search_index": 1
+ },
+ {
+  "doctype": "Custom Field",
   "name": "Customer-kanzlei_documents_tab",
   "dt": "Customer",
   "fieldname": "kanzlei_documents_tab",
