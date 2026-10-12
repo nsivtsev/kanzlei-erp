@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -94,6 +95,65 @@ class DeploymentTests(unittest.TestCase):
 		self.assertEqual(json.loads((self.root / "shared/current.json").read_text()), self.state)
 		self.assertFalse((self.root / "shared/pending.json").exists())
 		self.assertTrue(any("up" in call and "scheduler" in call for call in commands.calls))
+
+	def test_existing_site_installs_missing_apps_after_backup_before_migration(self):
+		commands = FakeCommands()
+		self.deployer(commands).deploy()
+		installation = next(i for i, call in enumerate(commands.calls) if "install-app suite" in call[-1])
+		backup = next(i for i, call in enumerate(commands.calls) if "backup" in call)
+		migration = next(i for i, call in enumerate(commands.calls) if "migrate" in call)
+		self.assertLess(backup, installation)
+		self.assertLess(installation, migration)
+		self.assertNotIn("new-site", commands.calls[installation][-1])
+
+	def test_suite_install_failure_preserves_recovery_marker(self):
+		class FailedInstall(FakeCommands):
+			def run(self, args, **kwargs):
+				if "install-app suite" in args[-1]:
+					self.calls.append(list(args))
+					raise RuntimeError("Suite installation failed")
+				return super().run(args, **kwargs)
+
+		commands = FailedInstall()
+		with self.assertRaisesRegex(RuntimeError, "Suite installation"):
+			self.deployer(commands).deploy()
+		self.assertTrue((self.root / "shared/pending.json").exists())
+		self.assertFalse(any("migrate" in call for call in commands.calls))
+		self.assertEqual(json.loads((self.root / "shared/current.json").read_text()), self.state)
+
+	def test_resume_completes_committed_partial_suite_install_only_once(self):
+		commands = FakeCommands()
+		self.deployer(commands).ensure_apps()
+		script = commands.calls[-1][-1]
+		bin_path = self.root / "bin"
+		bin_path.mkdir()
+		(self.root / "env/bin").mkdir(parents=True)
+		(self.root / "env/bin/python").symlink_to(sys.executable)
+		site_path = self.root / "sites/erp.example.com"
+		site_path.mkdir(parents=True)
+		(site_path / "site_config.json").write_text('{"kanzlei_suite_install_pending":1}')
+		bench = bin_path / "bench"
+		bench.write_text(
+			"#!" + sys.executable + "\n"
+			"import json, os, sys\nfrom pathlib import Path\n"
+			"args=sys.argv[1:]\n"
+			"with open('bench-calls.jsonl','a') as f: f.write(json.dumps(args)+'\\n')\n"
+			"if args[2]=='list-apps': print('frappe 16\\nerpnext 16\\nsuite 0\\nkanzlei_erp 0')\n"
+			"if args[2]=='set-config':\n"
+			" p=Path('sites')/os.environ['SITE_NAME']/'site_config.json'\n"
+			" data=json.loads(p.read_text()); data[args[3]]=json.loads(args[4]); p.write_text(json.dumps(data))\n"
+		)
+		bench.chmod(0o700)
+		env = {**os.environ, "PATH": str(bin_path) + ":" + os.environ["PATH"], "SITE_NAME": "erp.example.com"}
+		for _ in range(2):
+			subprocess.run(["bash", "-euc", script], cwd=self.root, env=env, check=True)
+		calls = [json.loads(line) for line in (self.root / "bench-calls.jsonl").read_text().splitlines()]
+		installs = [call for call in calls if call[2] == "install-app"]
+		self.assertEqual(installs, [["--site", "erp.example.com", "install-app", "suite", "--force"]])
+		cleanup = ["--site", "erp.example.com", "execute", '__import__("kanzlei_erp.suite_setup", fromlist=["prepare_suite_install"]).prepare_suite_install("suite")']
+		self.assertEqual(calls.count(cleanup), 1)
+		self.assertLess(calls.index(cleanup), calls.index(installs[0]))
+		self.assertEqual(json.loads((site_path / "site_config.json").read_text())["kanzlei_suite_install_pending"], 0)
 
 	def test_migration_failure_keeps_recovery_marker_and_previous_release(self):
 		commands = FakeCommands("migrate")

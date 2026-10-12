@@ -43,10 +43,16 @@ trap cleanup EXIT
 "${compose[@]}" run --rm -T configurator
 # Variables in this script expand inside the disposable container.
 # shellcheck disable=SC2016
-"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-site.py:/tmp/ci-site.py:ro" -e SITE_NAME=ci.localhost -e DB_PASSWORD -e ADMIN_PASSWORD backend bash -euc '
+"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-site.py:/tmp/ci-site.py:ro" -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" -e SITE_NAME=ci.localhost -e DB_PASSWORD -e ADMIN_PASSWORD backend bash -euc '
 bench new-site ci.localhost --db-root-password "$DB_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=%
 bench --site ci.localhost install-app erpnext
+bench --site ci.localhost install-app suite
+bench --site ci.localhost set-config kanzlei_suite_install_pending 1
+bench --site ci.localhost execute "__import__(\"kanzlei_erp.suite_setup\", fromlist=[\"prepare_suite_install\"]).prepare_suite_install(\"suite\")"
+bench --site ci.localhost install-app suite --force
+bench --site ci.localhost set-config kanzlei_suite_install_pending 0
 bench --site ci.localhost install-app kanzlei_erp
+bench --site ci.localhost execute kanzlei_erp.suite_setup.configure
 bench --site ci.localhost execute frappe.db.set_single_value --args "[\"System Settings\",\"time_zone\",\"Europe/Berlin\"]"
 bench --site ci.localhost execute kanzlei_erp.localization.configure_german_language --kwargs "{\"user\":\"Administrator\"}"
 bench --site ci.localhost migrate
@@ -58,6 +64,22 @@ env/bin/python /tmp/ci-site.py
 bench --site ci.localhost run-tests --app kanzlei_erp --junit-xml-output /home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml
 env/bin/python -c '\''import re, xml.etree.ElementTree as E; data=open("/home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml").read(); root=E.fromstring("<reports>"+re.sub(r"<\?xml[^>]*\?>", "", data)+"</reports>"); cases=list(root.iter("testcase")); assert any(case.find("skipped") is None for case in cases), "No application tests executed"; assert not list(root.iter("failure")) and not list(root.iter("error")), "Application tests failed"; print(f"Verified {len(cases)} application test results")'\''
 bench --site ci.localhost set-config allow_tests false
+bench new-site suite-upgrade.localhost --db-root-password "$DB_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=%
+bench --site suite-upgrade.localhost install-app erpnext
+bench --site suite-upgrade.localhost install-app kanzlei_erp
+env/bin/python /tmp/ci-suite.py legacy-seed --site suite-upgrade.localhost
+bench --site suite-upgrade.localhost backup --with-files --compress
+bench --site suite-upgrade.localhost install-app suite
+bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
+bench --site suite-upgrade.localhost migrate
+bench --site suite-upgrade.localhost migrate
+env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
+bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 1
+bench --site suite-upgrade.localhost execute "__import__(\"kanzlei_erp.suite_setup\", fromlist=[\"prepare_suite_install\"]).prepare_suite_install(\"suite\")"
+bench --site suite-upgrade.localhost install-app suite --force
+bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 0
+bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
+env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
 '
 "${compose[@]}" up -d backend frontend websocket queue-short queue-long scheduler
 python3 - "$task_root" "$image" <<'PY'
@@ -81,6 +103,8 @@ remaining = compose.commands.run(["docker", "ps", "-aq", "--filter", "label=io.k
     "--filter", "label=com.docker.compose.project=" + compose.config["PROJECT_NAME"]])
 assert not remaining, "Timed-out maintenance container is still present"
 PY
+"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" -e ADMIN_PASSWORD backend env/bin/python /tmp/ci-suite.py upload
+"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" backend env/bin/python /tmp/ci-suite.py verify
 # Real backup/restore on the disposable site verifies both file archives and schema restoration.
 "${compose[@]}" stop --timeout 120 backend frontend websocket queue-short queue-long scheduler
 backup_container="$project-acceptance-backup"
@@ -98,6 +122,7 @@ touch sites/ci.localhost/public/files/after-snapshot.txt sites/ci.localhost/priv
 mkdir -m 700 "$task_root/restore"
 docker cp "$backup_container:/home/frappe/frappe-bench/sites/ci.localhost/private/backups/acceptance/." "$task_root/restore"
 docker rm "$backup_container" >/dev/null
+"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" backend env/bin/python /tmp/ci-suite.py damage
 chmod 600 "$task_root/restore/"*
 python3 - "$task_root" "$image" <<'PY'
 import importlib.util
@@ -123,6 +148,7 @@ test ! -e sites/ci.localhost/public/files/after-snapshot.txt
 test ! -e sites/ci.localhost/private/files/after-snapshot.txt
 '
 "${compose[@]}" up -d backend frontend websocket queue-short queue-long scheduler
+"${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" backend env/bin/python /tmp/ci-suite.py verify
 python3 - "$task_root" "$image" <<'PY'
 import importlib.util
 from pathlib import Path

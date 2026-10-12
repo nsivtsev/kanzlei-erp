@@ -11,8 +11,12 @@ app_license = "mit"
 required_apps = ["erpnext"]
 override_whitelisted_methods = {
 	"erpnext.projects.doctype.project.project.set_project_status": "kanzlei_erp.fibu_questions.set_project_status",
+	"suite.drive.api.files.remove_or_restore": "kanzlei_erp.suite_setup.trash_or_restore",
 }
+extend_doctype_class = {"File": ["kanzlei_erp.suite_file.ERPAttachmentGuard"]}
 app_home = "/desk/kanzlei-overview"
+home_page = app_home
+setup_wizard_url = "/desk/setup-wizard"
 boot_session = "kanzlei_erp.navigation.configure_desk"
 app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {
@@ -53,4 +57,4 @@ doc_events = {
 	"File": {"validate": "kanzlei_erp.fibu_materials.validate_fibu_attachment", "on_trash": "kanzlei_erp.fibu_materials.validate_fibu_attachment"},
 }
 scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"]}
-after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles"]
+after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles", "kanzlei_erp.suite_setup.configure"]

@@ -125,6 +125,38 @@ preferences. No production application tests or sample-data scripts run on the s
 
 ## What an update does
 
+The image now bundles Frappe Suite at the commit in `deploy/suite.env`, including
+its Python/frontend dependencies, ffmpeg and compiled assets. No app source or
+dependencies are downloaded on the production server. A fresh site installs
+ERPNext, Suite and Kanzlei ERP in that order. An existing site installs missing
+Suite after the verified recovery snapshot and before the normal migration.
+Installation is checked on every deployment, including explicit resume; an
+installation failure retains `pending.json` and the original recovery backup.
+The site flag `kanzlei_suite_install_pending` distinguishes a completed install
+from Frappe's early registration in `installed_apps`. Resume replays an
+interrupted installation with `install-app suite --force` and clears the flag
+only after the command succeeds. CI verifies that replay preserves attachments.
+During this flagged recovery, Kanzlei clears only Suite-owned bootstrap Rate Limit
+rows before Suite recreates them; normal updates preserve those settings.
+Do not uninstall Suite as a rollback: restore the full pre-install snapshot and
+its previous image using the recovery procedure below.
+
+Kanzlei ERP is kept last in the installed-app order so its home and setup hooks
+retain priority. Administrator opens Drive from **Dateien**. CI verifies the
+Drive HTML and referenced JS/CSS through nginx, private PDF upload/download,
+legacy Customer attachments on upgrade, and Drive-file recovery from backup.
+Post-deployment HTTP checks include Drive/assets when the site has Suite; a
+restored pre-Suite snapshot remains compatible with the old release.
+
+After release, run the **Verify Suite Drive** GitHub Actions workflow. It logs in
+as Administrator using the server's `ADMIN_PASSWORD`, creates an identifiable
+`Kanzlei Releasecheck …` folder, uploads a test PDF and compares its download
+checksum. It leaves that test file for inspection and records its identifiers
+in `shared/drive-acceptance.json`. If the Administrator password has changed,
+update the server's protected configuration before this explicit check.
+The same check can be run on the server with
+`python3 /opt/kanzlei-erp/current/deploy/verify_drive.py --root /opt/kanzlei-erp`.
+
 The server pulls the digest and verifies its commit label, then enables maintenance,
 stops the web, workers and scheduler, and makes a complete pre-update backup. Each
 snapshot under `/opt/kanzlei-erp/backups/` contains:

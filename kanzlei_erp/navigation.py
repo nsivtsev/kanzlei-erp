@@ -3,6 +3,7 @@
 import frappe
 
 EMAIL_INBOX_URL = "/desk/communication/view/inbox"
+DRIVE_URL = "/drive"
 
 
 def _has_assigned_email_account(user):
@@ -62,7 +63,12 @@ def configure_desk(bootinfo):
 			for item in bootinfo.workspace_sidebar_item["kanzlei"]["items"]
 			if item["label"] != "Einstellungen"
 			and (item.get("url") != EMAIL_INBOX_URL or show_mail)
+			and item.get("url") != DRIVE_URL
 		]
+		if frappe.session.user == "Administrator" and "suite" in frappe.get_installed_apps():
+			bootinfo.workspace_sidebar_item["kanzlei"]["items"].append(
+				{"label": frappe._("Files"), "type": "Link", "link_type": "URL", "link_to": None, "url": DRIVE_URL, "icon": "folder"}
+			)
 	if "einstellungen" in bootinfo.workspace_sidebar_item and "kanzlei" in bootinfo.workspace_sidebar_item:
 		bootinfo.workspace_sidebar_item["kanzlei"]["items"].append(
 			{

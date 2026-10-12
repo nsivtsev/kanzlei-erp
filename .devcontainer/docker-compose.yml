@@ -25,7 +25,10 @@ services:
     platform: linux/arm64
 
   frappe:
-    image: docker.io/frappe/bench:latest
+    image: kanzlei-erp-bench:local
+    build:
+      context: .
+      dockerfile: Dockerfile
     platform: linux/arm64
     command: >-
       bash -lc 'until test -f /workspace/development/frappe-bench/.kanzlei-ready;

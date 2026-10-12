@@ -14,7 +14,10 @@ fi
 
 compose=(docker compose --env-file .env -f .devcontainer/docker-compose.yml)
 "${compose[@]}" config --quiet
-"${compose[@]}" up -d
+rm -f development/frappe-bench/.kanzlei-ready
+# Bench must restart after editable dependencies change; keep it behind the ready gate.
+"${compose[@]}" stop frappe
+"${compose[@]}" up -d --build
 
 echo "Waiting for MariaDB..."
 for attempt in {1..60}; do
@@ -60,9 +63,25 @@ fi
 grep -qxF kanzlei_erp sites/apps.txt || printf "kanzlei_erp\n" >> sites/apps.txt
 uv pip install --quiet -e /workspace --python env/bin/python
 bench build --app kanzlei_erp > /tmp/kanzlei-build.log 2>&1
+suite_pending=$(env/bin/python -c '\''import json; print(json.load(open("sites/development.localhost/site_config.json")).get("kanzlei_suite_install_pending", 0))'\'')
+if ! bench --site development.localhost list-apps | grep -q "^suite" && [[ $suite_pending != 1 ]]; then
+  bench --site development.localhost backup --with-files --compress
+fi
+bash /workspace/scripts/fetch-suite.sh
+if ! bench --site development.localhost list-apps | grep -q "^suite" || [[ $suite_pending == 1 ]]; then
+  force=()
+  if bench --site development.localhost list-apps | grep -q "^suite"; then
+    force=(--force)
+  fi
+  bench --site development.localhost set-config kanzlei_suite_install_pending 1
+  bench --site development.localhost execute "__import__(\"kanzlei_erp.suite_setup\", fromlist=[\"prepare_suite_install\"]).prepare_suite_install(\"suite\")"
+  bench --site development.localhost install-app suite "${force[@]}"
+  bench --site development.localhost set-config kanzlei_suite_install_pending 0
+fi
 if ! bench --site development.localhost list-apps | grep -q "^kanzlei_erp"; then
   bench --site development.localhost install-app kanzlei_erp
 fi
+bench --site development.localhost execute kanzlei_erp.suite_setup.configure
 bench --site development.localhost set-config developer_mode 1
 bench --site development.localhost set-config allow_tests true
 bench --site development.localhost migrate > /tmp/kanzlei-migrate.log 2>&1
