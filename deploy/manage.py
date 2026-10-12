@@ -283,7 +283,7 @@ def smoke_check(compose):
 	get("/assets/kanzlei_erp/js/fibu_workflow.js")
 	get("/assets/kanzlei_erp/js/fibu_checklist.js")
 	# Recovery may restore a pre-Suite snapshot, so inspect the restored site's apps.
-	apps = json.loads(compose.bench("execute", "frappe.get_installed_apps"))
+	apps = json.loads(compose.call("exec", "-T", "backend", "bench", "--site", config["SITE_NAME"], "execute", "frappe.get_installed_apps"))
 	if "suite" in apps:
 		html = get("/drive").decode("utf-8")
 		paths = re.findall(r'''(?:src|href)=["'](/assets/suite/frontend/[^"']+\.(?:js|css))["']''', html)

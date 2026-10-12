@@ -65,7 +65,7 @@ def main():
 			manage.validate_release(current["image"], current["revision"], current["tag"])
 			compose = manage.Compose(args.root, Path(current["release"]), current["image"], manage.Commands())
 			result = compose.call("run", "--rm", "-T", "--no-deps", "-v", str(Path(__file__).resolve()) + ":/tmp/verify_drive.py:ro", "-e", "SITE_NAME", "-e", "ADMIN_PASSWORD", "backend", "env/bin/python", "/tmp/verify_drive.py", "--container")
-			manage.atomic_json(args.root / "shared/drive-acceptance.json", json.loads(result))
+			manage.atomic_json(args.root / "shared/drive-acceptance.json", json.loads(result.splitlines()[-1]))
 			print("Administrator Drive folder/upload/download verification passed for " + current["tag"])
 
 
