@@ -303,6 +303,35 @@ class TestFiBuPackage(FrappeTestCase):
 		self.assertEqual(package.transfers[0].note, "Sent manually")
 		self.assertEqual(supplement.files[0].file, file.name)
 
+	def test_drive_rejects_closed_attachment_changes_before_moving_bytes(self):
+		from pathlib import Path
+
+		from frappe.utils.file_manager import save_file
+		from suite.drive.api.files import create_folder
+		from suite.drive.overrides.file import after_file_upload
+		from suite.drive.utils import get_user_folder
+
+		package = self.make_package()
+		content = b"Protected FiBu attachment"
+		file = save_file("protected-" + frappe.generate_hash(length=8) + ".txt", content, "FiBu Package", package.name, is_private=1)
+		file = after_file_upload(file)
+		file.save()
+		path = Path(file.get_full_path())
+		original_url = file.file_url
+		target = create_folder("Target " + frappe.generate_hash(length=8), get_user_folder().name)
+		package.close("Complete")
+		for operation in (
+			lambda: file.rename("changed.txt"),
+			lambda: file.move(target.name),
+			lambda: frappe.call("kanzlei_erp.suite_setup.trash_or_restore", entity_names=[file.name]),
+		):
+			with self.subTest(operation=operation):
+				with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+					operation()
+				self.assertTrue(path.is_file(), "Rejected operation moved the attachment bytes")
+				self.assertEqual(path.read_bytes(), content)
+				self.assertEqual(frappe.db.get_value("File", file.name, "file_url"), original_url)
+
 	def test_browser_round_trip_preserves_transfer_history_on_close(self):
 		from frappe.utils import get_datetime
 

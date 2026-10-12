@@ -6,8 +6,14 @@ ARG SOURCE_DATE_EPOCH
 LABEL org.opencontainers.image.source="https://github.com/nsivtsev/kanzlei-erp" \
       org.opencontainers.image.revision="${REVISION}"
 
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg git build-essential pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 USER frappe
 WORKDIR /home/frappe/frappe-bench
+COPY --chown=frappe:frappe deploy/suite.env /tmp/kanzlei/deploy/suite.env
+COPY --chown=frappe:frappe scripts/fetch-suite.sh /tmp/kanzlei/scripts/fetch-suite.sh
+RUN bash /tmp/kanzlei/scripts/fetch-suite.sh
 COPY --chown=frappe:frappe pyproject.toml README.md license.txt apps/kanzlei_erp/
 COPY --chown=frappe:frappe kanzlei_erp/ apps/kanzlei_erp/kanzlei_erp/
 # Assets must live in the image's baked directory, outside the persistent sites volume.

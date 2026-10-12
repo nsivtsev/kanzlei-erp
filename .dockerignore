@@ -6,6 +6,9 @@
 !kanzlei_erp/**
 !deploy/
 !deploy/Dockerfile
+!deploy/suite.env
+!scripts/
+!scripts/fetch-suite.sh
 kanzlei_erp/**/__pycache__/
 kanzlei_erp/**/*.pyc
 kanzlei_erp/public/dist/

@@ -137,6 +137,32 @@ Local setup selects German (`de`) in System Settings and for Administrator. User
 
 ## Development and production
 
+### Suite Drive
+
+Suite is bundled at commit `2db13737524b271e32cae80a64a85b5ff112e55f`, pinned in
+`deploy/suite.env` for both local setup and production builds. Run
+`bash scripts/setup-local.sh` to add it to the local site. Before its first
+installation on an existing local site, setup backs up the database and files.
+Setup pauses Bench while installing dependencies and rebuilding, then starts it
+again; repeating it preserves the site and Drive files. A Suite checkout at a
+different commit stops setup rather than overwriting it.
+
+Administrator sees **Dateien / Files / Файлы** in Kanzlei, opening `/drive`.
+Create a folder, upload a PDF, and download it to verify access. Kanzlei remains
+the ERP home and ERPNext owns company setup; Suite's separate onboarding is
+marked complete without configuring its Mail, Meet or other products. Staff
+navigation, Mandant folder mapping, WebDAV, archive migration and additional
+backup scheduling are future steps. Suite's own roles and permission system
+remain active: hiding the navigation link is not a server-side access boundary.
+ERP attachments are managed from their original documents; Drive rename,
+move, trash and permanent deletion reject them before touching stored bytes,
+including operations on a containing folder.
+
+Production images contain Suite code, dependencies and built assets. Deployment
+installs Suite on existing sites after the verified pre-update snapshot and
+before migration. CI covers fresh installation, an upgrade retaining a Customer
+and its private attachment, PDF upload/download and Drive file backup/restore.
+
 The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
 
 ### Work overview

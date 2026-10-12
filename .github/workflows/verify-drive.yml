@@ -1,0 +1,42 @@
+name: Verify Suite Drive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Check Drive as Administrator on the current production release
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+          DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER || 'deploy' }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/kanzlei-erp' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          [[ $DEPLOY_HOST =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ $DEPLOY_SSH_USER =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ $DEPLOY_SSH_PORT =~ ^[0-9]+$ ]] && (( DEPLOY_SSH_PORT > 0 && DEPLOY_SSH_PORT < 65536 ))
+          [[ $DEPLOY_PATH =~ ^/[a-zA-Z0-9_./-]+$ && $DEPLOY_PATH != / && $DEPLOY_PATH != *..* ]]
+          ssh_dir=$(mktemp -d)
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          ssh_options=(-i "$ssh_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=20)
+          printf -v remote 'exec python3 %q --root %q' "$DEPLOY_PATH/current/deploy/verify_drive.py" "$DEPLOY_PATH"
+          ssh -p "$DEPLOY_SSH_PORT" "${ssh_options[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" "bash -c $(printf '%q' "$remote")"

@@ -40,6 +40,7 @@ class TestKanzleiNavigation(FrappeTestCase):
 				(frappe._("FiBu-Perioden"), "FiBu Package"),
 				(frappe._("Rückfragen"), "/desk/fibu-questions"),
 				(frappe._("Zeiterfassung"), "Timesheet"),
+				(frappe._("Files"), "/drive"),
 			],
 		)
 		if navigation._has_assigned_email_account(frappe.session.user):
@@ -155,6 +156,14 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertNotIn("Einstellungen", persisted_labels)
 		self.assertNotIn("Rechnungen", labels)
 		self.assertNotIn("Wiederholungen", labels)
+		self.assertNotIn(frappe._("Files"), labels)
+
+	def test_drive_link_remains_unique_after_boot_reconfiguration(self):
+		boot = get_bootinfo()
+		configure_desk(boot)
+		links = [item for item in boot.workspace_sidebar_item["kanzlei"]["items"] if item.get("url") == "/drive"]
+		del boot
+		self.assertEqual(len(links), 1)
 
 	def test_admin_settings_link_is_not_duplicated(self):
 		boot = get_bootinfo()

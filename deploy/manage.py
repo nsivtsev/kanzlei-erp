@@ -282,6 +282,16 @@ def smoke_check(compose):
 			raise RuntimeError("Empty built asset: " + name)
 	get("/assets/kanzlei_erp/js/fibu_workflow.js")
 	get("/assets/kanzlei_erp/js/fibu_checklist.js")
+	# Recovery may restore a pre-Suite snapshot, so inspect the restored site's apps.
+	apps = json.loads(compose.bench("execute", "frappe.get_installed_apps"))
+	if "suite" in apps:
+		html = get("/drive").decode("utf-8")
+		paths = re.findall(r'''(?:src|href)=["'](/assets/suite/frontend/[^"']+\.(?:js|css))["']''', html)
+		if not any(path.endswith(".js") for path in paths):
+			raise RuntimeError("Drive HTML does not reference its built JavaScript")
+		for path in set(paths):
+			if not get(path):
+				raise RuntimeError("Empty Suite asset")
 
 
 def publish_state(root, state):
@@ -414,13 +424,32 @@ apps="$(bench --site "$SITE_NAME" list-apps)"
 if ! printf '%s\\n' "$apps" | grep -Eq '^erpnext[[:space:]]'; then
   bench --site "$SITE_NAME" install-app erpnext
 fi
+""",
+		)
+
+	def ensure_apps(self):
+		"""Install newly bundled apps on existing sites, after the recovery snapshot."""
+		self.new.call(
+			"run", "--rm", "-T", "--no-deps", "-e", "SITE_NAME", "backend", "bash", "-euc",
+			"""
+apps="$(bench --site "$SITE_NAME" list-apps)"
+suite_pending="$(env/bin/python -c 'import json, os; print(json.load(open("sites/"+os.environ["SITE_NAME"]+"/site_config.json")).get("kanzlei_suite_install_pending", 0))')"
+if ! printf '%s\\n' "$apps" | grep -Eq '^suite[[:space:]]' || [ "$suite_pending" = 1 ]; then
+  force=()
+  if printf '%s\\n' "$apps" | grep -Eq '^suite[[:space:]]'; then
+    force=(--force)
+  fi
+  bench --site "$SITE_NAME" set-config kanzlei_suite_install_pending 1
+  bench --site "$SITE_NAME" execute '__import__("kanzlei_erp.suite_setup", fromlist=["prepare_suite_install"]).prepare_suite_install("suite")'
+  bench --site "$SITE_NAME" install-app suite "${force[@]}"
+  bench --site "$SITE_NAME" set-config kanzlei_suite_install_pending 0
+fi
 if ! printf '%s\\n' "$apps" | grep -Eq '^kanzlei_erp[[:space:]]'; then
   bench --site "$SITE_NAME" install-app kanzlei_erp
 fi
 bench --site "$SITE_NAME" set-config developer_mode 0
 bench --site "$SITE_NAME" set-config allow_tests false
-bench --site "$SITE_NAME" execute frappe.db.set_single_value --args '["System Settings","time_zone","Europe/Berlin"]'
-bench --site "$SITE_NAME" execute kanzlei_erp.localization.configure_german_language --kwargs '{"user":"Administrator"}'
+bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 """,
 		)
 
@@ -521,6 +550,10 @@ bench --site "$SITE_NAME" execute kanzlei_erp.localization.configure_german_lang
 			self.new.call("run", "--rm", "-T", "configurator")
 			if not previous:
 				self.initialize()
+			self.ensure_apps()
+			if not previous:
+				self.new.bench("execute", "frappe.db.set_single_value", "--args", '["System Settings","time_zone","Europe/Berlin"]')
+				self.new.bench("execute", "kanzlei_erp.localization.configure_german_language", "--kwargs", '{"user":"Administrator"}')
 			print("Applying migrations", flush=True)
 			self.new.bench("migrate")
 			self.new.bench("clear-cache")
