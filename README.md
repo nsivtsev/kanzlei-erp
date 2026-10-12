@@ -151,7 +151,7 @@ Administrator sees **Dateien / Files / Файлы** in Kanzlei, opening `/drive`
 Create a folder, upload a PDF, and download it to verify access. Kanzlei remains
 the ERP home and ERPNext owns company setup; Suite's separate onboarding is
 marked complete without configuring its Mail, Meet or other products. Staff
-navigation, Mandant folder mapping, WebDAV, archive migration and additional
+navigation, WebDAV, archive migration and additional
 backup scheduling are future steps. Suite's own roles and permission system
 remain active: hiding the navigation link is not a server-side access boundary.
 ERP attachments are managed from their original documents; Drive rename,
@@ -162,6 +162,35 @@ Production images contain Suite code, dependencies and built assets. Deployment
 installs Suite on existing sites after the verified pre-update snapshot and
 before migration. CI covers fresh installation, an upgrade retaining a Customer
 and its private attachment, PDF upload/download and Drive file backup/restore.
+
+Saved Mandanten have **Drive Folder / Drive-Ordner / Папка Drive**. Before a
+folder exists, a staff user with Customer write access sees **Create Drive
+Folder**; this creates one private native Drive folder and records its stable
+File ID on the Customer. Repeating the action opens the existing folder. A
+Customer name change does not create another folder. Existing Mandanten get
+folders on demand; there is no bulk backfill or copying of ERP attachments.
+
+Access to the folder and all new descendants follows the current Customer
+permissions: staff readers can browse/download; staff writers can upload and
+manage files/subfolders. Owners and Suite Admin cannot bypass a revoked Customer
+permission. Ordinary Guest/portal access and manual Drive shares do not grant
+access. Short-lived preview tokens recheck their issuer's current access; ZIP
+downloads recheck selected entities and archive members. The root and its
+containing folders cannot be renamed, moved, trashed or deleted through Drive;
+files/subfolders can move within the same Mandant. Cross-boundary moves and
+raw changes to protected metadata/storage keys are rejected before storage
+operations. These folders support uploaded files, subfolders and HTTP(S) links.
+Native Writer Documents, Sheets and Slides are rejected server-side because
+their content permissions require a separate integration. Create them in
+ordinary Drive folders. The existing **Dokumente** tab still lists ERP-linked material.
+
+This access bridge requires the tracked Frappe and Suite patches applied by
+`scripts/fetch-suite.sh`, also copied into the production build. Patch application
+is idempotent and checks the source context; incompatible upstream updates stop
+setup/build. After applying patches, migrate the site, build Kanzlei assets and
+clear cache. A missing/trashed root is reported for administrator attention;
+clicking the action never silently creates a replacement. See the
+[folder design](docs/plans/2026-10-12-mandant-drive-design.md).
 
 The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
 

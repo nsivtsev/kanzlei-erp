@@ -1,0 +1,37 @@
+--- a/frappe/core/doctype/file/file.py
++++ b/frappe/core/doctype/file/file.py
+@@ -1006,6 +1006,10 @@
+ 
+ def has_permission(doc, ptype=None, user=None, debug=False):
+ 	user = user or frappe.session.user
++	for hook in frappe.get_hooks("file_access_override"):
++		access = frappe.call(hook, doc=doc, ptype=ptype, user=user, debug=debug)
++		if access is not None:
++			return bool(access)
+ 
+ 	if user == "Administrator":
+ 		return True
+@@ -1044,7 +1048,7 @@
+ 	return False
+ 
+ 
+-def get_permission_query_conditions(user: str | None = None) -> str:
++def _framework_file_query_conditions(user: str | None = None) -> str:
+ 	user = user or frappe.session.user
+ 	if user == "Administrator":
+ 		return ""
+@@ -1095,6 +1099,14 @@
+ 		conditions.append(_scoped_attachment_condition(doctype, user, " AND ".join(field_conditions)))
+ 
+ 	return "(" + " OR ".join(conditions) + ")"
++
++
++def get_permission_query_conditions(user: str | None = None) -> str:
++	user = user or frappe.session.user
++	condition = _framework_file_query_conditions(user)
++	for hook in frappe.get_hooks("file_query_condition_override"):
++		condition = frappe.call(hook, user=user, condition=condition)
++	return condition
+ 
+ 
+ def _scoped_attachment_condition(doctype: str, user: str, exists_condition: str) -> str:

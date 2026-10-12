@@ -464,3 +464,19 @@ Pending Review,На проверке,Task status
 Overdue,Просрочена,Task status
 Files,Файлы
 Manage ERP attachments from their original document,Управляйте вложениями ERP из исходного документа
+Drive Folder,Папка Drive
+Create Drive Folder,Создать папку Drive
+Allow popups to open the Drive folder.,Разрешите всплывающие окна для открытия папки Drive.
+Could not open the Mandant folder. Check your access and try again.,Не удалось открыть папку клиента. Проверьте доступ и повторите попытку.
+Please log in as a staff user,Войдите под учётной записью сотрудника
+Drive is not installed,Drive не установлен
+The Mandant folder is unavailable. Contact an administrator.,Папка клиента недоступна. Обратитесь к администратору.
+Manage the Mandant folder through its Drive action,Управляйте папкой клиента через действие Drive в его карточке
+No write access to this Mandant,Нет права изменять этого клиента
+Mandant Drive files must remain private,Файлы клиента в Drive должны оставаться закрытыми
+The Mandant root folder cannot be moved or deleted,Корневую папку клиента нельзя перемещать или удалять
+Files can only be moved within the same Mandant,Файлы можно перемещать только внутри папки того же клиента
+Drive access is managed through Mandant permissions,Доступ к Drive определяется правами на клиента
+Manage Mandant files through Drive,Управляйте файлами клиента через Drive
+Upload files to Mandant folders. Create Suite documents outside these folders.,Загружайте файлы в папки клиентов. Создавайте документы Suite вне этих папок.
+Mandant Drive links must use HTTP or HTTPS,Ссылки в папках клиентов должны использовать HTTP или HTTPS

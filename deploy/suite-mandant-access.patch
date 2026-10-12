@@ -1,0 +1,280 @@
+--- a/suite/drive/api/permissions.py
++++ b/suite/drive/api/permissions.py
+@@ -41,7 +41,32 @@
+     return get_user_access_for_user(entity, frappe.session.user)
+ 
+ 
++def get_app_access(entity, user):
++    """An app may own access to a File; None preserves Suite semantics."""
++    for hook in frappe.get_hooks("drive_entity_access"):
++        access = frappe.call(hook, entity=entity, user=user)
++        if access is not None:
++            return access
++    return None
++
++
++def get_app_access_batch(entities, user):
++    """Batch providers must return only the File IDs whose access they own."""
++    hooks = frappe.get_hooks("drive_entity_access_batch")
++    if not hooks:
++        return {entity.name: access for entity in entities
++                if (access := get_app_access(entity, user)) is not None}
++    result = {}
++    for hook in hooks:
++        for name, access in frappe.call(hook, entities=entities, user=user).items():
++            result.setdefault(name, access)
++    return result
++
++
+ def get_user_access_for_user(entity: str | Document | frappe._dict, user: str):
++    app_access = get_app_access(entity, user)
++    if app_access is not None:
++        return app_access
+     if isinstance(entity, str):
+         entity = frappe.get_cached_doc("File", entity)
+ 
+--- a/suite/drive/utils/__init__.py
++++ b/suite/drive/utils/__init__.py
+@@ -513,7 +513,15 @@
+         if row["perm_user"] is not None:
+             nodes[-1]["perms"].append(row)
+ 
+-    return [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    from suite.drive.api.permissions import get_app_access
++
++    path = [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    for node in path:
++        access = get_app_access(node["name"], user)
++        if access is not None:
++            node.update(access)
++            node["decided"] = list(PERMISSION_TYPES)
++    return path
+ 
+ 
+ def get_valid_breadcrumbs(entity_name, user_access):
+@@ -522,9 +530,9 @@
+     """
+     # Admins see the entire path; others get the contiguous readable suffix.
+     path = generate_upward_path(entity_name)
+-    if user_access.get("type") not in ["admin", "user"]:
+-        lose_access = next((i for i, k in enumerate(path[::-1]) if not k["read"]), 0)
+-        path = path[-lose_access:]
++    if user_access.get("type") != "admin":
++        last_unread = next((i for i in range(len(path) - 1, -1, -1) if not path[i]["read"]), -1)
++        path = path[last_unread + 1 :]
+     return _name_own_drive(path)
+ 
+ 
+--- a/suite/drive/utils/overrides.py
++++ b/suite/drive/utils/overrides.py
+@@ -4,7 +4,7 @@
+ from suite.drive.utils import get_principals, principal_list
+ 
+ 
+-def file_permission_criterion(user=None, table=None):
++def _suite_file_permission_criterion(user=None, table=None):
+     user = user or frappe.session.user
+     roles = frappe.get_roles(user)
+     if user == "Administrator" or "Suite Admin" in roles:
+@@ -34,13 +34,22 @@
+     return criterion
+ 
+ 
++def file_permission_criterion(user=None, table=None):
++    user = user or frappe.session.user
++    criterion = _suite_file_permission_criterion(user, table)
++    for hook in frappe.get_hooks("drive_file_permission_criterion"):
++        criterion = frappe.call(hook, user=user, table=table, criterion=criterion)
++    return criterion
++
++
+ def filter_file(user=None):
+     """Replaces the framework's File query conditions (skipped because of the
+     `ignore_file_permissions` hook). Conservative: owner, direct Drive grants,
+     public files, DocShares, and readable attachments — folder-inherited access
+     needs Drive's recursive path traversal, impractical in SQL, so it's left to
+     `has_permission`."""
+-    return file_permission_criterion(user)
++    criterion = file_permission_criterion(user)
++    return criterion.get_sql(quote_char='"' if frappe.conf.db_type == "postgres" else "`") if criterion is not None else ""
+ 
+ 
+ def common_filters(func):
+--- a/suite/drive/webdav/perms.py
++++ b/suite/drive/webdav/perms.py
+@@ -9,7 +9,7 @@
+ 
+ import frappe
+ 
+-from suite.drive.api.permissions import get_user_access_for_user, is_drive_admin
++from suite.drive.api.permissions import get_app_access, get_app_access_batch, get_user_access_for_user, is_drive_admin
+ from suite.drive.utils import (
+     GENERAL_USER,
+     GROUP_PREFIX,
+@@ -31,15 +31,18 @@
+     parent_path: list[dict], children: list[frappe._dict], user: str
+ ) -> dict[str, dict]:
+     """Access bits per child name. parent_path is generate_upward_path(parent, user)."""
++    app_access = get_app_access_batch(children, user)
+     if is_drive_admin(user):
+-        return {child.name: dict(ALL_ACCESS) for child in children}
++        return {child.name: app_access.get(child.name, dict(ALL_ACCESS)) for child in children}
+ 
+     inherited = _dribble_state(parent_path)
+     own_rows = _child_permission_rows([child.name for child in children], user)
+ 
+     access = {}
+     for child in children:
+-        if user != "Guest" and child.owner == user:
++        if child.name in app_access:
++            access[child.name] = app_access[child.name]
++        elif user != "Guest" and child.owner == user:
+             # ownership bypasses any deny on the path
+             access[child.name] = dict(ALL_ACCESS)
+         elif child.get("attached_to_doctype") and child.get("attached_to_name"):
+@@ -101,6 +104,9 @@
+ 
+ def parent_access(parent_path: list[dict], parent: frappe._dict, user: str) -> dict:
+     """Access at the path's leaf, with the owner/admin short-circuits applied."""
++    app_access = get_app_access(parent, user)
++    if app_access is not None:
++        return app_access
+     if is_drive_admin(user):
+         return dict(ALL_ACCESS)
+     if user != "Guest" and parent.owner == user:
+--- a/suite/drive/api/files.py
++++ b/suite/drive/api/files.py
+@@ -5,6 +5,7 @@
+ import secrets
+ import tempfile
+ import zipfile
++from contextlib import ExitStack
+ from io import BytesIO
+ from pathlib import Path
+ from urllib.parse import quote
+@@ -42,7 +43,7 @@
+ )
+ from suite.drive.utils.users import mark_as_viewed
+ 
+-from .permissions import user_has_permission
++from .permissions import get_app_access, user_has_permission
+ 
+ FORBIDDEN_DOWNLOAD_TYPES = ["Folder", "Link", "Document", "Presentation"]
+ 
+@@ -282,8 +283,11 @@
+     if token:
+         # Single-use capability minted by create_auth_token, for cookieless
+         # fetches (e.g. the Office Online preview).
+-        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry"], as_dict=True)
++        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry", "user"], as_dict=True)
+         if not auth or auth.file != entity_name or frappe.utils.now_datetime() > auth.expiry:
++            raise frappe.PermissionError("You do not have permission to view this file")
++        app_access = get_app_access(entity_name, auth.user)
++        if app_access is not None and not app_access.get("read"):
+             raise frappe.PermissionError("You do not have permission to view this file")
+         frappe.delete_doc("Drive Token", token, ignore_permissions=True, force=True)
+     elif not user_has_permission(entity_name, "read"):
+@@ -538,7 +542,8 @@
+         key, size = _write_archive(token, files)
+         cache.set_value(
+             cache_key,
+-            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size},
++            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size,
++             "entities": entities, "files": [file.name for _, file in files]},
+             expires_in_sec=DOWNLOAD_TTL,
+         )
+         _publish_download_status(token, user, "ready", size=size)
+@@ -592,7 +597,8 @@
+     token = secrets.token_urlsafe(24)
+     cache.set_value(
+         _download_cache_key(token),
+-        {"status": "building", "owner": user, "file_name": zip_name},
++        {"status": "building", "owner": user, "file_name": zip_name,
++         "entities": entities, "files": [file.name for _, file in files]},
+         expires_in_sec=BUILDING_TTL,
+     )
+     cache.set_value(selection_key, token, expires_in_sec=BUILDING_TTL)
+@@ -612,6 +618,13 @@
+     entry = frappe.cache().get_value(_download_cache_key(token))
+     if not entry or entry.get("owner") != frappe.session.user:
+         frappe.throw("Not found", frappe.DoesNotExistError)
++    if entry.get("status") in ("building", "ready"):
++        # Old entries without provenance must be rebuilt, not served unchecked.
++        if "files" not in entry or "entities" not in entry:
++            frappe.throw("Archive expired. Build it again.", frappe.DoesNotExistError)
++        for name in set(entry["entities"] + entry["files"]):
++            if not frappe.db.exists("File", name) or not user_has_permission(name, "read"):
++                raise frappe.PermissionError("You do not have permission to download this archive")
+     return entry
+ 
+ 
+@@ -692,36 +705,39 @@
+ def toggle_entity_status(doc, manager: FileManager, locked_owners: set):
+     """Trash an Active entity, or restore a Trashed one. Shared by
+     remove_or_restore and WebDAV DELETE."""
+-    # row lock before the disk transfer — same discipline as File.move()
+-    frappe.db.get_value("File", doc.name, "name", for_update=True)
+-    if not user_has_permission(doc, "write"):
+-        raise frappe.PermissionError("You do not have permission to remove this file")
+-    if doc.owner not in locked_owners:
+-        acquire_owner_storage_lock(doc.owner)
+-        locked_owners.add(doc.owner)
+-    if doc.status == STATUS_ACTIVE:
+-        flag = STATUS_TRASHED
+-        manager.move_to_trash(doc)
+-    else:
+-        validate_quota(doc.owner, doc.file_size)
+-        # A trashed name is free — get_new_file_name only counts Active siblings —
+-        # so something may have taken it. Restoring onto it would overwrite the
+-        # newcomer's blob, or, for a folder, land inside it.
+-        available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
+-        if available != doc.file_name:
+-            doc.flags.drive_disk_rename = True
+-            doc.file_name = available
+-            if not manager.flat and not doc._not_in_disk():
+-                doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
+-        manager.restore(doc)
+-        flag = STATUS_ACTIVE
+-
+-    doc.status = flag
+-    doc.file_modified = frappe.utils.now_datetime()
+-    if doc.folder and doc.file_size:
+-        apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
+-
+-    doc.save()
++    with ExitStack() as stack:
++        for hook in frappe.get_hooks("drive_storage_mutation"):
++            stack.enter_context(frappe.call(hook, doc=doc))
++        # row lock before the disk transfer — same discipline as File.move()
++        frappe.db.get_value("File", doc.name, "name", for_update=True)
++        if not user_has_permission(doc, "write"):
++            raise frappe.PermissionError("You do not have permission to remove this file")
++        if doc.owner not in locked_owners:
++            acquire_owner_storage_lock(doc.owner)
++            locked_owners.add(doc.owner)
++        if doc.status == STATUS_ACTIVE:
++            flag = STATUS_TRASHED
++            manager.move_to_trash(doc)
++        else:
++            validate_quota(doc.owner, doc.file_size)
++            # A trashed name is free — get_new_file_name only counts Active siblings —
++            # so something may have taken it. Restoring onto it would overwrite the
++            # newcomer's blob, or, for a folder, land inside it.
++            available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
++            if available != doc.file_name:
++                doc.flags.drive_disk_rename = True
++                doc.file_name = available
++                if not manager.flat and not doc._not_in_disk():
++                    doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
++            manager.restore(doc)
++            flag = STATUS_ACTIVE
++
++        doc.status = flag
++        doc.file_modified = frappe.utils.now_datetime()
++        if doc.folder and doc.file_size:
++            apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
++
++        doc.save()
+ 
+ 
+ @frappe.whitelist()
