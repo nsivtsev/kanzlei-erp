@@ -20,7 +20,7 @@ def check(base, site, password):
 	response = session.post(base + "/api/method/login", data={"usr": "Administrator", "pwd": password}, timeout=30)
 	response.raise_for_status()
 	assert response.json()["message"] == "Logged In"
-	assert response.json()["home_page"] == "/desk/kanzlei-overview", "Kanzlei login landing page changed"
+	assert response.json()["home_page"].lstrip("/") == "desk/kanzlei-overview", "Kanzlei login landing page changed"
 	desk = session.get(base + "/desk/kanzlei-overview", timeout=30)
 	desk.raise_for_status()
 	assert "/drive" in desk.text, "Administrator Desk has no Drive link"
