@@ -12,8 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg git buil
 USER frappe
 WORKDIR /home/frappe/frappe-bench
 COPY --chown=frappe:frappe deploy/suite.env /tmp/kanzlei/deploy/suite.env
-COPY --chown=frappe:frappe deploy/suite-mandant-access.patch /tmp/kanzlei/deploy/suite-mandant-access.patch
-COPY --chown=frappe:frappe deploy/frappe-mandant-access.patch /tmp/kanzlei/deploy/frappe-mandant-access.patch
+COPY --chown=frappe:frappe deploy/*-mandant-access*.patch /tmp/kanzlei/deploy/
 COPY --chown=frappe:frappe scripts/fetch-suite.sh /tmp/kanzlei/scripts/fetch-suite.sh
 RUN rm -rf sites/assets \
     && ln -s /home/frappe/frappe-bench/assets sites/assets \

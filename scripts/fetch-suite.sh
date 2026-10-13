@@ -17,13 +17,39 @@ else
   git -C apps/suite checkout --detach FETCH_HEAD
 fi
 patch_dir=$(realpath "$(dirname "$0")/../deploy")
+applied=()
+removed_previous=()
+rollback_patches() {
+  result=$?
+  if (( result != 0 )); then
+    # Frappe and Suite form one change: a conflict in either restores both.
+    for (( i=${#applied[@]}-1; i>=0; i-- )); do
+      app=${applied[$i]}
+      git -C "apps/$app" apply --reverse "$patch_dir/$app-mandant-access.patch"
+    done
+    for app in "${removed_previous[@]}"; do
+      git -C "apps/$app" apply "$patch_dir/$app-mandant-access-v1.patch"
+    done
+  fi
+  exit "$result"
+}
+trap rollback_patches EXIT
 for app in frappe suite; do
   patch_file="$patch_dir/$app-mandant-access.patch"
   if ! git -C "apps/$app" apply --reverse --check "$patch_file" 2>/dev/null; then
+    previous="$patch_dir/$app-mandant-access-v1.patch"
+    if ! git -C "apps/$app" apply --check "$patch_file" 2>/dev/null; then
+      # Only remove the exact known predecessor. Never reset other local changes.
+      git -C "apps/$app" apply --reverse --check "$previous"
+      git -C "apps/$app" apply --reverse "$previous"
+      removed_previous+=("$app")
+    fi
     git -C "apps/$app" apply --check "$patch_file"
     git -C "apps/$app" apply "$patch_file"
+    applied+=("$app")
   fi
 done
+trap - EXIT
 git -C apps/suite submodule update --init --recursive --depth 1
 grep -qxF suite sites/apps.txt || printf '\nsuite\n' >> sites/apps.txt
 bench pip install -e apps/suite

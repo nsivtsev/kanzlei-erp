@@ -1,0 +1,3 @@
+# Unified patch context includes a leading space before upstream tabs/blank lines.
+# Check whitespace in the actual patched source, not in its context markers.
+deploy/*.patch -whitespace

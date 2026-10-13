@@ -43,6 +43,7 @@ bench set-config -g redis_cache redis://redis-cache:6379
 bench set-config -g redis_queue redis://redis-queue:6379
 bench set-config -g redis_socketio redis://redis-queue:6379
 bench set-config -g socketio_port 9100
+bench set-config -g developer_mode 1
 sed -i "/^redis_/d" Procfile
 if [[ ! -d sites/development.localhost ]]; then
   bench new-site --db-root-password "$LOCAL_DB_ROOT_PASSWORD" --admin-password "$LOCAL_ADMIN_PASSWORD" --mariadb-user-host-login-scope=% development.localhost

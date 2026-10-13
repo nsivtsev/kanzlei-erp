@@ -103,6 +103,17 @@ remaining = compose.commands.run(["docker", "ps", "-aq", "--filter", "label=io.k
     "--filter", "label=com.docker.compose.project=" + compose.config["PROJECT_NAME"]])
 assert not remaining, "Timed-out maintenance container is still present"
 PY
+"${compose[@]}" run --rm -T --no-deps \
+  -v "$PWD/scripts/verify-drive-security.py:/tmp/verify-drive-security.py:ro" \
+  -v "$PWD/scripts/verify-drive-security.cjs:/tmp/verify-drive-security.cjs:ro" \
+  -v "$PWD/tests:/home/frappe/frappe-bench/apps/kanzlei_erp/tests:ro" \
+  backend bash -euc '
+bench --site ci.localhost set-config allow_tests true
+trap "bench --site ci.localhost set-config allow_tests false" EXIT
+env/bin/python /tmp/verify-drive-security.py --site ci.localhost --fixtures --base http://frontend:8080 --socket http://websocket:9000
+cd apps/kanzlei_erp
+node --test tests/*.test.cjs
+'
 "${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" -e ADMIN_PASSWORD backend env/bin/python /tmp/ci-suite.py upload
 "${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" backend env/bin/python /tmp/ci-suite.py verify
 # Real backup/restore on the disposable site verifies both file archives and schema restoration.

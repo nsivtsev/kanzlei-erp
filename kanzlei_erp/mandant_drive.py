@@ -114,6 +114,10 @@ def entity_access(entity, user):
 	if not frappe.get_meta("File").has_field(FILE_CUSTOMER):
 		return None
 	name = entity if isinstance(entity, str) else entity.get("name")
+	from kanzlei_erp.drive_storage import is_alias
+	row = frappe.db.get_value("File", name, ["name", "file_url", "is_folder"], as_dict=True) if name else None
+	if row and is_alias(row):
+		return {**dict.fromkeys(ACCESS_TYPES, 0), "type": "guest"}
 	# Read the persisted marker, not client input or a possibly stale cached File.
 	customer = frappe.db.get_value("File", name, FILE_CUSTOMER) if name else None
 	if not customer:
@@ -126,11 +130,18 @@ def entity_access_batch(entities, user):
 	if not entities or not frappe.get_meta("File").has_field(FILE_CUSTOMER):
 		return {}
 	names = [entity if isinstance(entity, str) else entity.get("name") for entity in entities]
-	rows = frappe.get_all("File", filters={"name": ["in", names], FILE_CUSTOMER: ["is", "set"]},
-		fields=["name", FILE_CUSTOMER])
-	customers = {row.get(FILE_CUSTOMER) for row in rows}
+	from kanzlei_erp.drive_storage import _index, is_alias
+	rows = frappe.get_all("File", filters={"name": ["in", names]}, fields=["name", "file_url", FILE_CUSTOMER])
+	index = _index()
+	customers = {row.get(FILE_CUSTOMER) for row in rows if row.get(FILE_CUSTOMER)}
 	access = {customer: _customer_access(customer, user) for customer in customers}
-	return {row.name: access[row.get(FILE_CUSTOMER)] for row in rows}
+	result = {}
+	for row in rows:
+		if is_alias(row, index=index):
+			result[row.name] = {**dict.fromkeys(ACCESS_TYPES, 0), "type": "guest"}
+		elif row.get(FILE_CUSTOMER):
+			result[row.name] = access[row.get(FILE_CUSTOMER)]
+	return result
 
 
 def _customer_access(customer, user):
@@ -148,7 +159,11 @@ def file_permission_criterion(user, table, criterion):
 	if not frappe.get_meta("File").has_field(FILE_CUSTOMER):
 		return criterion
 	file = table or frappe.qb.DocType("File")
+	from kanzlei_erp.drive_storage import alias_names
+	aliases = alias_names()
 	unmanaged = file[FILE_CUSTOMER].isnull() | (file[FILE_CUSTOMER] == "")
+	if aliases:
+		unmanaged &= file.name.notin(aliases)
 	if criterion is not None:
 		unmanaged &= criterion
 	if not _staff(user):
@@ -177,7 +192,11 @@ def file_query_condition_override(user, condition):
 	if not frappe.get_meta("File").has_field(FILE_CUSTOMER):
 		return condition
 	file = frappe.qb.DocType("File")
+	from kanzlei_erp.drive_storage import alias_names
+	aliases = alias_names()
 	unmanaged = file[FILE_CUSTOMER].isnull() | (file[FILE_CUSTOMER] == "")
+	if aliases:
+		unmanaged &= file.name.notin(aliases)
 	quote_char = '"' if frappe.conf.db_type == "postgres" else "`"
 	base = f"({condition or '1=1'}) AND ({unmanaged.get_sql(quote_char=quote_char, with_namespace=True)})"
 	customers = _readable_customers(user)
@@ -188,13 +207,15 @@ def file_query_condition_override(user, condition):
 
 
 @contextmanager
-def storage_mutation(doc):
+def storage_mutation(doc, target=None):
 	from kanzlei_erp.suite_file import require_drive_material
+	from kanzlei_erp.drive_storage import binding_change
 
 	require_drive_material(doc)
-	token = _changing_storage.set(True)
+	token = _changing_storage.set(doc.name)
 	try:
-		yield
+		with binding_change(doc, target):
+			yield
 	finally:
 		_changing_storage.reset(token)
 
