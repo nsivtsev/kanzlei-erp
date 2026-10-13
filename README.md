@@ -192,6 +192,35 @@ clear cache. A missing/trashed root is reported for administrator attention;
 clicking the action never silently creates a replacement. See the
 [folder design](docs/plans/2026-10-12-mandant-drive-design.md).
 
+Drive also binds each File to its physical object. A second File cannot reuse
+Mandant bytes, thumbnails, trash objects or a protected directory, even when
+its creator can currently read the original. Legacy aliases are denied at
+permission and storage boundaries; they are not automatically repaired or
+deleted. Ordinary ERP attachment copies retain their shared URL after source
+and destination permission checks.
+
+List changes are delivered after commit as an addressed
+`drive-folder-changed` signal containing only a folder ID. Drive reloads its
+permission-checked list; File updates, comments and presence also recheck
+current access. Rollbacks send no invalidation.
+
+Before rollout, run this read-only audit as an administrator and manually
+investigate any reported aliases:
+
+```sh
+bench --site <site> execute kanzlei_erp.drive_storage.audit_storage_aliases
+```
+
+Update both dependency patches and frontend assets together, then migrate,
+rebuild Suite and Kanzlei assets, clear cache and restart backend, workers and
+websocket. `scripts/fetch-suite.sh` upgrades the exact previous patches without
+resetting unrelated checkout changes. Already issued S3 presigned URLs remain
+valid until their expiry; this change prevents an alias from obtaining one.
+The [security verification](docs/reviews/2026-10-13-drive-security-verification.md)
+records local/S3-mock, HTTP, browser and image acceptance. The disposable
+HTTP/Socket.IO scenario is included in `scripts/ci-image.sh`; it requires four
+temporary staff sessions and does not run against production.
+
 The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
 
 ### Work overview

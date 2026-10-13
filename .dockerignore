@@ -9,6 +9,8 @@
 !deploy/suite.env
 !deploy/suite-mandant-access.patch
 !deploy/frappe-mandant-access.patch
+!deploy/suite-mandant-access-v1.patch
+!deploy/frappe-mandant-access-v1.patch
 !scripts/
 !scripts/fetch-suite.sh
 kanzlei_erp/**/__pycache__/

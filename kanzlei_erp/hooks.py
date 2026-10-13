@@ -23,11 +23,19 @@ drive_file_permission_criterion = ["kanzlei_erp.mandant_drive.file_permission_cr
 file_access_override = ["kanzlei_erp.mandant_drive.file_access_override"]
 file_query_condition_override = ["kanzlei_erp.mandant_drive.file_query_condition_override"]
 drive_storage_mutation = ["kanzlei_erp.mandant_drive.storage_mutation"]
+drive_storage_guard = ["kanzlei_erp.drive_storage.suite_storage_guard"]
+drive_file_changed = ["kanzlei_erp.drive_realtime.changed"]
+file_realtime_event = ["kanzlei_erp.drive_realtime.intercept_file_event"]
+file_storage_path_guard = ["kanzlei_erp.drive_storage.require_path_access"]
+file_privacy_guard = ["kanzlei_erp.drive_storage.guard_privacy_change"]
+drive_authorized_read = ["kanzlei_erp.drive_storage.authorized_read"]
+drive_storage_creation = ["kanzlei_erp.drive_storage.creation_binding"]
+file_storage_creation = ["kanzlei_erp.drive_storage.creation_binding"]
 app_home = "/desk/kanzlei-overview"
 home_page = app_home
 setup_wizard_url = "/desk/setup-wizard"
 boot_session = "kanzlei_erp.navigation.configure_desk"
-app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
+app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "drive_realtime.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {
 	"Communication": "kanzlei_erp.navigation.communication_has_permission",
 	"FiBu Package": "kanzlei_erp.fibu_permissions.package_has_permission",
@@ -54,6 +62,7 @@ doctype_js = {
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
+	"Drive Disk Settings": {"on_update": "kanzlei_erp.drive_storage.invalidate"},
 	"ToDo": {"validate": "kanzlei_erp.fibu_questions.validate_question_assignment"},
 	"DocShare": {"validate": "kanzlei_erp.fibu_questions.validate_question_share"},
 	"Customer": {"validate": ["kanzlei_erp.fibu_checklist.validate_customer_sources", "kanzlei_erp.mandant_drive.validate_customer"]},
@@ -65,9 +74,12 @@ doc_events = {
 		"on_trash": ["kanzlei_erp.fibu_task.protect_closed_task", "kanzlei_erp.fibu_questions.protect_question"],
 	},
 	"File": {
-		"before_validate": "kanzlei_erp.mandant_drive.prepare_file",
+		"before_validate": ["kanzlei_erp.drive_storage.validate_binding_event", "kanzlei_erp.mandant_drive.prepare_file"],
 		"validate": "kanzlei_erp.fibu_materials.validate_fibu_attachment",
 		"on_trash": ["kanzlei_erp.fibu_materials.validate_fibu_attachment", "kanzlei_erp.mandant_drive.protect_root"],
+		"after_insert": "kanzlei_erp.drive_realtime.changed",
+		"on_update": "kanzlei_erp.drive_realtime.changed",
+		"after_delete": "kanzlei_erp.drive_realtime.changed",
 	},
 }
 scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"]}

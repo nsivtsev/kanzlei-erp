@@ -42,6 +42,9 @@ services:
     volumes:
       - ..:/workspace:cached
     working_dir: /workspace/development
+    # Socket.IO rechecks sessions/permissions through the browser's site origin.
+    extra_hosts:
+      - "development.localhost:127.0.0.1"
     ports:
       - "127.0.0.1:8100:8000"
       - "127.0.0.1:9100:9100"
