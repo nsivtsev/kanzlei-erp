@@ -131,7 +131,8 @@ class ReleaseCoordinationTests(unittest.TestCase):
         registry = RegistryFixture({"sha-" + REVISION: IMAGE})
         registry.inspect = lambda image, revision: {"body": b'{"manifests":[{}]}',
             "config_digest": config_digest, "compressed_bytes": 100}
-        local = [{"Os": "linux", "Architecture": "amd64", "Id": config_digest, "Size": 123,
+        local = [{"Os": "linux", "Architecture": "amd64", "Id": IMAGE.split("@", 1)[1], "Size": 123,
+                  "Descriptor": {"digest": IMAGE.split("@", 1)[1]},
                   "Config": {"Labels": {"org.opencontainers.image.revision": REVISION}}}]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -144,6 +145,14 @@ class ReleaseCoordinationTests(unittest.TestCase):
                 module.publish_receipt(registry, "local:test", REVISION, root)
             receipt = json.loads((root / "verified-image.json").read_text())
             self.assertEqual(receipt["image"], IMAGE)
+            local[0]["Descriptor"]["digest"] = "sha256:" + "c" * 64
+            with patch.dict(os.environ, env), patch.object(module.subprocess, "check_output", return_value=json.dumps(local)):
+                with self.assertRaisesRegex(ValueError, "exact locally verified"):
+                    module.publish_receipt(registry, "local:test", REVISION, root)
+            del local[0]["Descriptor"]
+            local[0]["Id"] = config_digest
+            with patch.dict(os.environ, env), patch.object(module.subprocess, "check_output", return_value=json.dumps(local)):
+                module.publish_receipt(registry, "local:test", REVISION, root)
             local[0]["Id"] = "sha256:" + "c" * 64
             with patch.dict(os.environ, env), patch.object(module.subprocess, "check_output", return_value=json.dumps(local)):
                 with self.assertRaisesRegex(ValueError, "exact locally verified"):

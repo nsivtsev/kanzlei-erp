@@ -203,10 +203,15 @@ def publish_receipt(registry, local_image, revision, metrics):
     if not image:
         raise ValueError("Published candidate cannot be resolved")
     info = registry.inspect(image, revision)
-    if info["config_digest"] != local["Id"]:
+    # Engine 28's containerd store identifies an image by its root descriptor;
+    # the classic store identifies it by the selected platform's config digest.
+    descriptor = local.get("Descriptor") or {}
+    exact_image = (descriptor["digest"] == image.split("@", 1)[1]) if descriptor.get("digest") else (
+        info["config_digest"] == local["Id"])
+    if not exact_image:
         raise ValueError("Published candidate is not the exact locally verified image")
     receipt["image"] = image
-    receipt["metrics"]["image"] = {"uncompressed_bytes": local["Size"],
+    receipt["metrics"]["image"] = {"docker_reported_bytes": local["Size"],
         "compressed_bytes": info["compressed_bytes"], "publish_seconds": round(time.monotonic() - started, 3)}
     destination = Path(metrics) / "verified-image.json"
     destination.write_text(json.dumps(receipt, indent=2) + "\n")
@@ -229,7 +234,7 @@ def report(local_image, metrics):
         image = json.loads(inspected.stdout)[0]
         size = image["Size"]
         summary(f"\nLocal image: {size / 1024**2:.0f} MiB; layers: {len(image['RootFS']['Layers'])}")
-        (Path(metrics) / "image.json").write_text(json.dumps({"uncompressed_bytes": size,
+        (Path(metrics) / "image.json").write_text(json.dumps({"docker_reported_bytes": size,
                                                             "layer_count": len(image["RootFS"]["Layers"])}))
 
 
