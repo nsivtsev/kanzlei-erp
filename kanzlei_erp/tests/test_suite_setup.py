@@ -5,6 +5,28 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestSuiteSetup(FrappeTestCase):
+	def test_configure_invalidates_cached_suite_profiles(self):
+		from kanzlei_erp.suite_setup import configure
+
+		with patch("suite.api.account.forget_logged_in_users") as forget:
+			configure()
+			forget.assert_called_once()
+
+	def test_configure_removes_pre_upgrade_profile_cache_for_all_users(self):
+		from kanzlei_erp.suite_setup import configure
+
+		key = "suite.api.account.get_logged_in_user::pre-upgrade"
+		users = ("Administrator", "old-profile@example.invalid")
+		try:
+			for user in users:
+				frappe.cache.set_value(key, {"roles": []}, user=user, expires_in_sec=3600)
+			configure()
+			for user in users:
+				self.assertIsNone(frappe.cache.get_value(key, user=user))
+		finally:
+			for user in users:
+				frappe.cache.delete_value(key, user=user)
+
 	def test_partial_install_rebuilds_only_suite_owned_rate_limits(self):
 		from kanzlei_erp import suite_setup
 

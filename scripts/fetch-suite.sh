@@ -19,6 +19,7 @@ fi
 patch_dir=$(realpath "$(dirname "$0")/../deploy")
 applied=()
 removed_previous=()
+removed_patch_files=()
 rollback_patches() {
   result=$?
   if (( result != 0 )); then
@@ -27,27 +28,58 @@ rollback_patches() {
       app=${applied[$i]}
       git -C "apps/$app" apply --reverse "$patch_dir/$app-mandant-access.patch"
     done
-    for app in "${removed_previous[@]}"; do
-      git -C "apps/$app" apply "$patch_dir/$app-mandant-access-v1.patch"
+    for (( i=${#removed_previous[@]}-1; i>=0; i-- )); do
+      app=${removed_previous[$i]}
+      git -C "apps/$app" apply "${removed_patch_files[$i]}"
     done
   fi
   exit "$result"
 }
 trap rollback_patches EXIT
-for app in frappe suite; do
+apps=(frappe suite)
+needs_apply=()
+predecessors=()
+# Identify both checkouts before removing any known patch. Unknown states must
+# fail without touching either application or unrelated checkout changes.
+for app in "${apps[@]}"; do
   patch_file="$patch_dir/$app-mandant-access.patch"
-  if ! git -C "apps/$app" apply --reverse --check "$patch_file" 2>/dev/null; then
-    previous="$patch_dir/$app-mandant-access-v1.patch"
+  previous=""
+  if git -C "apps/$app" apply --reverse --check "$patch_file" 2>/dev/null; then
+    needs_apply+=(0)
+  else
+    needs_apply+=(1)
     if ! git -C "apps/$app" apply --check "$patch_file" 2>/dev/null; then
-      # Only remove the exact known predecessor. Never reset other local changes.
-      git -C "apps/$app" apply --reverse --check "$previous"
-      git -C "apps/$app" apply --reverse "$previous"
-      removed_previous+=("$app")
+      for version in v3 v2 v1; do
+        candidate="$patch_dir/$app-mandant-access-$version.patch"
+        if [[ -f $candidate ]] && git -C "apps/$app" apply --reverse --check "$candidate" 2>/dev/null; then
+          previous=$candidate
+          break
+        fi
+      done
+      if [[ -z $previous ]]; then
+        echo "Unknown $app patch state; refusing to overwrite checkout changes." >&2
+        exit 1
+      fi
     fi
-    git -C "apps/$app" apply --check "$patch_file"
-    git -C "apps/$app" apply "$patch_file"
-    applied+=("$app")
   fi
+  predecessors+=("$previous")
+done
+for (( i=0; i<${#apps[@]}; i++ )); do
+  app=${apps[$i]}
+  if (( needs_apply[i] == 0 )); then
+    continue
+  fi
+  patch_file="$patch_dir/$app-mandant-access.patch"
+  previous=${predecessors[$i]}
+  if [[ -n $previous ]]; then
+    # Remember the exact version removed, so rollback restores v1, v2 or v3.
+    git -C "apps/$app" apply --reverse "$previous"
+    removed_previous+=("$app")
+    removed_patch_files+=("$previous")
+  fi
+  git -C "apps/$app" apply --check "$patch_file"
+  git -C "apps/$app" apply "$patch_file"
+  applied+=("$app")
 done
 trap - EXIT
 git -C apps/suite submodule update --init --recursive --depth 1

@@ -65,7 +65,11 @@ def configure_desk(bootinfo):
 			and (item.get("url") != EMAIL_INBOX_URL or show_mail)
 			and item.get("url") != DRIVE_URL
 		]
-		if frappe.session.user == "Administrator" and "suite" in frappe.get_installed_apps():
+		if (
+			"suite" in frappe.get_installed_apps()
+			and frappe.session.user != "Guest"
+			and frappe.db.get_value("User", frappe.session.user, "user_type") == "System User"
+		):
 			bootinfo.workspace_sidebar_item["kanzlei"]["items"].append(
 				{"label": frappe._("Files"), "type": "Link", "link_type": "URL", "link_to": None, "url": DRIVE_URL, "icon": "folder"}
 			)

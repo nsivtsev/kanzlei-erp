@@ -27,6 +27,10 @@ def configure():
 		frappe.clear_cache()
 	# ERPNext owns the site setup; Drive should open without Suite's unrelated onboarding.
 	frappe.db.set_single_value("Suite Settings", "is_onboarded", 1)
+	# Profile responses cached before an upgrade may lack new navigation fields.
+	from suite.api.account import forget_logged_in_users
+
+	forget_logged_in_users()
 
 
 @frappe.whitelist()

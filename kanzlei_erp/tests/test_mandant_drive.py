@@ -87,6 +87,66 @@ class TestMandantDrive(FrappeTestCase):
 				doc.flags.file_created = True
 				doc.insert(ignore_links=True)
 
+	def test_form_snapshot_saves_business_changes_after_folder_synchronization(self):
+		frappe.set_user(self.writer.name)
+		snapshot = frappe.get_doc("Customer", self.customer.name).as_dict()
+		root = self.root()
+		self.assertEqual(frappe.db.get_value("Customer", self.customer.name, "modified"), snapshot.modified)
+		snapshot.customer_name = "Edited Mandant"
+		with self.assertRaises(frappe.PermissionError):
+			frappe.get_doc(snapshot).save()
+		snapshot.kanzlei_drive_folder = self.api.get_folder(self.customer.name)["folder"]
+		frappe.get_doc(snapshot).save()
+		stored = frappe.get_doc("Customer", self.customer.name)
+		self.assertEqual(stored.customer_name, "Edited Mandant")
+		self.assertEqual(stored.kanzlei_drive_folder, root.name)
+
+	def test_parallel_creator_retries_snapshot_conflict_before_creating_any_storage(self):
+		root = self.root()
+		doc = frappe.get_doc("Customer", self.customer.name)
+		with patch.object(self.api, "_require_customer", side_effect=[frappe.QueryDeadlockError(), doc]) as require, \
+			patch("frappe.db.rollback") as rollback, patch("suite.drive.utils.create_drive_file") as create:
+			result = self.api.create_folder(self.customer.name)
+			self.assertEqual(result["folder"], root.name)
+			rollback.assert_called_once()
+			self.assertEqual(require.call_count, 2)
+			create.assert_not_called()
+
+	def test_snapshot_retry_rechecks_permission_and_stops_before_storage(self):
+		with patch.object(self.api, "_require_customer", side_effect=[frappe.QueryDeadlockError(), frappe.PermissionError()]), \
+			patch("frappe.db.rollback") as rollback, patch("suite.drive.utils.create_drive_file") as create:
+			with self.assertRaises(frappe.PermissionError):
+				self.api.create_folder(self.customer.name)
+			rollback.assert_called_once()
+			create.assert_not_called()
+
+	def test_synchronized_mapping_cannot_be_cleared_or_replaced(self):
+		root = self.root()
+		other = self.child(root)
+		frappe.set_user(self.writer.name)
+		for mapping in (None, other.name):
+			with self.subTest(mapping=mapping):
+				doc = frappe.get_doc("Customer", self.customer.name)
+				doc.kanzlei_drive_folder = mapping
+				with self.assertRaises(frappe.PermissionError):
+					doc.save()
+				self.assertEqual(frappe.db.get_value("Customer", self.customer.name, "kanzlei_drive_folder"), root.name)
+
+	def test_folder_synchronization_does_not_bypass_business_timestamp_conflicts(self):
+		root = self.root()
+		frappe.set_user(self.writer.name)
+		stale = frappe.get_doc("Customer", self.customer.name)
+		current = frappe.get_doc("Customer", self.customer.name)
+		current.customer_name = "Other tab saved"
+		current.save()
+		stale.kanzlei_drive_folder = self.api.get_folder(self.customer.name)["folder"]
+		stale.customer_name = "Stale changes"
+		with self.assertRaises(frappe.TimestampMismatchError):
+			stale.save()
+		stored = frappe.get_doc("Customer", self.customer.name)
+		self.assertEqual(stored.customer_name, "Other tab saved")
+		self.assertEqual(stored.kanzlei_drive_folder, root.name)
+
 	def test_native_creators_reject_managed_folder_before_creating_content(self):
 		root = self.root()
 		for create in (self.api.create_document, self.api.create_sheet, self.api.create_presentation):

@@ -147,12 +147,18 @@ Setup pauses Bench while installing dependencies and rebuilding, then starts it
 again; repeating it preserves the site and Drive files. A Suite checkout at a
 different commit stops setup rather than overwriting it.
 
-Administrator sees **Dateien / Files / Файлы** in Kanzlei, opening `/drive`.
-Create a folder, upload a PDF, and download it to verify access. Kanzlei remains
-the ERP home and ERPNext owns company setup; Suite's separate onboarding is
-marked complete without configuring its Mail, Meet or other products. Staff
-navigation, WebDAV, archive migration and additional
-backup scheduling are future steps. Suite's own roles and permission system
+Every saved **System User**, including staff without Customer access and System
+Managers, sees **Dateien / Files / Файлы** in Kanzlei when Suite is installed.
+It follows **Zeiterfassung**, before administrative **Einstellungen**, and opens
+`/drive` in a new tab. Guest and Website User do not receive this staff entry.
+Drive's top sidebar group includes **Zur Kanzlei / Back to Kanzlei / В Kanzlei**,
+returning to `/desk/kanzlei-overview` in the current tab. The return link waits
+for a successfully loaded profile with `user_type = System User`.
+Create an ordinary folder in Home, upload a PDF, and download it to verify access.
+Kanzlei remains the ERP home and ERPNext owns company setup; Suite's separate
+onboarding is marked complete without configuring its Mail, Meet or other products.
+Archive migration and additional backup scheduling are future steps.
+Suite's own roles and permission system
 remain active: hiding the navigation link is not a server-side access boundary.
 ERP attachments are managed from their original documents; Drive rename,
 move, trash and permanent deletion reject them before touching stored bytes,
@@ -187,10 +193,17 @@ ordinary Drive folders. The existing **Dokumente** tab still lists ERP-linked ma
 This access bridge requires the tracked Frappe and Suite patches applied by
 `scripts/fetch-suite.sh`, also copied into the production build. Patch application
 is idempotent and checks the source context; incompatible upstream updates stop
-setup/build. After applying patches, migrate the site, build Kanzlei assets and
-clear cache. A missing/trashed root is reported for administrator attention;
+setup/build. The installer accepts the exact v1/v2/v3 predecessors and rolls
+back both dependency patches atomically on conflict, preserving unrelated edits.
+After applying patches, migrate the site, build Suite and Kanzlei assets and
+clear Desk cache. Migration also invalidates Suite's cached user profiles so
+the new `user_type` field is available immediately. A missing/trashed root is
+reported for administrator attention;
 clicking the action never silently creates a replacement. See the
 [folder design](docs/plans/2026-10-12-mandant-drive-design.md).
+
+The [staff navigation verification](docs/reviews/2026-10-14-drive-navigation-verification.md)
+records automated and browser acceptance for BL-046.
 
 Drive also binds each File to its physical object. A second File cannot reuse
 Mandant bytes, thumbnails, trash objects or a protected directory, even when
@@ -220,6 +233,29 @@ The [security verification](docs/reviews/2026-10-13-drive-security-verification.
 records local/S3-mock, HTTP, browser and image acceptance. The disposable
 HTTP/Socket.IO scenario is included in `scripts/ci-image.sh`; it requires four
 temporary staff sessions and does not run against production.
+
+Uploaded DOCX, PPTX, XLSX, PDF and XML files download with their original bytes
+and are included recursively in folder ZIPs. Uploaded Office files open a local
+File card with a download button; no Microsoft preview is requested. Native
+Writer, Sheets and Slides documents keep their editors. ZIPs report skipped
+native documents and links, count only readable items, deduplicate overlapping
+selections and preserve files when archive names collide. Unreadable uploaded
+bytes fail the whole build. Old archive tokens require rebuilding.
+
+The current Suite patch supports exact v1 and v2 predecessors; v2 preserves the
+previous security patch. Update backend and Suite assets together, back up the
+site, migrate, rebuild, clear cache and restart services. No File schema change
+or data migration is required. See the
+[download verification](docs/reviews/2026-10-13-drive-downloads-verification.md).
+
+Creating or reopening a Mandant folder synchronizes its protected link in the
+open Customer form while preserving unsaved business fields. Saving a stale
+form with an empty link waits for its current creation and checks the latest
+folder first, including folders created in another tab. Genuine conflicts in
+business fields still require the normal Frappe conflict workflow. Parallel
+creation retries a snapshot lock conflict before touching storage and returns
+the same root. See the
+[form verification](docs/reviews/2026-10-13-drive-form-sync-verification.md).
 
 The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
 

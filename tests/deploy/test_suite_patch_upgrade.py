@@ -1,5 +1,6 @@
 """Exercise the real patch installer using disposable Git checkouts."""
 
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -31,18 +32,27 @@ class TestSuitePatchUpgrade(unittest.TestCase):
             self.git(app, "init", "-q")
             (repo / "binding.txt").write_text("original\n")
             (repo / "second.txt").write_text("original\n")
+            (repo / "unrelated.txt").write_text("original\n")
             self.git(app, "add", ".")
             self.git(app, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
             (repo / "binding.txt").write_text("v1\n")
             old = self.git(app, "diff")
             (self.root / "deploy" / (app + "-mandant-access-v1.patch")).write_text(old)
             (repo / "binding.txt").write_text("v2\n")
-            (repo / "second.txt").write_text("v2\n")
+            if app == "suite":
+                previous = self.git(app, "diff")
+                (self.root / "deploy/suite-mandant-access-v2.patch").write_text(previous)
+                (repo / "binding.txt").write_text("v3\n")
+                previous = self.git(app, "diff")
+                (self.root / "deploy/suite-mandant-access-v3.patch").write_text(previous)
+            (repo / "binding.txt").write_text("current\n")
+            (repo / "second.txt").write_text("current\n")
             new = self.git(app, "diff")
             (self.root / "deploy" / (app + "-mandant-access.patch")).write_text(new)
             self.git(app, "checkout", "--", ".")
             self.git(app, "apply", str(self.root / "deploy" / (app + "-mandant-access-v1.patch")))
             (repo / "unrelated.txt").write_text("keep this work\n")
+            (repo / "untracked.txt").write_text("keep this new file\n")
         commit = self.git("suite", "rev-parse", "HEAD").strip()
         (self.root / "deploy/suite.env").write_text("SUITE_COMMIT=" + commit + "\nSUITE_REPOSITORY=unused\n")
 
@@ -57,8 +67,103 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         self.assertEqual(self.install().returncode, 0)
         self.assertEqual(self.install().returncode, 0)
         for app in ("frappe", "suite"):
-            self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "v2\n")
+            self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "current\n")
             self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def use_suite_v2(self):
+        self.git("suite", "apply", "--reverse", str(self.root / "deploy/suite-mandant-access-v1.patch"))
+        self.git("suite", "apply", str(self.root / "deploy/suite-mandant-access-v2.patch"))
+
+    def use_suite_v3(self):
+        self.git("suite", "apply", "--reverse", str(self.root / "deploy/suite-mandant-access-v1.patch"))
+        self.git("suite", "apply", str(self.root / "deploy/suite-mandant-access-v3.patch"))
+
+    def test_v3_upgrade_and_repeat_preserve_unrelated_work(self):
+        self.use_suite_v3()
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "current\n")
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+            self.assertEqual((self.root / "apps" / app / "untracked.txt").read_text(), "keep this new file\n")
+
+    def test_v3_conflict_restores_exact_predecessors_for_both_apps(self):
+        self.use_suite_v3()
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Unknown suite patch state", result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+            self.assertEqual((self.root / "apps" / app / "untracked.txt").read_text(), "keep this new file\n")
+
+    def test_v3_conflict_does_not_downgrade_already_current_frappe(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        self.git("frappe", "apply", str(self.root / "deploy/frappe-mandant-access.patch"))
+        self.use_suite_v3()
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Unknown suite patch state", result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+
+    def test_modified_v3_patch_preserves_both_checkout_diffs(self):
+        self.use_suite_v3()
+        (self.root / "apps/suite/binding.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unknown suite patch state", result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+
+    def test_v3_predecessor_is_included_in_image_context(self):
+        self.assertIn("!deploy/suite-mandant-access-v3.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertIn("deploy/*-mandant-access*.patch", (ROOT / "deploy/Dockerfile").read_text())
+
+    def test_v3_snapshot_is_exact_committed_predecessor(self):
+        # Exact Suite patch from ad1f339, before BL-046. Pin bytes rather than
+        # HEAD so later feature commits and shallow CI checkouts remain valid.
+        predecessor = (ROOT / "deploy/suite-mandant-access-v3.patch").read_bytes()
+        self.assertEqual(hashlib.sha256(predecessor).hexdigest(),
+                         "5eda2093e0e3e5579a7e7b7257c1ec8b0ea80f61f4cbe1ef9a7aafeea9a4a065")
+
+    def test_v2_upgrade_and_repeat_preserve_unrelated_work(self):
+        self.use_suite_v2()
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "current\n")
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def test_v2_conflict_restores_exact_predecessors_for_both_apps(self):
+        self.use_suite_v2()
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        self.assertNotEqual(self.install().returncode, 0)
+        self.assertEqual((self.root / "apps/frappe/binding.txt").read_text(), "v1\n")
+        self.assertEqual((self.root / "apps/suite/binding.txt").read_text(), "v2\n")
+        self.assertEqual((self.root / "apps/suite/second.txt").read_text(), "user edit\n")
+        for app in ("frappe", "suite"):
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def test_clean_install_and_repeat(self):
+        for app in ("frappe", "suite"):
+            self.git(app, "apply", "--reverse", str(self.root / "deploy" / (app + "-mandant-access-v1.patch")))
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "current\n")
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def test_v2_predecessor_is_included_in_image_context(self):
+        self.assertIn("!deploy/suite-mandant-access-v2.patch", (ROOT / ".dockerignore").read_text().splitlines())
 
     def test_conflict_in_second_app_restores_both_previous_patches(self):
         (self.root / "apps/suite/second.txt").write_text("user edit\n")
@@ -72,3 +177,23 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         self.assertNotEqual(self.install().returncode, 0)
         self.assertEqual((self.root / "apps/frappe/binding.txt").read_text(), "user edit\n")
         self.assertEqual((self.root / "apps/suite/binding.txt").read_text(), "v1\n")
+
+    def test_unknown_second_patch_preserves_both_checkout_diffs(self):
+        (self.root / "apps/suite/binding.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unknown suite patch state", result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+            self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def test_v2_conflict_does_not_downgrade_already_current_frappe(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        self.git("frappe", "apply", str(self.root / "deploy/frappe-mandant-access.patch"))
+        self.use_suite_v2()
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        self.assertNotEqual(self.install().returncode, 0)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])

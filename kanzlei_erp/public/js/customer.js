@@ -6,53 +6,110 @@ function ensureMandantDocuments(frm) {
 	frm.__mandantDocuments.setCustomer(frm.doc.name, frm.is_new());
 }
 
-async function ensureMandantDrive(frm) {
+function mandantDriveContext(frm) {
+	const previous = frm.__mandantDriveContext;
+	if (previous?.doc === frm.doc && previous.customer === frm.doc.name) return previous;
+	const context = { doc: frm.doc, customer: frm.doc.name, generation: 0, opening: null };
+	frm.__mandantDriveContext = context;
+	return context;
+}
+
+function currentMandantDrive(frm, context) {
+	const route = frappe.get_route();
+	return frm.doc === context.doc && frm.doc.name === context.customer && !frm.is_new()
+		&& route[0] === "Form" && route[1] === "Customer" && route[2] === context.customer;
+}
+
+async function syncMandantDrive(frm, context, state) {
+	if (!currentMandantDrive(frm, context)) return false;
+	// The server owns this immutable binding. An older empty reply must not
+	// clear a folder obtained from a completed creation or a newer lookup.
+	if (state?.enabled && state.folder && context.doc.kanzlei_drive_folder !== state.folder) {
+		await frm.set_value("kanzlei_drive_folder", state.folder, false, true);
+	}
+	return currentMandantDrive(frm, context);
+}
+
+function renderMandantDrive(frm, context, state) {
+	if (!currentMandantDrive(frm, context)) return;
 	frm.remove_custom_button(__("Drive Folder"));
 	frm.remove_custom_button(__("Create Drive Folder"));
-	const generation = (frm.__driveGeneration || 0) + 1;
-	frm.__driveGeneration = generation;
-	if (frm.is_new()) return;
-	const customer = frm.doc.name;
-	const current = () => frm.doc.name === customer && frm.__driveGeneration === generation && !frm.is_new();
-	const api = "kanzlei_erp.mandant_drive";
-	let response;
-	try {
-		response = await frappe.call({ method: `${api}.get_folder`, args: { customer } });
-	} catch {
-		return; // Frappe displays the server's permission or availability error.
-	}
-	const state = response.message;
-	if (!current() || !state?.enabled || (!state.folder && !state.can_create)) return;
-	const label = state.folder ? __("Drive Folder") : __("Create Drive Folder");
-	frm.add_custom_button(label, async () => {
-		if (!current() || frm.__driveOpening) return;
-		frm.__driveOpening = true;
+	const generation = ++context.generation;
+	if (!state?.enabled) return;
+	const folder = context.doc.kanzlei_drive_folder || state.folder;
+	if (!folder && !state.can_create) return;
+	const label = folder ? __("Drive Folder") : __("Create Drive Folder");
+	frm.add_custom_button(label, () => {
+		if (!currentMandantDrive(frm, context) || context.generation !== generation || context.opening) return;
+		const operation = { promise: null };
+		context.opening = operation;
 		// Reserve a tab during the click so popup blockers do not reject the async result.
 		const tab = window.open("about:blank", "_blank");
 		if (tab) tab.opener = null;
-		try {
-			const result = await frappe.call({
-				method: `${api}.${state.folder ? "get_folder" : "create_folder"}`,
-				args: { customer },
-			});
-			if (!result.message?.url) throw new Error("Folder unavailable");
-			if (tab) tab.location.href = result.message.url;
-			else frappe.msgprint(__("Allow popups to open the Drive folder."));
-			if (!state.folder && current()) {
-				state.folder = result.message.folder;
-				frm.remove_custom_button(label);
-				void ensureMandantDrive(frm);
+		operation.promise = (async () => {
+			try {
+				const result = await frappe.call({
+					method: `kanzlei_erp.mandant_drive.${folder ? "get_folder" : "create_folder"}`,
+					args: { customer: context.customer },
+				});
+				if (!currentMandantDrive(frm, context)) { tab?.close(); return; }
+				if (!result.message?.url) throw new Error("Folder unavailable");
+				if (!await syncMandantDrive(frm, context, result.message)) { tab?.close(); return; }
+				renderMandantDrive(frm, context, result.message);
+				if (tab) tab.location.href = result.message.url;
+				else frappe.msgprint(__("Allow popups to open the Drive folder."));
+			} catch {
+				tab?.close();
+				if (currentMandantDrive(frm, context)) {
+					frappe.msgprint(__("Could not open the Mandant folder. Check your access and try again."));
+				}
+			} finally {
+				if (context.opening === operation) context.opening = null;
 			}
-		} catch {
-			tab?.close();
-			frappe.msgprint(__("Could not open the Mandant folder. Check your access and try again."));
-		} finally {
-			frm.__driveOpening = false;
-		}
+		})();
+		return operation.promise;
 	});
 }
 
+async function ensureMandantDrive(frm) {
+	frm.remove_custom_button(__("Drive Folder"));
+	frm.remove_custom_button(__("Create Drive Folder"));
+	if (frm.is_new()) return;
+	const context = mandantDriveContext(frm);
+	const generation = ++context.generation;
+	try {
+		const response = await frappe.call({
+			method: "kanzlei_erp.mandant_drive.get_folder", args: { customer: context.customer },
+		});
+		if (context.generation !== generation || !await syncMandantDrive(frm, context, response.message)) return;
+		renderMandantDrive(frm, context, response.message);
+	} catch {
+		// Frappe displays the server's permission or availability error.
+	}
+}
+
+async function syncMandantDriveBeforeSave(frm) {
+	if (frm.is_new() || frm.doc.kanzlei_drive_folder) return;
+	const context = mandantDriveContext(frm);
+	try {
+		await context.opening?.promise;
+		if (!currentMandantDrive(frm, context)) throw new Error("Form changed");
+		const response = await frappe.call({
+			method: "kanzlei_erp.mandant_drive.get_folder", args: { customer: context.customer },
+		});
+		if (typeof response.message?.enabled !== "boolean") throw new Error("Folder state unavailable");
+		if (!await syncMandantDrive(frm, context, response.message)) throw new Error("Form changed");
+	} catch {
+		const message = currentMandantDrive(frm, context)
+			? __("Could not synchronize the Mandant folder. Your changes are preserved. Please try saving again.")
+			: __("Saving was cancelled because the Mandant form changed. Please save the current form again.");
+		frappe.msgprint(message);
+		throw new Error(message);
+	}
+}
+
 frappe.ui.form.on("Customer", {
+	before_save: syncMandantDriveBeforeSave,
 	refresh(frm) {
 		frm.toggle_display(
 			"accounting_tab",

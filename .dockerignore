@@ -10,6 +10,8 @@
 !deploy/suite-mandant-access.patch
 !deploy/frappe-mandant-access.patch
 !deploy/suite-mandant-access-v1.patch
+!deploy/suite-mandant-access-v2.patch
+!deploy/suite-mandant-access-v3.patch
 !deploy/frappe-mandant-access-v1.patch
 !scripts/
 !scripts/fetch-suite.sh

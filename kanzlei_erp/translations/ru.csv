@@ -463,6 +463,7 @@ Working,В работе,Task status
 Pending Review,На проверке,Task status
 Overdue,Просрочена,Task status
 Files,Файлы
+Back to Kanzlei,В Kanzlei
 Manage ERP attachments from their original document,Управляйте вложениями ERP из исходного документа
 Drive Folder,Папка Drive
 Create Drive Folder,Создать папку Drive
@@ -480,3 +481,5 @@ Drive access is managed through Mandant permissions,Доступ к Drive опр
 Manage Mandant files through Drive,Управляйте файлами клиента через Drive
 Upload files to Mandant folders. Create Suite documents outside these folders.,Загружайте файлы в папки клиентов. Создавайте документы Suite вне этих папок.
 Mandant Drive links must use HTTP or HTTPS,Ссылки в папках клиентов должны использовать HTTP или HTTPS
+Could not synchronize the Mandant folder. Your changes are preserved. Please try saving again.,Не удалось синхронизировать папку клиента. Ваши изменения сохранены в форме. Попробуйте сохранить ещё раз.
+Saving was cancelled because the Mandant form changed. Please save the current form again.,"Сохранение отменено, поскольку карточка клиента изменилась. Сохраните текущую карточку ещё раз."
