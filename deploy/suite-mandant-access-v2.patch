@@ -1,0 +1,1034 @@
+diff --git a/frontend/src/apps/drive/components/GenericPage.test.ts b/frontend/src/apps/drive/components/GenericPage.test.ts
+index e1bafb2f2..55ecf7eb7 100644
+--- a/frontend/src/apps/drive/components/GenericPage.test.ts
++++ b/frontend/src/apps/drive/components/GenericPage.test.ts
+@@ -123,9 +123,10 @@ function mountPage(grouper: (rows: unknown[]) => unknown) {
+   )
+   app.config.errorHandler = (err) => errors.push(String(err))
+   app.config.warnHandler = (msg) => errors.push(msg)
+-  app.provide('socket', { on: vi.fn() })
++  const handlers: Record<string, (payload: unknown) => void> = {}
++  app.provide('socket', { on: vi.fn((event, handler) => { handlers[event] = handler }), off: vi.fn() })
+   app.mount(document.createElement('div'))
+-  return { app, errors }
++  return { app, errors, handlers, getEntities }
+ }
+ 
+ // Recents' groupByTime — the shape that matters is a fresh object per call.
+@@ -212,7 +213,7 @@ function mountPaginated(firstPage: {
+         }),
+     })
+   )
+-  app.provide('socket', { on: vi.fn() })
++  app.provide('socket', { on: vi.fn(), off: vi.fn() })
+   app.mount(document.createElement('div'))
+   return { app, getEntities }
+ }
+@@ -424,3 +425,31 @@ describe('GenericPage pagination', () => {
+     app.unmount()
+   })
+ })
++
++
++describe('GenericPage realtime invalidation', () => {
++  it('fetches authoritative rows and ignores a late response after unmount', async () => {
++    vi.useFakeTimers()
++    let finish: (value: unknown) => void
++    frappeUI.request.mockImplementation(() => new Promise(resolve => { finish = resolve }))
++    const { app, handlers, getEntities } = mountPage(freshObjectGrouper)
++    handlers['drive-folder-changed']({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(frappeUI.request).toHaveBeenCalled()
++    app.unmount()
++    finish!({ message: [{ name: 'secret', file_name: 'private' }] })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(getEntities.setData).not.toHaveBeenCalled()
++    vi.useRealTimers()
++  })
++  it('clears rows when authoritative reload denies access', async () => {
++    vi.useFakeTimers()
++    frappeUI.request.mockRejectedValue({ status: 403 })
++    const { app, handlers, getEntities } = mountPage(freshObjectGrouper)
++    handlers['drive-folder-changed']({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(getEntities.setData).toHaveBeenCalledWith([])
++    app.unmount()
++    vi.useRealTimers()
++  })
++})
+diff --git a/frontend/src/apps/drive/components/GenericPage.vue b/frontend/src/apps/drive/components/GenericPage.vue
+index 2e5a47951..61b6d9c97 100644
+--- a/frontend/src/apps/drive/components/GenericPage.vue
++++ b/frontend/src/apps/drive/components/GenericPage.vue
+@@ -83,6 +83,7 @@ import { move } from '@/apps/drive/resources/files'
+ import DriveListSkeleton from '@/apps/drive/components/DriveListSkeleton.vue'
+ import { settings } from '@/apps/drive/resources/permissions'
+ import emitter from '@/apps/drive/emitter'
++import { subscribeFolderChanges } from '@/apps/drive/utils/realtimeRefresh'
+ import { useEmitter } from '@/apps/drive/utils/useEmitter'
+ import { getFileLink } from '@/apps/drive/ui/drive/js/utils'
+ 
+@@ -674,32 +675,42 @@ const actionItems = computed(() => {
+ })
+ 
+ const socket = inject('socket')
+-socket.on('list-add', ({ file }) => {
+-  if (
+-    file.folder === props.getEntities.params.entity_name &&
+-    !props.getEntities.data.find((k) => k.name === file.name)
+-  ) {
+-    props.getEntities.data.push(...prettyData([file]))
+-    props.getEntities.setData(props.getEntities.data)
+-  }
+-})
+-socket.on('list-update', ({ file }) => {
+-  if (file.folder !== props.getEntities.params.entity_name) return
+-  const index = props.getEntities.data.findIndex((k) => k.name == file.name)
+-  if (index !== -1)
+-    props.getEntities.data.splice(index, 1, ...prettyData([file]))
+-  props.getEntities.setData(props.getEntities.data)
+-})
+-socket.on('list-remove', ({ parent, entity_name }) => {
+-  if (parent !== props.getEntities.params.entity_name) return
+-  const index = props.getEntities.data.findIndex((k) => k.name == entity_name)
+-  if (index !== -1) props.getEntities.data.splice(index, 1)
+-  props.getEntities.setData(props.getEntities.data)
+-})
+-socket.on('client-rename', ({ entity_name, title }) => {
+-  const file = props.getEntities.data.find((k) => k.name === entity_name)
+-  file.file_name = title
+-})
++let realtimeStopped = false
++const stopRealtime = subscribeFolderChanges(socket,
++  folder => !props.getEntities.params?.entity_name || folder === props.getEntities.params.entity_name,
++  async () => {
++    const res = props.getEntities
++    const epoch = ++queryEpoch
++    const params = { ...res.params, ...queryParams() }
++    if (res.paginated) Object.assign(params, { start: 0, limit: PAGE_SIZE, paginated: 1 })
++    loadingMore.value = false
++    try {
++      const response = await frappeRequest({
++        url: res.url.startsWith('/') ? res.url : `/api/method/${res.url}`,
++        method: 'GET', params, credentials: 'include',
++      })
++      if (realtimeStopped || epoch !== queryEpoch || res !== props.getEntities) return
++      const payload = response?.message ?? response
++      res.setData(formatRows(res.paginated ? payload?.rows ?? [] : payload ?? []))
++      res.error = null
++      pageStart.value = payload?.next_start ?? 0
++      hasNextPage.value = !!payload?.has_next
++      refreshExpanded(sortOrder.value)
++    } catch (error) {
++      if (realtimeStopped || epoch !== queryEpoch || res !== props.getEntities) return
++      res.error = error
++      const denied = error?.status === 403 || error?.httpStatus === 403 ||
++        String(error?.exc_type ?? error?.message ?? '').includes('PermissionError')
++      if (denied) {
++        res.setData([])
++        selections.value = new Set()
++        activeEntity.value = null
++        hasNextPage.value = false
++      }
++    }
++  })
++onBeforeUnmount(() => { realtimeStopped = true; stopRealtime() })
++
+ </script>
+ <style>
+ .file-drag #drop-area {
+diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
+index 86a738764..39a3648fd 100644
+--- a/suite/drive/api/files.py
++++ b/suite/drive/api/files.py
+@@ -5,6 +5,7 @@ import re
+ import secrets
+ import tempfile
+ import zipfile
++from contextlib import ExitStack
+ from io import BytesIO
+ from pathlib import Path
+ from urllib.parse import quote
+@@ -42,7 +43,7 @@ from suite.drive.utils.files import (
+ )
+ from suite.drive.utils.users import mark_as_viewed
+ 
+-from .permissions import user_has_permission
++from .permissions import get_app_access, user_has_permission
+ 
+ FORBIDDEN_DOWNLOAD_TYPES = ["Folder", "Link", "Document", "Presentation"]
+ 
+@@ -116,7 +117,7 @@ def upload_file(
+         file_name,
+         parent,
+         file_type,
+-        lambda file: "/" + str(manager.get_disk_path(file, embed)),
++        lambda file: get_s3_url(str(manager.get_disk_path(file, embed))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file, embed)),
+         mime_type,
+         file_size,
+         int(file_modified) / 1000 if file_modified else None,
+@@ -126,8 +127,10 @@ def upload_file(
+     manager.upload_file(temp_path, drive_file, not embed)
+     # Change path to be s3 compatible
+     if manager.s3_enabled:
+-        drive_file.file_url = get_s3_url(get_s3_key(drive_file.file_url))
+-        drive_file.save()
++        new_url = get_s3_url(storage_key(drive_file.file_url))
++        with manager.storage_binding(drive_file, new_url):
++            drive_file.file_url = new_url
++            drive_file.save()
+ 
+     try:
+         update_file_size(parent, file_size)
+@@ -135,7 +138,12 @@ def upload_file(
+         # Find a cleaner way to handle folder sizes as multiple simultaneous uploads will break this
+         pass
+ 
+-    frappe.publish_realtime("list-add", {"file": prettify_file(drive_file.as_dict())})
++    hooks = frappe.get_hooks("drive_file_changed")
++    if hooks:
++        for hook in hooks:
++            frappe.call(hook, doc=drive_file)
++    else:
++        frappe.publish_realtime("list-add", {"file": prettify_file(drive_file.as_dict())}, after_commit=True)
+ 
+     return drive_file
+ 
+@@ -182,21 +190,7 @@ def create_folder(file_name: str, parent: str | None = None):
+     validate_filename(file_name, parent, "Folder", error=f"Folder '{file_name}' already exists.")
+ 
+     manager = FileManager()
+-    path = manager.create_folder(
+-        frappe._dict(
+-            {
+-                "file_name": file_name,
+-                "parent_path": Path(storage_key(parent_doc.file_url or "")),
+-            }
+-        )
+-    )
+-
+-    return create_drive_file(
+-        file_name,
+-        parent,
+-        "Folder",
+-        path,
+-    )
++    return create_drive_file(file_name, parent, "Folder", manager.create_folder)
+ 
+ 
+ def ensure_path(fullpath, parent=None):
+@@ -282,9 +276,12 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+     if token:
+         # Single-use capability minted by create_auth_token, for cookieless
+         # fetches (e.g. the Office Online preview).
+-        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry"], as_dict=True)
++        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry", "user"], as_dict=True)
+         if not auth or auth.file != entity_name or frappe.utils.now_datetime() > auth.expiry:
+             raise frappe.PermissionError("You do not have permission to view this file")
++        app_access = get_app_access(entity_name, auth.user)
++        if app_access is not None and not app_access.get("read"):
++            raise frappe.PermissionError("You do not have permission to view this file")
+         frappe.delete_doc("Drive Token", token, ignore_permissions=True, force=True)
+     elif not user_has_permission(entity_name, "read"):
+         raise frappe.PermissionError("You do not have permission to view this file")
+@@ -317,6 +314,11 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+         frappe.local.response["location"] = file.file_url
+         return
+ 
++    if token:
++        with ExitStack() as authority:
++            for hook in frappe.get_hooks("drive_authorized_read"):
++                authority.enter_context(frappe.call(hook, file=entity_name, user=auth.user))
++            return get_file_internal(file, trigger_download)
+     return get_file_internal(file, trigger_download)
+ 
+ 
+@@ -360,6 +362,7 @@ def get_file_internal(file, trigger_download=0):
+         return stream_file_content(file.name)
+ 
+     manager = FileManager()
++    manager.require_storage_access(file)
+     if trigger_download:
+         return _serve_resumable(manager, storage_key(file.file_url), file.file_name, file.get("mime_type"))
+     return send_file(
+@@ -523,6 +526,10 @@ def _write_archive(token, files):
+ def _publish_download_status(token, user, status, **extra):
+     """Push the terminal build state over the user's realtime room so the
+     client can drop polling and just listen."""
++    entry = frappe.cache().get_value(_download_cache_key(token)) or {}
++    names = entry.get("entities", []) + entry.get("files", [])
++    if any(not user_has_permission(name, "read", user) for name in names):
++        status, extra = "failed", {"error": "Archive access is unavailable."}
+     frappe.publish_realtime("drive-download-status", {"token": token, "status": status, **extra}, user=user)
+ 
+ 
+@@ -538,7 +545,8 @@ def build_download_archive(token, entities, zip_name, user):
+         key, size = _write_archive(token, files)
+         cache.set_value(
+             cache_key,
+-            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size},
++            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size,
++             "entities": entities, "files": [file.name for _, file in files]},
+             expires_in_sec=DOWNLOAD_TTL,
+         )
+         _publish_download_status(token, user, "ready", size=size)
+@@ -546,10 +554,10 @@ def build_download_archive(token, entities, zip_name, user):
+         frappe.log_error("Drive: archive build failed", e)
+         cache.set_value(
+             cache_key,
+-            {"status": "failed", "owner": user, "error": str(e)},
++            {"status": "failed", "owner": user, "error": "Archive could not be prepared."},
+             expires_in_sec=DOWNLOAD_TTL,
+         )
+-        _publish_download_status(token, user, "failed", error=str(e))
++        _publish_download_status(token, user, "failed", error="Archive could not be prepared.")
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+@@ -592,7 +600,8 @@ def download_folder(entities: str):
+     token = secrets.token_urlsafe(24)
+     cache.set_value(
+         _download_cache_key(token),
+-        {"status": "building", "owner": user, "file_name": zip_name},
++        {"status": "building", "owner": user, "file_name": zip_name,
++         "entities": entities, "files": [file.name for _, file in files]},
+         expires_in_sec=BUILDING_TTL,
+     )
+     cache.set_value(selection_key, token, expires_in_sec=BUILDING_TTL)
+@@ -612,6 +621,13 @@ def _get_download_entry(token):
+     entry = frappe.cache().get_value(_download_cache_key(token))
+     if not entry or entry.get("owner") != frappe.session.user:
+         frappe.throw("Not found", frappe.DoesNotExistError)
++    if entry.get("status") in ("building", "ready"):
++        # Old entries without provenance must be rebuilt, not served unchecked.
++        if "files" not in entry or "entities" not in entry:
++            frappe.throw("Archive expired. Build it again.", frappe.DoesNotExistError)
++        for name in set(entry["entities"] + entry["files"]):
++            if not frappe.db.exists("File", name) or not user_has_permission(name, "read"):
++                raise frappe.PermissionError("You do not have permission to download this archive")
+     return entry
+ 
+ 
+@@ -692,36 +708,46 @@ def remove_or_restore(entity_names: list[str] | str):
+ def toggle_entity_status(doc, manager: FileManager, locked_owners: set):
+     """Trash an Active entity, or restore a Trashed one. Shared by
+     remove_or_restore and WebDAV DELETE."""
+-    # row lock before the disk transfer — same discipline as File.move()
+-    frappe.db.get_value("File", doc.name, "name", for_update=True)
+-    if not user_has_permission(doc, "write"):
+-        raise frappe.PermissionError("You do not have permission to remove this file")
+-    if doc.owner not in locked_owners:
+-        acquire_owner_storage_lock(doc.owner)
+-        locked_owners.add(doc.owner)
+-    if doc.status == STATUS_ACTIVE:
+-        flag = STATUS_TRASHED
+-        manager.move_to_trash(doc)
+-    else:
+-        validate_quota(doc.owner, doc.file_size)
+-        # A trashed name is free — get_new_file_name only counts Active siblings —
+-        # so something may have taken it. Restoring onto it would overwrite the
+-        # newcomer's blob, or, for a folder, land inside it.
++    target = None
++    if doc.status == STATUS_TRASHED:
+         available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
+-        if available != doc.file_name:
+-            doc.flags.drive_disk_rename = True
+-            doc.file_name = available
+-            if not manager.flat and not doc._not_in_disk():
+-                doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
+-        manager.restore(doc)
+-        flag = STATUS_ACTIVE
+-
+-    doc.status = flag
+-    doc.file_modified = frappe.utils.now_datetime()
+-    if doc.folder and doc.file_size:
+-        apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
+-
+-    doc.save()
++        from types import SimpleNamespace
++        proposed = SimpleNamespace(**doc.as_dict())
++        proposed.file_name = available
++        target = manager.get_disk_path(proposed)
++    with ExitStack() as stack:
++        for hook in frappe.get_hooks("drive_storage_mutation"):
++            stack.enter_context(frappe.call(hook, doc=doc, target=target))
++        # row lock before the disk transfer — same discipline as File.move()
++        frappe.db.get_value("File", doc.name, "name", for_update=True)
++        if not user_has_permission(doc, "write"):
++            raise frappe.PermissionError("You do not have permission to remove this file")
++        if doc.owner not in locked_owners:
++            acquire_owner_storage_lock(doc.owner)
++            locked_owners.add(doc.owner)
++        if doc.status == STATUS_ACTIVE:
++            flag = STATUS_TRASHED
++            manager.move_to_trash(doc)
++        else:
++            validate_quota(doc.owner, doc.file_size)
++            # A trashed name is free — get_new_file_name only counts Active siblings —
++            # so something may have taken it. Restoring onto it would overwrite the
++            # newcomer's blob, or, for a folder, land inside it.
++            available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
++            if available != doc.file_name:
++                doc.flags.drive_disk_rename = True
++                doc.file_name = available
++                if not manager.flat and not doc._not_in_disk():
++                    doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
++            manager.restore(doc)
++            flag = STATUS_ACTIVE
++
++        doc.status = flag
++        doc.file_modified = frappe.utils.now_datetime()
++        if doc.folder and doc.file_size:
++            apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
++
++        doc.save()
+ 
+ 
+ @frappe.whitelist()
+@@ -940,7 +966,7 @@ def search(query: str):
+         return _add_presentation_thumbnails(rows)
+     except Exception as e:
+         frappe.log_error(frappe.get_traceback(), "Frappe Drive Search Error")
+-        return {"error": str(e)}
++        return {"error": "Archive could not be prepared."}
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+diff --git a/suite/drive/api/permissions.py b/suite/drive/api/permissions.py
+index 80b8eac84..f0c22025f 100644
+--- a/suite/drive/api/permissions.py
++++ b/suite/drive/api/permissions.py
+@@ -41,7 +41,32 @@ def get_user_access(entity: str | Document | frappe._dict):
+     return get_user_access_for_user(entity, frappe.session.user)
+ 
+ 
++def get_app_access(entity, user):
++    """An app may own access to a File; None preserves Suite semantics."""
++    for hook in frappe.get_hooks("drive_entity_access"):
++        access = frappe.call(hook, entity=entity, user=user)
++        if access is not None:
++            return access
++    return None
++
++
++def get_app_access_batch(entities, user):
++    """Batch providers must return only the File IDs whose access they own."""
++    hooks = frappe.get_hooks("drive_entity_access_batch")
++    if not hooks:
++        return {entity.name: access for entity in entities
++                if (access := get_app_access(entity, user)) is not None}
++    result = {}
++    for hook in hooks:
++        for name, access in frappe.call(hook, entities=entities, user=user).items():
++            result.setdefault(name, access)
++    return result
++
++
+ def get_user_access_for_user(entity: str | Document | frappe._dict, user: str):
++    app_access = get_app_access(entity, user)
++    if app_access is not None:
++        return app_access
+     if isinstance(entity, str):
+         entity = frappe.get_cached_doc("File", entity)
+ 
+diff --git a/suite/drive/api/tests/test_files.py b/suite/drive/api/tests/test_files.py
+index 0a5c55c71..d3bfa4dc8 100644
+--- a/suite/drive/api/tests/test_files.py
++++ b/suite/drive/api/tests/test_files.py
+@@ -170,7 +170,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -191,7 +191,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -214,7 +214,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session=None),
+             ):
+@@ -234,7 +234,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 patch(
+                     "suite.drive.api.files.validate_quota",
+@@ -258,7 +258,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session=None, chunk=(0, 2, 0)),
+                 self.assertRaises(frappe.ValidationError),
+@@ -277,7 +277,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session="", chunk=(0, 2, 0)),
+                 self.assertRaises(frappe.ValidationError),
+@@ -296,7 +296,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -319,7 +319,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -345,7 +345,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -558,7 +558,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+         with self.set_user(OWNER):
+             file = frappe.get_doc("File", self.file.name)
+             file.file_url = "/private/files/../../invalid.txt"
+-            with self.assertRaises(frappe.ValidationError):
++            with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+                 file.save()
+ 
+     def test_ordered_chunks_are_assembled_byte_for_byte(self):
+diff --git a/suite/drive/utils/__init__.py b/suite/drive/utils/__init__.py
+index 41b2f54fa..a10c9cddc 100644
+--- a/suite/drive/utils/__init__.py
++++ b/suite/drive/utils/__init__.py
+@@ -1,4 +1,5 @@
+ import os
++from contextlib import ExitStack
+ from datetime import datetime
+ from pathlib import Path
+ 
+@@ -513,7 +514,15 @@ def generate_upward_path(entity_name, user=None):
+         if row["perm_user"] is not None:
+             nodes[-1]["perms"].append(row)
+ 
+-    return [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    from suite.drive.api.permissions import get_app_access
++
++    path = [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    for node in path:
++        access = get_app_access(node["name"], user)
++        if access is not None:
++            node.update(access)
++            node["decided"] = list(PERMISSION_TYPES)
++    return path
+ 
+ 
+ def get_valid_breadcrumbs(entity_name, user_access):
+@@ -522,9 +531,9 @@ def get_valid_breadcrumbs(entity_name, user_access):
+     """
+     # Admins see the entire path; others get the contiguous readable suffix.
+     path = generate_upward_path(entity_name)
+-    if user_access.get("type") not in ["admin", "user"]:
+-        lose_access = next((i for i, k in enumerate(path[::-1]) if not k["read"]), 0)
+-        path = path[-lose_access:]
++    if user_access.get("type") != "admin":
++        last_unread = next((i for i in range(len(path) - 1, -1, -1) if not path[i]["read"]), -1)
++        path = path[last_unread + 1 :]
+     return _name_own_drive(path)
+ 
+ 
+@@ -637,8 +646,11 @@ def create_drive_file(
+         drive_file._name = name
+     drive_file.insert(ignore_permissions=True)
+     path = entity_path(drive_file) if callable(entity_path) else entity_path
+-    drive_file.file_url = str(path) if path else ""
+-    drive_file.save(ignore_permissions=True)
++    with ExitStack() as binding:
++        for hook in frappe.get_hooks("drive_storage_creation"):
++            binding.enter_context(frappe.call(hook, doc=drive_file, url=str(path) if path else ""))
++        drive_file.file_url = str(path) if path else ""
++        drive_file.save(ignore_permissions=True)
+     if owner:
+         drive_file.db_set("owner", owner, update_modified=False)
+     return drive_file
+diff --git a/suite/drive/utils/files.py b/suite/drive/utils/files.py
+index 02b1d97b3..629a12bf5 100644
+--- a/suite/drive/utils/files.py
++++ b/suite/drive/utils/files.py
+@@ -1,7 +1,7 @@
+ import os
+ import shutil
+ import unicodedata
+-from contextlib import contextmanager
++from contextlib import ExitStack, contextmanager
+ from io import BytesIO
+ from pathlib import Path
+ from urllib.parse import quote, unquote
+@@ -43,6 +43,17 @@ class FileManager:
+                 config=Config(signature_version=settings.signature_version),
+             )
+ 
++    def require_storage_access(self, entity, operation="read", target=None):
++        for hook in frappe.get_hooks("drive_storage_guard"):
++            frappe.call(hook, entity=entity, operation=operation, target=target)
++
++    @contextmanager
++    def storage_binding(self, doc, target):
++        with ExitStack() as stack:
++            for hook in frappe.get_hooks("drive_storage_mutation"):
++                stack.enter_context(frappe.call(hook, doc=doc, target=target))
++            yield
++
+     def get_prefix(self):
+         return self.settings.root_folder or ""
+ 
+@@ -74,8 +85,9 @@ class FileManager:
+         """
+         Moves the file from the current path to another path
+         """
++        self.require_storage_access(file, "write")
+         if self.s3_enabled:
+-            self.conn.upload_file(current_path, self.bucket, get_s3_key(file.file_url))
++            self.conn.upload_file(current_path, self.bucket, storage_key(file.file_url))
+             if create_thumbnail and self.can_create_thumbnail(file):
+                 frappe.enqueue(
+                     self.upload_thumbnail,
+@@ -176,6 +188,7 @@ class FileManager:
+         Function to create a folder in the S3 bucket or on disk.
+         """
+         path = self.get_disk_path(entity)
++        self.require_storage_access(entity, "write", target=str(path))
+         if self.s3_enabled:
+             self.conn.put_object(Bucket=self.bucket, Key=str(path) + "/", Body="")
+         else:
+@@ -186,6 +199,7 @@ class FileManager:
+         """
+         Function to get a file, with an optional range header for S3 objects
+         """
++        self.require_storage_access(entity)
+         file_url = storage_key(entity.file_url)
+         try:
+             if self.s3_enabled and not stored_on_disk(entity.file_url):
+@@ -260,6 +274,7 @@ class FileManager:
+ 
+     def iter_blocks(self, entity, block_size=4 * 1024 * 1024):
+         """Yield a file's bytes lazily so a worker never holds the whole file."""
++        self.require_storage_access(entity)
+         if self.s3_enabled and not stored_on_disk(entity.file_url):
+             source = self.get_file(entity)
+             try:
+@@ -384,7 +399,7 @@ class FileManager:
+         return Path(self.get_root_storage_key()) / self.settings.thumbnail_prefix / (name + ".thumbnail")
+ 
+     def get_thumbnail(self, name):
+-        return self.get_file(frappe._dict({"file_url": str(self.get_thumbnail_path(name))}), log=False)
++        return self.get_file(frappe._dict(name=name, file_url=str(self.get_thumbnail_path(name))), log=False)
+ 
+     def __get_trash_path(self, entity):
+         """Keyed by id, not file_name: trash is one flat directory under a single
+@@ -408,6 +423,7 @@ class FileManager:
+         if not entity.file_url or entity.mime_type in ["frappe/slides", "link"]:
+             return
+ 
++        self.require_storage_access(entity, "write")
+         trash_path = self.__get_trash_path(entity)
+         try:
+             if self.s3_enabled:
+@@ -438,7 +454,7 @@ class FileManager:
+         """
+         Restore a file from the trash.
+         """
+-        self.move(frappe._dict(file_url=self.__get_trash_path(entity)), entity.file_url)
++        self.move(frappe._dict(name=entity.name, file_url=self.__get_trash_path(entity)), entity.file_url)
+ 
+     @_not_if_flat
+     def move(self, entity, new_path: str | Path):
+@@ -447,6 +463,7 @@ class FileManager:
+         """
+         # Callers pass new_path as either a bare key or a stored file_url;
+         # normalize both ends to the actual backend key.
++        self.require_storage_access(entity, "write", target=new_path)
+         src_key = storage_key(entity.file_url)
+         dest_key = storage_key(new_path)
+         try:
+@@ -473,6 +490,8 @@ class FileManager:
+         """Duplicate a blob (files only — folders go through create_folder).
+         S3-to-S3 copies server-side; a local blob under an S3 config (framework
+         adoptions) uploads to the target's key."""
++        self.require_storage_access(source)
++        self.require_storage_access(target, "write")
+         src_key = storage_key(source.file_url)
+         dst_key = storage_key(target.file_url)
+         if self.s3_enabled:
+@@ -506,6 +525,7 @@ class FileManager:
+             pass
+ 
+     def delete_file(self, entity):
++        self.require_storage_access(entity, "write")
+         thumbnail_path = self.get_thumbnail_path(entity.name)
+ 
+         if self.s3_enabled:
+@@ -529,6 +549,7 @@ class FileManager:
+                 pass
+ 
+     def delete_from_trash(self, entity):
++        self.require_storage_access(entity, "write")
+         trash_path = self.__get_trash_path(entity)
+         if self.s3_enabled:
+             self.conn.delete_object(Bucket=self.bucket, Key=str(trash_path))
+diff --git a/suite/drive/utils/overrides.py b/suite/drive/utils/overrides.py
+index 6f3f83c98..5fbd3e80a 100644
+--- a/suite/drive/utils/overrides.py
++++ b/suite/drive/utils/overrides.py
+@@ -4,7 +4,7 @@ from frappe.permissions import SYSTEM_USER_ROLE, get_doctypes_with_read
+ from suite.drive.utils import get_principals, principal_list
+ 
+ 
+-def file_permission_criterion(user=None, table=None):
++def _suite_file_permission_criterion(user=None, table=None):
+     user = user or frappe.session.user
+     roles = frappe.get_roles(user)
+     if user == "Administrator" or "Suite Admin" in roles:
+@@ -34,13 +34,22 @@ def file_permission_criterion(user=None, table=None):
+     return criterion
+ 
+ 
++def file_permission_criterion(user=None, table=None):
++    user = user or frappe.session.user
++    criterion = _suite_file_permission_criterion(user, table)
++    for hook in frappe.get_hooks("drive_file_permission_criterion"):
++        criterion = frappe.call(hook, user=user, table=table, criterion=criterion)
++    return criterion
++
++
+ def filter_file(user=None):
+     """Replaces the framework's File query conditions (skipped because of the
+     `ignore_file_permissions` hook). Conservative: owner, direct Drive grants,
+     public files, DocShares, and readable attachments — folder-inherited access
+     needs Drive's recursive path traversal, impractical in SQL, so it's left to
+     `has_permission`."""
+-    return file_permission_criterion(user)
++    criterion = file_permission_criterion(user)
++    return criterion.get_sql(quote_char='"' if frappe.conf.db_type == "postgres" else "`") if criterion is not None else ""
+ 
+ 
+ def common_filters(func):
+diff --git a/suite/drive/webdav/copy.py b/suite/drive/webdav/copy.py
+index cd60d728b..33d3c1343 100644
+--- a/suite/drive/webdav/copy.py
++++ b/suite/drive/webdav/copy.py
+@@ -9,7 +9,6 @@ runs in the request transaction — on storage failure the created blobs are
+ best-effort removed and the DB insert rolls back with the request.
+ """
+ 
+-from pathlib import Path
+ 
+ import frappe
+ from werkzeug.wrappers import Response
+@@ -18,7 +17,7 @@ from suite.drive.api.files import toggle_entity_status
+ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.api.storage import acquire_owner_storage_lock, validate_quota
+ from suite.drive.utils import apply_file_size_delta, create_drive_file, generate_upward_path
+-from suite.drive.utils.files import FileManager, get_s3_key, get_s3_url, storage_key
++from suite.drive.utils.files import FileManager, get_s3_url, storage_key
+ from suite.drive.webdav import pathmap, perms
+ from suite.drive.webdav.conditional import evaluate_preconditions
+ from suite.drive.webdav.context import DavContext
+@@ -104,7 +103,7 @@ class _Copier:
+             new_name,
+             new_parent.name,
+             node.file_type,
+-            lambda file: "/" + str(manager.get_disk_path(file)),
++            lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+             node.mime_type,
+             node.file_size,
+             _timestamp(node.modified),
+@@ -112,8 +111,10 @@ class _Copier:
+         manager.copy_file(node, target)
+         self.created_blobs.append(frappe._dict(name=target.name, file_url=target.file_url))
+         if manager.s3_enabled:
+-            target.file_url = get_s3_url(get_s3_key(target.file_url))
+-            target.save()
++            new_url = get_s3_url(storage_key(target.file_url))
++            with manager.storage_binding(target, new_url):
++                target.file_url = new_url
++                target.save()
+         if node.get("content_hash"):
+             target.db_set("content_hash", node.content_hash, update_modified=False)
+         self._copy_dead_props(node.name, target.name)
+@@ -121,10 +122,7 @@ class _Copier:
+ 
+     def _copy_folder(self, node: frappe._dict, new_parent: frappe._dict, new_name: str) -> int:
+         manager = self.manager
+-        path = manager.create_folder(
+-            frappe._dict(file_name=new_name, parent_path=Path(storage_key(new_parent.file_url or "")))
+-        )
+-        target = create_drive_file(new_name, new_parent.name, "Folder", path)
++        target = create_drive_file(new_name, new_parent.name, "Folder", manager.create_folder)
+         target_row = frappe._dict(name=target.name, file_url=target.file_url, is_folder=1)
+         # track the folder too, so a mid-copy failure's cleanup removes its
+         # storage marker (an empty S3 object) and not just the copied files
+diff --git a/suite/drive/webdav/get.py b/suite/drive/webdav/get.py
+index 68c5c838a..ad42163b8 100644
+--- a/suite/drive/webdav/get.py
++++ b/suite/drive/webdav/get.py
+@@ -38,6 +38,7 @@ def handle(ctx: DavContext) -> Response:
+         return _collection_response(ctx, f"/drive/d/{row.name}")
+ 
+     manager = ctx.manager
++    manager.require_storage_access(row)
+     if manager.s3_enabled and not stored_on_disk(row.file_url):
+         return _serve_s3(ctx, row, manager)
+     return _serve_local(ctx, row, manager)
+diff --git a/suite/drive/webdav/lock.py b/suite/drive/webdav/lock.py
+index 72aa0bca8..137e46d49 100644
+--- a/suite/drive/webdav/lock.py
++++ b/suite/drive/webdav/lock.py
+@@ -17,6 +17,7 @@ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.api.storage import acquire_owner_storage_lock, validate_quota
+ from suite.drive.utils import create_drive_file, get_ancestors_of
+ from suite.drive.webdav import locks, pathmap, perms
++from suite.drive.utils.files import get_s3_url, storage_key
+ from suite.drive.webdav.context import DavContext
+ from suite.drive.webdav.errors import (
+     BadRequest,
+@@ -211,16 +212,16 @@ def _create_empty_resource(ctx: DavContext, resolved: pathmap.ResolvedPath) -> f
+             name,
+             parent.name,
+             "Application",
+-            lambda file: "/" + str(manager.get_disk_path(file)),
++            lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+             "application/octet-stream",
+             0,
+         )
+         manager.upload_file(scratch, drive_file, create_thumbnail=False)
+         if manager.s3_enabled:
+-            from suite.drive.utils.files import get_s3_key, get_s3_url
+-
+-            drive_file.file_url = get_s3_url(get_s3_key(drive_file.file_url))
+-            drive_file.save()
++            new_url = get_s3_url(storage_key(drive_file.file_url))
++            with manager.storage_binding(drive_file, new_url):
++                drive_file.file_url = new_url
++                drive_file.save()
+         drive_file.db_set("content_hash", hashlib.sha256(b"").hexdigest(), update_modified=False)
+     finally:
+         scratch.unlink(missing_ok=True)
+diff --git a/suite/drive/webdav/perms.py b/suite/drive/webdav/perms.py
+index f9bde6a34..a3c1f1bdf 100644
+--- a/suite/drive/webdav/perms.py
++++ b/suite/drive/webdav/perms.py
+@@ -9,7 +9,7 @@ first, then the state inherited at the parent, then deny.
+ 
+ import frappe
+ 
+-from suite.drive.api.permissions import get_user_access_for_user, is_drive_admin
++from suite.drive.api.permissions import get_app_access, get_app_access_batch, get_user_access_for_user, is_drive_admin
+ from suite.drive.utils import (
+     GENERAL_USER,
+     GROUP_PREFIX,
+@@ -31,15 +31,18 @@ def resolve_children_access(
+     parent_path: list[dict], children: list[frappe._dict], user: str
+ ) -> dict[str, dict]:
+     """Access bits per child name. parent_path is generate_upward_path(parent, user)."""
++    app_access = get_app_access_batch(children, user)
+     if is_drive_admin(user):
+-        return {child.name: dict(ALL_ACCESS) for child in children}
++        return {child.name: app_access.get(child.name, dict(ALL_ACCESS)) for child in children}
+ 
+     inherited = _dribble_state(parent_path)
+     own_rows = _child_permission_rows([child.name for child in children], user)
+ 
+     access = {}
+     for child in children:
+-        if user != "Guest" and child.owner == user:
++        if child.name in app_access:
++            access[child.name] = app_access[child.name]
++        elif user != "Guest" and child.owner == user:
+             # ownership bypasses any deny on the path
+             access[child.name] = dict(ALL_ACCESS)
+         elif child.get("attached_to_doctype") and child.get("attached_to_name"):
+@@ -101,6 +104,9 @@ def _child_permission_rows(child_names: list[str], user: str) -> dict[str, list[
+ 
+ def parent_access(parent_path: list[dict], parent: frappe._dict, user: str) -> dict:
+     """Access at the path's leaf, with the owner/admin short-circuits applied."""
++    app_access = get_app_access(parent, user)
++    if app_access is not None:
++        return app_access
+     if is_drive_admin(user):
+         return dict(ALL_ACCESS)
+     if user != "Guest" and parent.owner == user:
+diff --git a/suite/drive/webdav/put.py b/suite/drive/webdav/put.py
+index 4e7955195..26b01bea0 100644
+--- a/suite/drive/webdav/put.py
++++ b/suite/drive/webdav/put.py
+@@ -162,7 +162,7 @@ def _create(ctx: DavContext, resolved, scratch: Path, size: int, sha256: str) ->
+         name,
+         parent.name,
+         get_file_type(mime_type),
+-        lambda file: "/" + str(manager.get_disk_path(file)),
++        lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+         mime_type,
+         size,
+     )
+@@ -205,7 +205,7 @@ def _create(ctx: DavContext, resolved, scratch: Path, size: int, sha256: str) ->
+     # of the transfer window, so an S3-sized upload never stalls a concurrent
+     # PUT's rollup.
+     if manager.s3_enabled:
+-        generation = _stage_s3_generation(manager, blob, scratch, get_s3_key(blob.file_url), replaces=None)
++        generation = _stage_s3_generation(manager, blob, scratch, storage_key(blob.file_url), replaces=None)
+         drive_file.file_url = get_s3_url(generation)
+         drive_file.save()
+     else:
+@@ -232,6 +232,7 @@ def _overwrite(ctx: DavContext, row: frappe._dict, scratch: Path, size: int, sha
+     # later reaps — the key the row actually points at, not a resolve-time
+     # snapshot of it
+     doc = frappe.get_doc("File", row.name, for_update=True)
++    ctx.manager.require_storage_access(doc, "write")
+     delta = size - (doc.file_size or 0)
+     with quota_guard():
+         validate_quota(row.owner, max(0, delta))
+@@ -393,6 +394,7 @@ def _stage_disk_swap(
+                     cleanup(placed)
+                     compensation.run()
+                     return
++                manager.require_storage_access(frappe._dict(name=compensation.stamped.name, file_url=current.file_url), "write")
+                 dest = manager.get_local_path(current.file_url)
+                 missing = placed is None and expects_existing and not dest.exists()
+                 if missing and waits_left:
+@@ -480,6 +482,7 @@ def settle_swap_destination(file, stamp, placed, hops=0):
+         if current is None or current.status != STATUS_ACTIVE:
+             frappe.db.commit()
+             return
++        FileManager().require_storage_access(frappe._dict(name=file, file_url=current.file_url), "write")
+         dest = FileManager().get_local_path(current.file_url)
+         if dest == placed:
+             frappe.db.commit()  # release the row before deciding or waiting
+diff --git a/suite/drive/webdav/structure.py b/suite/drive/webdav/structure.py
+index 9fc603891..09fce3640 100644
+--- a/suite/drive/webdav/structure.py
++++ b/suite/drive/webdav/structure.py
+@@ -6,7 +6,6 @@ controllers, pre-trashing an Overwrite:T target so their auto-rename collision
+ handling never fires and exact WebDAV naming survives.
+ """
+ 
+-from pathlib import Path
+ 
+ import frappe
+ from werkzeug.wrappers import Response
+@@ -14,7 +13,6 @@ from werkzeug.wrappers import Response
+ from suite.drive.api.files import toggle_entity_status
+ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.utils import create_drive_file, generate_upward_path
+-from suite.drive.utils.files import storage_key
+ from suite.drive.webdav import locks, pathmap, perms
+ from suite.drive.webdav.conditional import evaluate_preconditions
+ from suite.drive.webdav.context import DavContext
+@@ -59,10 +57,7 @@ def handle_mkcol(ctx: DavContext) -> Response:
+     # create_folder minus validate_filename: exact-name collision was already
+     # ruled out by resolution, and the LIKE-count heuristic both over- and
+     # under-detects for DAV semantics
+-    path = ctx.manager.create_folder(
+-        frappe._dict(file_name=name, parent_path=Path(storage_key(parent.file_url or "")))
+-    )
+-    create_drive_file(name, parent.name, "Folder", path)
++    create_drive_file(name, parent.name, "Folder", ctx.manager.create_folder)
+     return Response(status=201)
+ 
+ 
+diff --git a/frontend/src/apps/drive/utils/realtimeRefresh.js b/frontend/src/apps/drive/utils/realtimeRefresh.js
+new file mode 100644
+index 000000000..85854f1e7
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/realtimeRefresh.js
+@@ -0,0 +1,28 @@
++// Signals carry only a folder ID. The caller re-fetches through the normal API.
++export function subscribeFolderChanges(socket, accepts, refresh) {
++  let timer, pending = false, running = false, stopped = false
++  const schedule = () => {
++    if (stopped || running || timer) return
++    timer = setTimeout(async () => {
++      timer = undefined
++      if (stopped || !pending) return
++      pending = false
++      running = true
++      try { await refresh() } finally {
++        running = false
++        if (pending) schedule()
++      }
++    }, 150)
++  }
++  const changed = ({ folder } = {}) => {
++    if (stopped || typeof folder !== 'string' || !accepts(folder)) return
++    pending = true
++    schedule()
++  }
++  socket.on('drive-folder-changed', changed)
++  return () => {
++    stopped = true
++    clearTimeout(timer)
++    socket.off('drive-folder-changed', changed)
++  }
++}
+diff --git a/frontend/src/apps/drive/utils/realtimeRefresh.test.ts b/frontend/src/apps/drive/utils/realtimeRefresh.test.ts
+new file mode 100644
+index 000000000..faac34a7d
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/realtimeRefresh.test.ts
+@@ -0,0 +1,28 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { subscribeFolderChanges } from './realtimeRefresh'
++
++afterEach(() => vi.useRealTimers())
++describe('permission-aware folder refresh', () => {
++  it('coalesces signals, serializes requests and unsubscribes', async () => {
++    vi.useFakeTimers()
++    let handler: (payload: { folder: string }) => void
++    const socket = { on: vi.fn((_event, cb) => { handler = cb }), off: vi.fn() }
++    let finish: () => void
++    const refresh = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
++    const stop = subscribeFolderChanges(socket, folder => folder === 'allowed', refresh)
++    handler!({ folder: 'denied' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).not.toHaveBeenCalled()
++    handler!({ folder: 'allowed' }); handler!({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(1)
++    handler!({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(1)
++    finish!(); await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(2)
++    stop(); finish!(); await vi.advanceTimersByTimeAsync(150)
++    expect(socket.off).toHaveBeenCalledWith('drive-folder-changed', handler!)
++    expect(refresh).toHaveBeenCalledTimes(2)
++  })
++})

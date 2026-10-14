@@ -221,6 +221,29 @@ records local/S3-mock, HTTP, browser and image acceptance. The disposable
 HTTP/Socket.IO scenario is included in `scripts/ci-image.sh`; it requires four
 temporary staff sessions and does not run against production.
 
+Uploaded DOCX, PPTX, XLSX, PDF and XML files download with their original bytes
+and are included recursively in folder ZIPs. Uploaded Office files open a local
+File card with a download button; no Microsoft preview is requested. Native
+Writer, Sheets and Slides documents keep their editors. ZIPs report skipped
+native documents and links, count only readable items, deduplicate overlapping
+selections and preserve files when archive names collide. Unreadable uploaded
+bytes fail the whole build. Old archive tokens require rebuilding.
+
+The current Suite patch supports exact v1 and v2 predecessors; v2 preserves the
+previous security patch. Update backend and Suite assets together, back up the
+site, migrate, rebuild, clear cache and restart services. No File schema change
+or data migration is required. See the
+[download verification](docs/reviews/2026-10-13-drive-downloads-verification.md).
+
+Creating or reopening a Mandant folder synchronizes its protected link in the
+open Customer form while preserving unsaved business fields. Saving a stale
+form with an empty link waits for its current creation and checks the latest
+folder first, including folders created in another tab. Genuine conflicts in
+business fields still require the normal Frappe conflict workflow. Parallel
+creation retries a snapshot lock conflict before touching storage and returns
+the same root. See the
+[form verification](docs/reviews/2026-10-13-drive-form-sync-verification.md).
+
 The local stack is for development. Production deploys to Hetzner through GitHub Actions on `vX.Y.Z` tags, using a tested GHCR image digest, HTTPS, pre-update backups and explicit recovery. Follow the [server setup and deployment runbook](docs/deployment.md); see [production notes](docs/production.md) for application onboarding and acceptance checks.
 
 ### Work overview

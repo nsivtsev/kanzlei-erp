@@ -18,10 +18,10 @@ def _staff(user):
 	return user != "Guest" and frappe.db.get_value("User", user, "user_type") == "System User"
 
 
-def _require_customer(customer, ptype="read"):
+def _require_customer(customer, ptype="read", *, for_update=False):
 	if not _staff(frappe.session.user):
 		frappe.throw(frappe._("Please log in as a staff user"), frappe.PermissionError)
-	doc = frappe.get_doc("Customer", customer)
+	doc = frappe.get_doc("Customer", customer, for_update=for_update)
 	doc.check_permission(ptype)
 	return doc
 
@@ -89,10 +89,16 @@ def create_folder(customer):
 	from suite.drive.utils import create_drive_file, get_new_file_name, get_user_folder
 	from suite.drive.utils.files import FileManager
 
-	doc = _require_customer(customer, "write")
-	frappe.db.get_value("Customer", doc.name, "name", for_update=True)
-	doc.reload()
-	doc.check_permission("write")
+	# MariaDB snapshot isolation may reject a waiting lock after another
+	# creator commits. Retry only this read, before any storage mutation.
+	for attempt in range(3):
+		try:
+			doc = _require_customer(customer, "write", for_update=True)
+			break
+		except frappe.QueryDeadlockError:
+			if attempt == 2:
+				raise
+			frappe.db.rollback()
 	if doc.get(CUSTOMER_FOLDER):
 		return _folder_result(doc)
 	parent = get_user_folder("Administrator")
