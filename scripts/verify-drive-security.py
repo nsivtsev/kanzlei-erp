@@ -147,7 +147,7 @@ def main():
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument("--site", required=True, choices=["development.localhost", "ci.localhost"])
 	parser.add_argument("--fixtures", action="store_true", required=True)
-	parser.add_argument("--mode", choices=["verify", "setup", "revoke", "cleanup", "verify-form"], default="verify")
+	parser.add_argument("--mode", choices=["verify", "setup", "revoke", "cleanup", "verify-form", "grant"], default="verify")
 	parser.add_argument("--base", default="http://127.0.0.1:8000")
 	parser.add_argument("--socket", default="http://127.0.0.1:9100")
 	parser.add_argument("--state-file", type=Path)
@@ -159,10 +159,16 @@ def main():
 	frappe.set_user("Administrator")
 	try:
 		assert frappe.conf.allow_tests, "Fixtures require an explicitly test-enabled site"
-		if args.mode in ("revoke", "cleanup", "verify-form"):
+		if args.mode in ("revoke", "cleanup", "verify-form", "grant"):
 			state = json.loads(args.state_file.read_text() if args.state_file else sys.stdin.read())
 			assert state["site"] == args.site
-			if args.mode == "verify-form":
+			if args.mode == "grant":
+				validate_state(state)
+				frappe.share.add("Customer", state["form_customer"], state["users"]["reader"]["user"], read=1)
+				frappe.clear_cache(user=state["users"]["reader"]["user"])
+				frappe.db.commit()
+				print("Fixture permission granted")
+			elif args.mode == "verify-form":
 				validate_state(state)
 				assert frappe.db.get_value("Customer", state["form_customer"], "kanzlei_drive_folder") == state["form_root"]
 				assert frappe.db.count("File", {"kanzlei_drive_customer": state["form_customer"], "is_folder": 1}) == 1

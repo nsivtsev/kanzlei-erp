@@ -1,5 +1,6 @@
 import shutil
 from unittest.mock import patch
+from urllib.parse import quote
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -75,6 +76,144 @@ class TestMandantDrive(FrappeTestCase):
 		self.assertFalse(user_has_permission(root, "read", "Guest"))
 		self.assertFalse(user_has_permission(root, "read", self.stranger.name))
 		self.assertTrue(second["url"].startswith("/drive/d/"))
+
+	def test_mandanten_list_follows_docshares_and_revocation(self):
+		for user, can_create in ((self.reader, False), (self.writer, True)):
+			frappe.set_user(user.name)
+			result = self.api.list_mandanten(search=self.customer.name)
+			self.assertEqual(len(result["rows"]), 1)
+			row = result["rows"][0]
+			self.assertEqual(row["customer"], self.customer.name)
+			self.assertEqual(row["customer_name"], self.customer.customer_name)
+			self.assertEqual(row["state"], "missing")
+			self.assertEqual(row["can_create"], can_create)
+			self.assertEqual(row["customer_url"], "/desk/customer/" + quote(self.customer.name, safe=""))
+			self.assertFalse(result["has_next"])
+		frappe.set_user(self.stranger.name)
+		self.assertEqual(self.api.list_mandanten(search=self.customer.name)["rows"], [])
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.reader.name)
+		frappe.set_user(self.reader.name)
+		self.assertEqual(self.api.list_mandanten(search=self.customer.name)["rows"], [])
+
+	def test_mandanten_list_rejects_guest_and_portal_and_handles_absent_suite(self):
+		frappe.db.set_value("User", self.stranger.name, "user_type", "Website User")
+		for user in ("Guest", self.stranger.name):
+			frappe.set_user(user)
+			with self.assertRaises(frappe.PermissionError):
+				self.api.list_mandanten()
+		frappe.set_user(self.reader.name)
+		with patch("frappe.get_installed_apps", return_value=["frappe", "erpnext", "kanzlei_erp"]):
+			self.assertEqual(self.api.list_mandanten(), {"rows": [], "has_next": False, "next_start": None})
+
+	def test_mandanten_list_ready_and_corrupt_roots_are_isolated(self):
+		root = self.root()
+		frappe.set_user(self.reader.name)
+		row = self.api.list_mandanten(search=self.customer.name)["rows"][0]
+		self.assertEqual((row["state"], row["folder"], row["url"]), ("ready", root.name, "/drive/d/" + root.name))
+		self.assertFalse(row["can_create"])
+		frappe.set_user("Administrator")
+		for field, value in (("status", "Trashed"), ("is_folder", 0), ("kanzlei_drive_customer", "wrong")):
+			old = frappe.db.get_value("File", root.name, field)
+			frappe.db.set_value("File", root.name, field, value)
+			row = self.api.list_mandanten(search=self.customer.name)["rows"][0]
+			self.assertEqual(row["state"], "unavailable")
+			self.assertIsNone(row["folder"])
+			self.assertIsNone(row["url"])
+			self.assertFalse(row["can_create"])
+			frappe.db.set_value("File", root.name, field, old)
+		frappe.db.set_value("Customer", self.customer.name, "kanzlei_drive_folder", "missing-" + frappe.generate_hash(8))
+		self.assertEqual(self.api.list_mandanten(search=self.customer.name)["rows"][0]["state"], "unavailable")
+
+	def test_mandanten_pagination_refills_denied_documents_without_skipping(self):
+		prefix = "_Navigation " + frappe.generate_hash(8)
+		customers = []
+		for index in range(5):
+			customers.append(frappe.get_doc({"doctype": "Customer", "customer_name": prefix,
+				"customer_type": "Company", "customer_group": "Commercial", "territory": "All Territories"}).insert())
+			frappe.share.add("Customer", customers[-1].name, self.reader.name, read=1)
+		customers.sort(key=lambda doc: doc.name)
+		denied = {customers[0].name, customers[2].name}
+		original = frappe.has_permission
+		def permission(doctype, ptype="read", doc=None, **kwargs):
+			if doctype == "Customer" and ptype == "read" and doc and (doc if isinstance(doc, str) else doc.name) in denied:
+				return False
+			return original(doctype, ptype, doc=doc, **kwargs)
+		frappe.set_user(self.reader.name)
+		with patch("frappe.has_permission", side_effect=permission):
+			first = self.api.list_mandanten(search=prefix, start=-1, page_length=2)
+			self.assertEqual([row["customer"] for row in first["rows"]], [customers[1].name, customers[3].name])
+			self.assertTrue(first["has_next"])
+			second = self.api.list_mandanten(search=prefix, start=first["next_start"], page_length=2)
+			self.assertEqual([row["customer"] for row in second["rows"]], [customers[4].name])
+			self.assertFalse(second["has_next"])
+			self.assertIsNone(second["next_start"])
+		self.assertEqual(len(self.api.list_mandanten(search=prefix, page_length=0)["rows"]), 1)
+		self.assertEqual(len(self.api.list_mandanten(search=customers[4].name)["rows"]), 1)
+
+	def test_mandant_entity_navigation_trims_ancestors_and_uses_current_customer(self):
+		from suite.drive.api.permissions import get_entity_with_permissions
+		root = self.root()
+		child = self.child(root)
+		frappe.db.set_value("Customer", self.customer.name, "customer_name", "Current customer title")
+		for user in ("Administrator", self.reader.name):
+			frappe.set_user(user)
+			result = get_entity_with_permissions(child.name)
+			self.assertEqual(result["mandant"], {"customer": self.customer.name,
+				"customer_name": "Current customer title", "folder": root.name,
+				"customer_url": "/desk/customer/" + quote(self.customer.name, safe="")})
+			self.assertEqual([crumb["name"] for crumb in result["breadcrumbs"]], [root.name, child.name])
+		frappe.set_user(self.stranger.name)
+		self.assertIsNone(self.api.entity_navigation(child, self.stranger.name))
+		with self.assertRaises(frappe.PermissionError):
+			get_entity_with_permissions(child.name)
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.reader.name)
+		self.assertIsNone(self.api.entity_navigation(child, self.reader.name))
+
+	def test_navigation_ordinary_files_preserve_suite_response(self):
+		from suite.drive.utils import get_user_folder
+		from suite.drive.api.permissions import get_entity_with_permissions
+		ordinary = get_user_folder("Administrator")
+		self.assertIsNone(self.api.entity_navigation(ordinary, "Administrator"))
+		self.assertNotIn("mandant", get_entity_with_permissions(ordinary.name))
+
+	def test_mandanten_system_manager_and_user_permissions(self):
+		self.stranger.add_roles("System Manager")
+		frappe.set_user(self.stranger.name)
+		self.assertEqual(self.api.list_mandanten(search=self.customer.name)["rows"], [])
+		frappe.set_user("Administrator")
+		self.stranger.add_roles("Sales Manager")
+		frappe.set_user(self.stranger.name)
+		row = self.api.list_mandanten(search=self.customer.name)["rows"][0]
+		self.assertEqual(row["customer"], self.customer.name)
+		self.assertFalse(row["can_create"])
+		frappe.set_user("Administrator")
+		self.stranger.add_roles("Sales Master Manager")
+		frappe.set_user(self.stranger.name)
+		self.assertTrue(self.api.list_mandanten(search=self.customer.name)["rows"][0]["can_create"])
+		frappe.set_user("Administrator")
+		other = frappe.get_doc({"doctype": "Customer", "customer_name": "_Restricted " + frappe.generate_hash(8),
+			"customer_type": "Company", "customer_group": "Commercial", "territory": "All Territories"}).insert()
+		self.reader.add_roles("Sales User")
+		frappe.get_doc({"doctype": "User Permission", "user": self.reader.name,
+			"allow": "Customer", "for_value": self.customer.name, "apply_to_all_doctypes": 1}).insert()
+		frappe.set_user(self.reader.name)
+		self.assertEqual(self.api.list_mandanten(search=other.name)["rows"], [])
+		self.assertEqual(self.api.list_mandanten(search=self.customer.name)["rows"][0]["customer"], self.customer.name)
+
+	def test_navigation_rejects_forged_client_marker_and_broken_root(self):
+		from suite.drive.api.permissions import get_entity_with_permissions
+		from suite.drive.utils import get_user_folder
+		root = self.root()
+		ordinary = get_user_folder("Administrator")
+		forged = frappe._dict(name=ordinary.name, kanzlei_drive_customer=self.customer.name)
+		self.assertIsNone(self.api.entity_navigation(forged, "Administrator"))
+		frappe.db.set_value("Customer", self.customer.name, "kanzlei_drive_folder", "missing-" + frappe.generate_hash(8))
+		self.assertIsNone(self.api.entity_navigation(root, self.reader.name))
+		frappe.db.set_value("Customer", self.customer.name, "kanzlei_drive_folder", root.name)
+		with patch("suite.drive.api.permissions.get_valid_breadcrumbs", return_value=[{"name": "secret-ancestor"}]):
+			self.assertEqual(get_entity_with_permissions(root.name)["breadcrumbs"], [])
 
 	def test_native_documents_are_rejected_in_managed_folders(self):
 		root = self.root()

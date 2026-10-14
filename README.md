@@ -205,6 +205,19 @@ clicking the action never silently creates a replacement. See the
 The [staff navigation verification](docs/reviews/2026-10-14-drive-navigation-verification.md)
 records automated and browser acceptance for BL-046.
 
+Drive now includes **Mandanten** at `/drive/mandanten` for confirmed staff,
+including mobile navigation. The searchable list includes readable Customers
+with ready, missing or unavailable folders; write access enables the existing
+idempotent folder-creation action. ERP records open separately, and client
+folders and their descendants return through Mandanten breadcrumbs using the
+current Customer title. Personal folders remain in Home. Lists refresh on entry,
+visible-tab return and explicit refresh, with no persisted list cache or polling.
+`kanzlei_erp.mandant_drive.list_mandanten` paginates readable records only and
+checks current Customer rights; granted and revoked access appear on refresh.
+Suite entity navigation context is supplied after entity read authorization.
+The exact BL-046 patch is preserved as v4; the installer supports v1–v4 upgrades
+and atomic rollback. See [BL-047 acceptance](docs/reviews/2026-10-14-drive-mandanten-verification.md).
+
 Drive also binds each File to its physical object. A second File cannot reuse
 Mandant bytes, thumbnails, trash objects or a protected directory, even when
 its creator can currently read the original. Legacy aliases are denied at

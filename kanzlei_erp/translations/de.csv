@@ -462,3 +462,17 @@ Upload files to Mandant folders. Create Suite documents outside these folders.,L
 Mandant Drive links must use HTTP or HTTPS,Links in Mandantenordnern müssen HTTP oder HTTPS verwenden
 Could not synchronize the Mandant folder. Your changes are preserved. Please try saving again.,Der Mandantenordner konnte nicht synchronisiert werden. Ihre Änderungen bleiben erhalten. Bitte versuchen Sie erneut zu speichern.
 Saving was cancelled because the Mandant form changed. Please save the current form again.,"Das Speichern wurde abgebrochen, da das Mandantenformular gewechselt wurde. Bitte speichern Sie das aktuelle Formular erneut."
+Mandanten,Mandanten
+Client folders follow your ERP access. Personal folders are in Home.,Mandantenordner folgen Ihren ERP-Rechten. Persönliche Ordner finden Sie unter Home.
+Search clients by name or ID,Mandanten nach Name oder ID suchen
+Folder available,Ordner verfügbar
+Folder not created,Ordner noch nicht angelegt
+Folder unavailable,Ordner nicht verfügbar
+Contact an administrator.,Wenden Sie sich an einen Administrator.
+Open folder,Ordner öffnen
+Open ERP record,Mandantenakte im ERP öffnen
+No clients match this search.,Keine Mandanten entsprechen dieser Suche.
+No clients are available to you.,Für Sie sind keine Mandanten verfügbar.
+Loading clients…,Mandanten werden geladen …
+Could not load clients. Check your access and try again.,Mandanten konnten nicht geladen werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.
+Could not create the client folder. The list was refreshed; check its status and try again.,Der Mandantenordner konnte nicht angelegt werden. Die Liste wurde aktualisiert; prüfen Sie den Status und versuchen Sie es erneut.

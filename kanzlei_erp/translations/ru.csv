@@ -483,3 +483,16 @@ Upload files to Mandant folders. Create Suite documents outside these folders.,�
 Mandant Drive links must use HTTP or HTTPS,Ссылки в папках клиентов должны использовать HTTP или HTTPS
 Could not synchronize the Mandant folder. Your changes are preserved. Please try saving again.,Не удалось синхронизировать папку клиента. Ваши изменения сохранены в форме. Попробуйте сохранить ещё раз.
 Saving was cancelled because the Mandant form changed. Please save the current form again.,"Сохранение отменено, поскольку карточка клиента изменилась. Сохраните текущую карточку ещё раз."
+Client folders follow your ERP access. Personal folders are in Home.,Доступ к папкам клиентов определяется правами ERP. Личные папки находятся в Home.
+Search clients by name or ID,Поиск клиентов по названию или ID
+Folder available,Папка доступна
+Folder not created,Папка ещё не создана
+Folder unavailable,Папка недоступна
+Contact an administrator.,Обратитесь к администратору.
+Open folder,Открыть папку
+Open ERP record,Открыть карточку ERP
+No clients match this search.,По этому запросу клиентов не найдено.
+No clients are available to you.,У вас нет доступных клиентов.
+Loading clients…,Загрузка клиентов…
+Could not load clients. Check your access and try again.,Не удалось загрузить клиентов. Проверьте доступ и повторите попытку.
+Could not create the client folder. The list was refreshed; check its status and try again.,Не удалось создать папку клиента. Список обновлён; проверьте состояние и повторите попытку.

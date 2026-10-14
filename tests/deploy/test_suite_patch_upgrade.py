@@ -45,6 +45,9 @@ class TestSuitePatchUpgrade(unittest.TestCase):
                 (repo / "binding.txt").write_text("v3\n")
                 previous = self.git(app, "diff")
                 (self.root / "deploy/suite-mandant-access-v3.patch").write_text(previous)
+            (repo / "binding.txt").write_text("v4\n")
+            if app == "suite":
+                (self.root / "deploy/suite-mandant-access-v4.patch").write_text(self.git(app, "diff"))
             (repo / "binding.txt").write_text("current\n")
             (repo / "second.txt").write_text("current\n")
             new = self.git(app, "diff")
@@ -132,6 +135,32 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         predecessor = (ROOT / "deploy/suite-mandant-access-v3.patch").read_bytes()
         self.assertEqual(hashlib.sha256(predecessor).hexdigest(),
                          "5eda2093e0e3e5579a7e7b7257c1ec8b0ea80f61f4cbe1ef9a7aafeea9a4a065")
+
+    def use_suite_v4(self):
+        self.git("suite", "apply", "--reverse", str(self.root / "deploy/suite-mandant-access-v1.patch"))
+        self.git("suite", "apply", str(self.root / "deploy/suite-mandant-access-v4.patch"))
+
+    def test_v4_upgrade_repeat_and_atomic_conflict(self):
+        self.use_suite_v4()
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Unknown suite patch state", result.stderr)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+        (self.root / "apps/suite/second.txt").write_text("original\n")
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "apps/suite/binding.txt").read_text(), "current\n")
+        self.assertEqual((self.root / "apps/suite/unrelated.txt").read_text(), "keep this work\n")
+        self.assertEqual((self.root / "apps/suite/untracked.txt").read_text(), "keep this new file\n")
+
+    def test_v4_predecessor_is_exact_and_included_in_image(self):
+        self.assertIn("!deploy/suite-mandant-access-v4.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertEqual(hashlib.sha256((ROOT / "deploy/suite-mandant-access-v4.patch").read_bytes()).hexdigest(),
+                         "6a4d15b8fc09294a2a2b4c08d664358452dd9b488e524ae3b9a1d106ea860ccc")
 
     def test_v2_upgrade_and_repeat_preserve_unrelated_work(self):
         self.use_suite_v2()

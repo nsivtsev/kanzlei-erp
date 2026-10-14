@@ -48,6 +48,84 @@ def get_folder(customer):
 	return _folder_result(doc)
 
 
+def _customer_url(customer):
+	return f"/desk/customer/{quote(customer, safe='')}"
+
+
+def _valid_root(file, customer):
+	return bool(file and file.is_folder and file.status == "Active" and file.get(FILE_CUSTOMER) == customer)
+
+
+@frappe.whitelist()
+def list_mandanten(search="", start=0, page_length=50):
+	"""List permitted Customers; pagination offsets count only readable documents."""
+	user = frappe.session.user
+	if not _staff(user):
+		frappe.throw(frappe._("Please log in as a staff user"), frappe.PermissionError)
+	empty = {"rows": [], "has_next": False, "next_start": None}
+	if "suite" not in frappe.get_installed_apps():
+		return empty
+	start = max(0, frappe.utils.cint(start))
+	page_length = min(100, max(1, frappe.utils.cint(page_length)))
+	search = str(search or "").strip()
+	query = {"or_filters": [["customer_name", "like", f"%{search}%"], ["name", "like", f"%{search}%"]]} if search else {}
+	readable, offset, skipped = [], 0, 0
+	while len(readable) <= page_length:
+		try:
+			candidates = frappe.get_list("Customer", fields=["name"],
+				order_by="customer_name asc, name asc", start=offset, limit=100, **query)
+		except frappe.PermissionError:
+			return empty
+		for customer in candidates:
+			if not frappe.has_permission("Customer", "read", doc=customer.name, user=user):
+				continue
+			if skipped < start:
+				skipped += 1
+				continue
+			readable.append(customer)
+			if len(readable) > page_length:
+				break
+		if len(candidates) < 100:
+			break
+		offset += len(candidates)
+	has_next = len(readable) > page_length
+	# A DocShare-only reader may have no role-level field permissions. Read the
+	# display/link fields only for IDs whose document permission passed above.
+	names = [customer.name for customer in readable[:page_length]]
+	by_name = {doc.name: doc for doc in frappe.get_all("Customer", filters={"name": ["in", names]},
+		fields=["name", "customer_name", CUSTOMER_FOLDER])} if names else {}
+	customers = [by_name[name] for name in names if name in by_name]
+	folders = [customer.get(CUSTOMER_FOLDER) for customer in customers if customer.get(CUSTOMER_FOLDER)]
+	files = {row.name: row for row in frappe.get_all("File", filters={"name": ["in", folders]},
+		fields=["name", "is_folder", "status", FILE_CUSTOMER])} if folders else {}
+	rows = []
+	for customer in customers:
+		folder = customer.get(CUSTOMER_FOLDER)
+		state = "missing" if not folder else "ready" if _valid_root(files.get(folder), customer.name) else "unavailable"
+		rows.append({"customer": customer.name, "customer_name": customer.customer_name,
+			"customer_url": _customer_url(customer.name), "state": state,
+			"folder": folder if state == "ready" else None,
+			"url": f"/drive/d/{quote(folder, safe='')}" if state == "ready" else None,
+			"can_create": state == "missing" and bool(frappe.has_permission("Customer", "write", doc=customer.name, user=user))})
+	return {"rows": rows, "has_next": has_next, "next_start": start + len(rows) if has_next else None}
+
+
+def entity_navigation(entity, user):
+	"""Return persisted Mandant context only after current staff/Customer checks."""
+	if not _staff(user) or not frappe.get_meta("File").has_field(FILE_CUSTOMER):
+		return None
+	name = entity if isinstance(entity, str) else entity.get("name")
+	customer = frappe.db.get_value("File", name, FILE_CUSTOMER) if name else None
+	if not customer or not frappe.db.exists("Customer", customer) or not frappe.has_permission("Customer", "read", doc=customer, user=user):
+		return None
+	doc = frappe.db.get_value("Customer", customer, ["customer_name", CUSTOMER_FOLDER], as_dict=True)
+	folder = doc.get(CUSTOMER_FOLDER)
+	file = frappe.db.get_value("File", folder, ["is_folder", "status", FILE_CUSTOMER], as_dict=True) if folder else None
+	if not _valid_root(file, customer):
+		return None
+	return {"customer": customer, "customer_name": doc.customer_name, "folder": folder, "customer_url": _customer_url(customer)}
+
+
 def _require_uploaded_content(parent):
 	if parent and frappe.get_meta("File").has_field(FILE_CUSTOMER) and frappe.db.get_value("File", parent, FILE_CUSTOMER):
 		_reject_native_content()
