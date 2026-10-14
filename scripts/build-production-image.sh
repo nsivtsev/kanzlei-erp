@@ -5,7 +5,7 @@ if [[ $# -ne 1 ]]; then
   exit 1
 fi
 revision=$(git rev-parse HEAD)
-source_date_epoch=$(git show -s --format=%ct HEAD)
+[[ $revision =~ ^[a-f0-9]{40}$ ]]
 docker buildx build --load --platform "${PLATFORM:-linux/amd64}" \
-  --build-arg "REVISION=$revision" --build-arg "SOURCE_DATE_EPOCH=$source_date_epoch" \
+  --build-arg "REVISION=$revision" --build-arg "SOURCE_DATE_EPOCH=0" \
   --tag "$1" --file deploy/Dockerfile .

@@ -23,103 +23,55 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
       packages: write
     outputs:
-      image: ${{ steps.publish.outputs.image }}
-      revision: ${{ steps.validate.outputs.revision }}
-      tag: ${{ steps.validate.outputs.tag }}
+      ready: ${{ steps.resolve.outputs.ready }}
+      image: ${{ steps.promote.outputs.image }}
+      revision: ${{ steps.resolve.outputs.revision }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
+      # The controller comes from main; the deployment payload comes from the tag.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.tag || github.ref }}
-      - name: Validate release tag and main ancestry
-        id: validate
+          ref: main
+      - name: Resolve the image verified by CI main
+        id: resolve
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          if [[ ! $RELEASE_TAG =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Release tag must be vX.Y.Z" >&2
-            exit 1
-          fi
-          revision=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")
-          test "$(git rev-parse HEAD)" = "$revision"
-          git merge-base --is-ancestor "$revision" origin/main
-          printf 'revision=%s\ntag=%s\n' "$revision" "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Deployment tests and shell checks
-        run: |
-          python3 -m unittest discover -s tests/deploy -v
-          bash -n scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/setup-local.sh scripts/fetch-suite.sh
-          shellcheck -x scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/fetch-suite.sh
-          # actionlint 1.7.12 predates GitHub concurrency.queue (May 2026).
-          # https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color -ignore '^unexpected key "queue" for "concurrency" section\.'
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Resolve existing immutable release
-        id: existing
-        env:
-          RELEASE_TAG: ${{ steps.validate.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          image_ref=$(python3 scripts/release-image.py "$RELEASE_TAG")
-          printf 'image=%s\n' "$image_ref" >> "$GITHUB_OUTPUT"
-      - name: Pull the previously verified release for a retry
-        if: steps.existing.outputs.image != ''
+        run: python3 scripts/ci_release.py resolve "$RELEASE_TAG"
+      - name: Promote the verified manifest without transferring image layers
+        if: steps.resolve.outputs.ready == 'true'
+        id: promote
         env:
-          EXISTING_IMAGE: ${{ steps.existing.outputs.image }}
-          REVISION: ${{ steps.validate.outputs.revision }}
-        run: |
-          docker pull --platform linux/amd64 "$EXISTING_IMAGE"
-          actual=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$EXISTING_IMAGE")
-          test "$actual" = "$REVISION"
-          docker tag "$EXISTING_IMAGE" kanzlei-release:test
-      - name: Build exact commit for a new release
-        if: steps.existing.outputs.image == ''
-        run: bash scripts/build-production-image.sh kanzlei-release:test
-      - name: Verify application and backup restore
-        run: bash scripts/ci-image.sh kanzlei-release:test
-      - name: Publish the verified image without rebuilding
-        id: publish
-        env:
-          RELEASE_TAG: ${{ steps.validate.outputs.tag }}
-          REVISION: ${{ steps.validate.outputs.revision }}
-          EXISTING_IMAGE: ${{ steps.existing.outputs.image }}
-        run: |
-          image=ghcr.io/nsivtsev/kanzlei-erp
-          if [[ -n $EXISTING_IMAGE ]]; then
-            image_ref=$EXISTING_IMAGE
-          else
-            docker tag kanzlei-release:test "$image:$RELEASE_TAG"
-            docker push "$image:$RELEASE_TAG"
-            image_ref=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image:$RELEASE_TAG" | awk -v prefix="$image@sha256:" 'index($0,prefix)==1 {print; exit}')
-          fi
-          if [[ ! $image_ref =~ ^ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}$ ]]; then
-            echo "Could not determine the published digest" >&2
-            exit 1
-          fi
-          printf 'image=%s\n' "$image_ref" >> "$GITHUB_OUTPUT"
-          # Markdown backticks are literal.
-          # shellcheck disable=SC2016
-          printf '### Verified release\n\nTag: `%s`\n\nCommit: `%s`\n\nImage: `%s`\n' "$RELEASE_TAG" "$REVISION" "$image_ref" >> "$GITHUB_STEP_SUMMARY"
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+          REVISION: ${{ steps.resolve.outputs.revision }}
+          VERIFIED_IMAGE: ${{ steps.resolve.outputs.image }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/ci_release.py promote "$RELEASE_TAG" "$REVISION" "$VERIFIED_IMAGE"
       - name: Package matching deployment configuration
-        run: tar -czf release.tar.gz deploy
+        if: steps.resolve.outputs.ready == 'true'
+        env:
+          REVISION: ${{ steps.resolve.outputs.revision }}
+        run: git archive --format=tar "$REVISION" deploy | gzip > release.tar.gz
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.resolve.outputs.ready == 'true'
         with:
           name: deployment-release
+          overwrite: true
           path: release.tar.gz
           retention-days: 7
+          if-no-files-found: error
 
   deploy:
     needs: release
+    if: needs.release.outputs.ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment:
@@ -128,7 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ needs.release.outputs.revision }}
+          ref: main
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

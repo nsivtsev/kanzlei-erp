@@ -1,0 +1,114 @@
+name: Verify image
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI_METRICS_DIR: /tmp/kanzlei-ci-metrics-${{ github.run_id }}-${{ github.run_attempt }}
+      # Enable 2 only after a comparison on the GitHub runner shows lower total minutes.
+      CI_SCENARIO_JOBS: ${{ vars.CI_SCENARIO_JOBS || '1' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: docker/setup-docker-action@2bf61fb9464cc67f0cbdeabed6aa0380accd1c70 # v5
+        with:
+          version: v28.0.4
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true}}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver: docker
+      - name: Deployment tests and shell checks
+        run: |
+          python3 -m unittest discover -s tests/deploy -v
+          bash -n scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/setup-local.sh scripts/fetch-suite.sh
+          shellcheck -x scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/fetch-suite.sh
+          # actionlint 1.7.12 predates GitHub concurrency.queue (May 2026).
+          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color -ignore '^unexpected key "queue" for "concurrency" section\.'
+      - name: Exact commit
+        id: source
+        run: |
+          revision=$(git rev-parse HEAD)
+          [[ $revision =~ ^[a-f0-9]{40}$ ]]
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+          mkdir -p "$CI_METRICS_DIR"
+          date +%s > "$CI_METRICS_DIR/build-start"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve a previously published main image
+        if: inputs.publish
+        id: candidate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ steps.source.outputs.revision }}
+        run: python3 scripts/ci_release.py candidate "$REVISION"
+      - name: Pull existing exact image for verification
+        if: inputs.publish && steps.candidate.outputs.image != ''
+        env:
+          CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
+        run: |
+          docker pull --platform linux/amd64 "$CANDIDATE_IMAGE"
+          docker tag "$CANDIDATE_IMAGE" kanzlei-ci:test
+      - name: Build exact commit with shared dependency cache
+        if: steps.candidate.outputs.image == ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: kanzlei-ci:test
+          build-args: |
+            REVISION=${{ steps.source.outputs.revision }}
+            SOURCE_DATE_EPOCH=0
+          cache-from: type=gha,version=2,scope=kanzlei-linux-amd64-v1
+          cache-to: ${{ inputs.publish && 'type=gha,version=2,scope=kanzlei-linux-amd64-v1,mode=min,ignore-error=true' || '' }}
+      - name: Build duration
+        run: |
+          started=$(cat "$CI_METRICS_DIR/build-start")
+          elapsed=$(( $(date +%s) - started ))
+          printf '{"seconds":%s}\n' "$elapsed" > "$CI_METRICS_DIR/build.json"
+          printf 'Build or pull: %s seconds\n' "$elapsed" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify application, Suite upgrade and backup restore
+        run: bash scripts/ci-image.sh kanzlei-ci:test
+      - name: Publish the exact verified main image and receipt
+        if: inputs.publish
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ steps.source.outputs.revision }}
+        run: python3 scripts/ci_release.py publish kanzlei-ci:test "$REVISION" "$CI_METRICS_DIR"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: inputs.publish
+        with:
+          name: verified-image-${{ steps.source.outputs.revision }}
+          overwrite: true
+          path: ${{ steps.publish.outputs.receipt }}
+          retention-days: 90
+          if-no-files-found: error
+      - name: CI timings and image size
+        if: always()
+        continue-on-error: true
+        run: python3 scripts/ci_release.py report kanzlei-ci:test "$CI_METRICS_DIR"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ci-metrics
+          overwrite: true
+          path: ${{ env.CI_METRICS_DIR }}/*.json
+          retention-days: 7
+          if-no-files-found: ignore

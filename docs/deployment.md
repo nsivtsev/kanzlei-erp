@@ -104,13 +104,40 @@ Tags must be `vX.Y.Z` without prerelease suffixes and must point to a commit rea
 from `main`. Never move an existing release tag. A normal deployment rejects older
 versions and reassignment of the current version to another image or commit.
 
-The release workflow tests the exact image before publishing it; it does not rebuild
-after testing. If a tag already exists in GHCR, it verifies the image's commit label,
-pulls and tests that exact digest again, and reuses it without overwriting the tag.
-Registry authentication/network failures stop the release rather than permitting a
-new publication. Its summary records the tag, commit and digest. Workflow concurrency
-queues releases without canceling an active migration, and the server also enforces
-an exclusive deployment/restore lock. GitHub's queue support is documented
+CI on `main` publishes the exact tested image as `sha-<full commit SHA>` and uploads
+`verified-image-<SHA>`, containing its immutable digest, platform, successful scenario
+results and CI run/attempt. PRs do not publish images or receive package write access.
+A CI rerun pulls the existing SHA image and verifies it again; it never overwrites
+that tag with a different image. Verification receipts are retained for 90 days.
+
+The release workflow validates the tag's ancestry, looks up a successful **main push**
+CI for that exact commit, and verifies its receipt against the registry's SHA tag,
+digest, platform and revision label. It copies only the original manifest to the
+release tag inside GHCR; it neither rebuilds nor transfers image layers through an
+Actions runner. The deployment archive is taken from the release commit, while the
+release controller and SSH preflight run from `main`.
+
+A tag may be pushed while CI is still queued or running. Its first release run prints
+“waiting for CI” and skips deployment. **Continue ready releases** reacts to successful
+main CI completion and dispatches **Release and deploy** on `main` for matching release
+tags. Waiting consumes no runner minutes. Failed CI never triggers deployment; a
+successful CI rerun continues waiting releases. If a completed CI has no valid receipt
+(or the receipt expired), rerun that commit's CI before deploying. New releases from
+commits predating this CI scheme need a commit verified by the new workflow.
+
+Already published `vX.Y.Z` images retain their retry path, including older releases:
+the controller validates their platform and commit label and reuses the original
+digest. Authentication/network failures stop publication rather than being treated
+as a missing image. Existing release tags cannot be reassigned.
+
+Workflow concurrency queues main CI and production releases without canceling a
+running migration. The server also enforces an exclusive deployment/restore lock.
+The SSH preflight checks an already installed `tag + revision + digest` and its live
+health before skipping duplicate deployment, including legacy bundles. A pending
+migration always reaches the existing recovery guard. Before a new image pull, the
+preflight reports free bytes and inodes for the deployment, Docker and containerd
+filesystems; it does not delete images, volumes or recovery backups. GitHub's queue
+support is documented
 [here](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
 For a retry **before server changes**, run **Actions → Release and deploy → Run
@@ -122,6 +149,48 @@ the generated password from `shared/production.env`. Complete ERPNext's setup wi
 and configure the company, staff permissions and mailbox accounts. The initial site
 uses German and `Europe/Berlin`; subsequent migrations preserve user language
 preferences. No production application tests or sample-data scripts run on the server.
+
+## CI performance and measurements
+
+Builds use a fixed `SOURCE_DATE_EPOCH=0`; the commit revision label is applied after
+application build layers. Suite dependencies are cached independently of Kanzlei
+source changes. Yarn/pip/uv download caches are removed in the same layer that creates
+them; runtime `node_modules` remain available, including `socket.io-client` used by
+realtime acceptance. GitHub runners enable the containerd image store and use the
+Docker Buildx driver, avoiding export through a tar archive into a second daemon.
+
+The GHA v2 cache scope is `kanzlei-linux-amd64-v1`. Main exports a best-effort `min`
+cache; PRs restore it without exporting PR caches. A cache miss produces a normal
+cold build. A cache export failure is a warning; build/test/image identity failures
+block CI. Review cache hit/export diagnostics in the Docker build action summary.
+
+`scripts/ci-image.sh IMAGE [all|application|upgrade]` defaults to all checks. The
+application scenario covers fresh installation, migrations, app and JavaScript tests,
+HTTP/assets/Drive permissions/realtime, uploads and real backup/restore. The upgrade
+scenario separately covers legacy attachments and interrupted Suite installation.
+Each scenario gets its own disposable Compose project, database, Redis and volumes.
+A failed scenario cancels its peer and runs cleanup before returning an error.
+Frontend startup waits for backend and websocket endpoints to start, so Nginx does
+not retain a stopped upstream's former IP after a restore.
+
+The repository Actions variable `CI_SCENARIO_JOBS` accepts `1` or `2` and defaults to
+`1`. Both scenarios run on the same runner. Compare the complete run duration and
+memory use on standard GitHub runners before setting it to `2`; keep `1` if contention
+increases total runner minutes. Locally, use distinct metrics directories:
+
+```bash
+CI_METRICS_DIR=/tmp/kanzlei-serial CI_SCENARIO_JOBS=1 bash scripts/ci-image.sh IMAGE
+CI_METRICS_DIR=/tmp/kanzlei-parallel CI_SCENARIO_JOBS=2 bash scripts/ci-image.sh IMAGE
+```
+
+Actions summaries and the seven-day `ci-metrics` artifact include build/pull time,
+scenario exit codes and timings, image size and layer count. The main verification
+receipt also includes compressed layer size and publish duration. Stable artifact
+names are replaced on reruns, and receipts must match the latest successful attempt.
+Benchmark targets on warm cache: PR median ≤10 minutes, main including publication
+≤12 minutes, ready-image release ≤7 minutes, and at least 30% fewer runner minutes
+across PR → main → release. Queue time is recorded separately and targets do not
+replace correctness gates with timing-dependent failures.
 
 ## What an update does
 
