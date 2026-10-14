@@ -399,6 +399,69 @@ index ad41a07b8..d22f395b5 100644
            onClick: () => entitiesDownload([rootEntity.value]),
          },
          {
+diff --git a/frontend/src/apps/drive/components/Sidebar.vue b/frontend/src/apps/drive/components/Sidebar.vue
+index b8978a02e..953912d0f 100644
+--- a/frontend/src/apps/drive/components/Sidebar.vue
++++ b/frontend/src/apps/drive/components/Sidebar.vue
+@@ -23,7 +23,7 @@ import { rootInfo } from '@/apps/drive/resources/files'
+ import { dynamicList, isApple } from '@/apps/drive/utils/files'
+ 
+ import { useCurrentUser, useSessionStore } from '@/boot/session'
+-const { fullName: currentUserFullName } = useCurrentUser()
++const { fullName: currentUserFullName, isStaff } = useCurrentUser()
+ import { getRootSection } from '@/apps/drive/data/breadcrumbs'
+ import { sidebarCollapsed } from '@/apps/drive/data/prefs'
+ import LucideClock from '~icons/lucide/clock'
+@@ -138,7 +138,13 @@ const sidebarItems = computed(() => {
+     route.name === routeName || first.name === routeName
+   return dynamicList([
+     {
+-      items: [
++      items: dynamicList([
++        {
++          label: __('Back to Kanzlei'),
++          icon: LucideBuilding2,
++          cond: isStaff.value,
++          onClick: () => window.location.assign('/desk/kanzlei-overview'),
++        },
+         {
+           label: __('Search'),
+           icon: LucideSearch,
+@@ -152,7 +158,7 @@ const sidebarItems = computed(() => {
+           isActive: active('drive-Inbox'),
+           suffix: notifCount.data ? String(notifCount.data) : undefined,
+         },
+-      ],
++      ]),
+     },
+     {
+       items: [
+diff --git a/frontend/src/apps/drive/runtime.ts b/frontend/src/apps/drive/runtime.ts
+index 09f3a1edf..0f2a22368 100644
+--- a/frontend/src/apps/drive/runtime.ts
++++ b/frontend/src/apps/drive/runtime.ts
+@@ -4,15 +4,18 @@ import { createResource } from 'frappe-ui'
+ import { setActiveEntity } from '@/apps/drive/data/selection'
+ import { setupTheme } from '@/utils/setupTheme'
+ 
+-export function bootstrap() {
++export async function bootstrap() {
+   setupTheme()
+ 
+   if (!window.translatedMessages) {
+-    createResource({
++    await createResource({
+       url: 'suite.drive.api.product.get_translations',
+       cache: 'translations',
+       transform: (data: unknown) => (window.translatedMessages = data),
+-    }).fetch()
++    }).fetch().catch((error) => {
++      // Translation failures must keep Drive available with source labels.
++      console.warn('Unable to load Drive translations', error)
++    })
+   }
+ }
+ 
 diff --git a/frontend/src/apps/drive/ui/drive/js/utils.js b/frontend/src/apps/drive/ui/drive/js/utils.js
 index 28c53d540..f74ceb87c 100644
 --- a/frontend/src/apps/drive/ui/drive/js/utils.js
@@ -693,8 +756,31 @@ index 3d76c1db4..31b581f23 100644
    })
  }
  // passthrough: sonner's loading→success/error toast, updated in place by id
+diff --git a/frontend/src/boot/session.ts b/frontend/src/boot/session.ts
+index 974a08e14..20b399fc9 100644
+--- a/frontend/src/boot/session.ts
++++ b/frontend/src/boot/session.ts
+@@ -106,6 +106,18 @@ export function useCurrentUser() {
+         ? ((userResource.data.roles as string[]) ?? []).includes('System Manager')
+         : systemUser.value,
+     ),
++    // Staff navigation uses the saved profile type, independent of Apps/admin roles.
++    isStaff: computed(() =>
++      Boolean(
++        store.isLoggedIn &&
++          userResource.fetched &&
++          !userResource.loading &&
++          !userResource.error &&
++          userResource.data?.name === store.user &&
++          userResource.data.name !== 'Guest' &&
++          userResource.data.user_type === 'System User',
++      ),
++    ),
+     isSystemManager: computed(() =>
+       ((userResource.data?.roles as string[] | undefined) ?? []).includes('System Manager'),
+     ),
 diff --git a/frontend/vitest.config.ts b/frontend/vitest.config.ts
-index ddf44aef9..af3315e6d 100644
+index ddf44aef9..99585ae11 100644
 --- a/frontend/vitest.config.ts
 +++ b/frontend/vitest.config.ts
 @@ -11,6 +11,21 @@ export default defineConfig({
@@ -719,6 +805,81 @@ index ddf44aef9..af3315e6d 100644
  			"~icons/lucide/scan": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/chevron-down": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/clock": path.resolve(__dirname, "src/test/icon-stub.ts"),
+@@ -27,6 +42,17 @@ export default defineConfig({
+ 			"~icons/lucide/corner-left-up": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/monitor-cog": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/star": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/inbox": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/search": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/book": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/badge-help": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/sun-moon": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/sun": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/moon": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/monitor": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/check": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/paperclip": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/file-text": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/trash": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 		},
+ 	},
+diff --git a/suite/api/account.py b/suite/api/account.py
+index 4d4d855e6..6e770fce7 100644
+--- a/suite/api/account.py
++++ b/suite/api/account.py
+@@ -185,6 +185,7 @@ def get_logged_in_user() -> dict | None:
+         "name": user_doc.name,
+         "email": user_doc.email,
+         "full_name": user_doc.full_name,
++        "user_type": user_doc.user_type,
+         "avatar": user_doc.user_image,
+         "roles": [role.role for role in user_doc.roles],
+         "is_jmap_configured": can_use_mail(user),
+diff --git a/suite/api/test_account.py b/suite/api/test_account.py
+index b00b05417..e835411bf 100644
+--- a/suite/api/test_account.py
++++ b/suite/api/test_account.py
+@@ -1,4 +1,5 @@
+ import unittest
++from inspect import unwrap
+ from unittest import mock
+ from uuid import uuid4
+ 
+@@ -38,7 +39,7 @@ class MarkOnboarded(AccountTestBase):
+     def setUp(self):
+         super().setUp()
+         self.engine = self.enterContext(
+-            mock.patch("frappe.desk.page.setup_wizard.setup_wizard.complete_app_setup")
++            mock.patch("frappe.desk.page.setup_wizard.setup_wizard.complete_app_setup", create=True)
+         )
+         self.suite_wizard = self.enterContext(
+             mock.patch("suite.api.account.uses_suite_setup_wizard", return_value=True)
+@@ -139,3 +140,25 @@ class GetUsersOnSite(IntegrationTestCase):
+         self.assertEqual(member.user_type, "Website User")
+ 
+         self.assertIn(member.name, [user["name"] for user in account.get_users()])
++
++
++class GetLoggedInUser(AccountTestBase):
++    def test_reports_saved_user_type_without_inferring_it_from_roles(self):
++        self.enterContext(mock.patch("suite.api.account.can_use_mail", return_value=False))
++        for user_type, roles in (("System User", ["Employee"]), ("Website User", [])):
++            with self.subTest(user_type=user_type):
++                user = frappe._dict(
++                    name="alice@example.com", email="alice@example.com", full_name="Alice",
++                    user_image=None, user_type=user_type,
++                    roles=[frappe._dict(role=role) for role in roles],
++                )
++                self.frappe.get_doc.return_value = user
++                profile = unwrap(account.get_logged_in_user)()
++                self.assertEqual(profile["user_type"], user_type)
++                self.assertEqual(profile["roles"], roles)
++                self.frappe.get_doc.assert_called_with("User", "alice@example.com")
++
++    def test_guest_has_no_logged_in_profile(self):
++        self.frappe.session.user = "Guest"
++        self.assertIsNone(unwrap(account.get_logged_in_user)())
++        self.frappe.get_doc.assert_not_called()
 diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
 index 86a738764..e355b3877 100644
 --- a/suite/drive/api/files.py
@@ -1893,6 +2054,149 @@ index 000000000..58886c31b
 +    app.unmount()
 +  })
 +})
+diff --git a/frontend/src/apps/drive/components/Sidebar.test.ts b/frontend/src/apps/drive/components/Sidebar.test.ts
+new file mode 100644
+index 000000000..c695897a8
+--- /dev/null
++++ b/frontend/src/apps/drive/components/Sidebar.test.ts
+@@ -0,0 +1,78 @@
++import { createApp, defineComponent, h, nextTick, ref } from 'vue'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const mocks = vi.hoisted(() => ({ assign: vi.fn(), isStaff: null as ReturnType<typeof ref> | null }))
++vi.mock('@/boot/session', () => ({
++  useCurrentUser: () => ({ fullName: ref('Employee'), isStaff: mocks.isStaff }),
++  useSessionStore: () => ({ logout: { submit: vi.fn() } }),
++}))
++vi.mock('frappe-ui', async () => ({
++  // Use the installed pinned SidebarItem: validates on-click reaches its real button.
++  SidebarItem: (await import('../../../../../node_modules/frappe-ui/src/components/Sidebar/SidebarItem.vue')).default,
++  Sidebar: defineComponent({ setup: (_, { slots }) => () => h('aside', slots.default?.()) }),
++  SidebarSection: defineComponent({ setup: (_, { slots }) => () => h('section', slots.default?.()) }),
++  SidebarHeader: { template: '<div />' }, SidebarCollapseToggle: { template: '<div />' },
++}))
++vi.mock('./StorageBar.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('./Settings/SettingsDialog.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('./FrappeDriveLogo.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('@/apps/drive/resources/permissions', () => ({ notifCount: { fetch: vi.fn() }, apps: { data: [] } }))
++vi.mock('@/apps/drive/resources/files', () => ({ rootInfo: { data: {}, fetch: vi.fn() }, move: { submit: vi.fn() } }))
++vi.mock('@/apps/drive/utils/files', () => ({
++  dynamicList: (items) => items.filter((item) => !('cond' in item) || item.cond), isApple: () => false,
++}))
++vi.mock('@/apps/drive/data/breadcrumbs', () => ({ getRootSection: () => ({ name: 'drive-Home' }) }))
++vi.mock('@/apps/drive/data/prefs', () => ({ sidebarCollapsed: ref(false) }))
++vi.mock('@/apps/drive/utils/useEmitter', () => ({ useEmitter: vi.fn() }))
++vi.mock('@/apps/drive/emitter', () => ({ default: { emit: vi.fn() } }))
++vi.mock('@/stores/root', () => ({ useRootStore: () => ({ paletteOpen: false }) }))
++vi.mock('@/composables/useAppSwitcher', () => ({ useAppSwitcher: () => ref({ label: 'Apps' }) }))
++vi.mock('@/utils/setupTheme', () => ({ themeMode: ref('light'), switchTheme: vi.fn() }))
++vi.mock('vue-router', () => ({
++  RouterLink: { template: '<a><slot /></a>' },
++  useRouter: () => ({}), useRoute: () => ({ name: 'drive-Home', params: {} }),
++}))
++import Sidebar from './Sidebar.vue'
++
++let app: ReturnType<typeof createApp> | undefined
++let root: HTMLDivElement
++beforeEach(() => {
++  mocks.assign.mockClear()
++  mocks.isStaff = ref(false)
++  vi.stubGlobal('__', (message: string) => message)
++  vi.stubGlobal('window', { location: { assign: mocks.assign }, __: (message: string) => message })
++  root = document.createElement('div')
++  app = createApp({ render: () => h(Sidebar) })
++  app.config.globalProperties.__ = (message: string) => message
++})
++afterEach(() => { app?.unmount(); vi.unstubAllGlobals() })
++
++describe('Drive return to ERP', () => {
++  it('places a staff return action in the first group and navigates the current tab', () => {
++    mocks.isStaff!.value = true
++    app!.mount(root)
++    const firstSection = root.querySelector('section')!
++    const button = [...firstSection.querySelectorAll('button')].find((button) => button.textContent === 'Back to Kanzlei')
++    expect(button).toBeDefined()
++    button!.click()
++    expect(mocks.assign).toHaveBeenCalledWith('/desk/kanzlei-overview')
++  })
++
++  it('keeps the return action hidden without a confirmed staff profile', () => {
++    app!.mount(root)
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++    expect(root.textContent).toContain('Home')
++    expect(root.textContent).toContain('Search')
++  })
++
++  it('reacts to profile load and hides the return action again when eligibility is lost', async () => {
++    app!.mount(root)
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++    mocks.isStaff!.value = true
++    await nextTick()
++    expect(root.textContent).toContain('Back to Kanzlei')
++    mocks.isStaff!.value = false
++    await nextTick()
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++  })
++})
+diff --git a/frontend/src/apps/drive/runtime.test.ts b/frontend/src/apps/drive/runtime.test.ts
+new file mode 100644
+index 000000000..5f61ce549
+--- /dev/null
++++ b/frontend/src/apps/drive/runtime.test.ts
+@@ -0,0 +1,53 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const mocks = vi.hoisted(() => ({ fetch: vi.fn() }))
++vi.mock('frappe-ui', () => ({
++  createResource: (options) => ({
++    fetch: () => mocks.fetch(options).then((data) => options.transform(data)),
++  }),
++}))
++vi.mock('@/apps/drive/data/selection', () => ({ setActiveEntity: vi.fn() }))
++vi.mock('@/utils/setupTheme', () => ({ setupTheme: vi.fn() }))
++import { bootstrap } from './runtime'
++
++const fetcher = mocks.fetch
++beforeEach(() => {
++  delete window.translatedMessages
++  fetcher.mockReset()
++})
++afterEach(() => {
++  vi.restoreAllMocks()
++})
++
++describe('Drive translation readiness', () => {
++  it.each([
++    { 'Back to Kanzlei': 'Zur Kanzlei' },
++    { 'Back to Kanzlei': 'В Kanzlei' },
++  ])('waits for translations before the router can mount its sidebar %j', async (translations) => {
++    let finish!: (data: typeof translations) => void
++    fetcher.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
++    let ready = false
++    const boot = Promise.resolve(bootstrap()).then(() => { ready = true })
++    await Promise.resolve()
++    expect(ready).toBe(false)
++    expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ url: 'suite.drive.api.product.get_translations' }))
++    finish(translations)
++    await boot
++    expect(window.translatedMessages).toEqual(translations)
++    expect(ready).toBe(true)
++  })
++
++  it('keeps Drive startup available with source labels when translation loading fails', async () => {
++    fetcher.mockRejectedValue(new Error('Translation service unavailable'))
++    vi.spyOn(console, 'warn').mockImplementation(() => {})
++    await expect(bootstrap()).resolves.toBeUndefined()
++    expect(window.translatedMessages).toBeUndefined()
++  })
++
++  it('reuses an already loaded translation dictionary without another request', async () => {
++    window.translatedMessages = { 'Back to Kanzlei': 'Zur Kanzlei' }
++    await bootstrap()
++    expect(fetcher).not.toHaveBeenCalled()
++    expect(window.translatedMessages['Back to Kanzlei']).toBe('Zur Kanzlei')
++  })
++})
 diff --git a/frontend/src/apps/drive/ui/drive/js/utils.test.ts b/frontend/src/apps/drive/ui/drive/js/utils.test.ts
 new file mode 100644
 index 000000000..802aa0dd6
@@ -2182,6 +2486,81 @@ index 000000000..615aa3956
 +    toast('Downloaded')
 +    expect(mocks.success).toHaveBeenCalledWith('Downloaded')
 +    expect(toast.promise).toBe(mocks.promise)
++  })
++})
+diff --git a/frontend/src/boot/session.test.ts b/frontend/src/boot/session.test.ts
+new file mode 100644
+index 000000000..346705601
+--- /dev/null
++++ b/frontend/src/boot/session.test.ts
+@@ -0,0 +1,69 @@
++import { createPinia, setActivePinia } from 'pinia'
++import { reactive } from 'vue'
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++
++vi.mock('frappe-ui', () => ({
++  createResource: (options) => reactive({ data: null, loading: false, fetched: false, error: null, ...options }),
++}))
++vi.mock('@/apps/slides/utils/serviceWorker', () => ({ clearSlidesUserData: vi.fn() }))
++import { useCurrentUser, useSessionStore, userResource } from './session'
++
++beforeEach(() => {
++  setActivePinia(createPinia())
++  useSessionStore().user = 'staff@example.com'
++  userResource.data = null
++  userResource.fetched = true
++  userResource.loading = false
++  userResource.error = null
++})
++
++describe('staff navigation eligibility', () => {
++  it('offers employee navigation from saved System User without System Manager role', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: ['Employee'] }
++    const user = useCurrentUser()
++    expect(user.isStaff?.value).toBe(true)
++    expect(user.isSystemManager.value).toBe(false)
++    expect(user.systemUser.value).toBe(false)
++  })
++
++  it.each([
++    { name: 'member@example.com', user_type: 'Website User', roles: ['System Manager'] },
++    { name: 'Guest', user_type: 'System User', roles: [] },
++    { name: 'staff@example.com', roles: ['System Manager'] },
++    null,
++  ])('hides employee navigation for an unconfirmed staff profile %j', (profile) => {
++    userResource.data = profile
++    useSessionStore().user = profile?.name === 'Guest' ? null : profile?.name ?? null
++    expect(useCurrentUser().isStaff?.value).toBe(false)
++  })
++
++  it('does not treat a cached offline profile as a confirmed server response', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    userResource.fetched = false
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it.each([null, 'Guest'])('hides a cached staff profile without a current logged-in staff session %j', (sessionUser) => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    useSessionStore().user = sessionUser
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it('does not offer staff navigation from a profile belonging to another session user', () => {
++    userResource.data = { name: 'old-user@example.com', user_type: 'System User', roles: [] }
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it('hides a previously loaded staff profile during refresh and after a failed request', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    const { isStaff } = useCurrentUser()
++    expect(isStaff?.value).toBe(true)
++    userResource.loading = true
++    expect(isStaff?.value).toBe(false)
++    userResource.loading = false
++    userResource.error = new Error('Network failure')
++    expect(isStaff?.value).toBe(false)
++    userResource.error = null
++    expect(isStaff?.value).toBe(true)
 +  })
 +})
 diff --git a/suite/drive/utils/downloads.py b/suite/drive/utils/downloads.py

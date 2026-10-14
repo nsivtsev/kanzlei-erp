@@ -36,14 +36,15 @@ def provision(site):
 		"customer_type": "Company", "customer_group": "Commercial", "territory": "All Territories"}).insert()
 	state["form_customer"] = form_customer.name
 	with patch("frappe.core.doctype.user.user.throttle_user_creation"):
-		for label in ("writer", "reader", "stranger", "revoked"):
+		for label in ("writer", "reader", "stranger", "revoked", "manager", "portal"):
+			roles = [] if label == "portal" else ["System Manager" if label == "manager" else "Projects User"]
 			user = frappe.get_doc({"doctype": "User", "email": f"drive-security-{run}-{label}@example.invalid",
 				"first_name": "Drive Security " + label, "send_welcome_email": 0,
-				"roles": [{"role": "Projects User"}]}).insert()
+				"roles": [{"role": role} for role in roles]}).insert()
 			password = secrets.token_urlsafe(32)
 			update_password(user.name, password)
 			state["users"][label] = {"user": user.name, "password": password}
-			if label != "stranger":
+			if label in ("writer", "reader", "revoked"):
 				frappe.share.add("Customer", customer.name, user.name, read=1, write=int(label == "writer"))
 			if label == "writer":
 				frappe.share.add("Customer", form_customer.name, user.name, read=1, write=1)

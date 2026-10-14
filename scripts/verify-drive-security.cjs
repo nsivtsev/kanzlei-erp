@@ -47,6 +47,39 @@ async function main(state) {
 	try {
 		for (const [label, credentials] of Object.entries(state.users)) await login(label, credentials);
 		const { writer, reader, stranger, revoked } = clients;
+		for (const [label, client] of Object.entries(clients)) {
+			const profile = await client.call('suite.api.account.get_logged_in_user');
+			assert.equal(profile.user_type, label === 'portal' ? 'Website User' : 'System User');
+			for (let repeat = 0; repeat < 2; repeat++) {
+				const desk = await client.request('/desk/kanzlei-overview');
+				if (label === 'portal') { assert.equal(desk.status, 403); continue; }
+				assert.equal(desk.status, 200);
+				const match = (await desk.text()).match(/frappe\.boot\s*=\s*(\{[^\n]+\});/);
+				assert.ok(match, 'Desk boot missing');
+				const boot = JSON.parse(match[1]);
+				const items = boot.workspace_sidebar_item.kanzlei.items;
+				const driveLinks = items.filter(item => item.url === '/drive');
+				assert.equal(driveLinks.length, 1, 'Staff Drive menu must be unique');
+				const index = items.indexOf(driveLinks[0]);
+				const timesheetIndex = items.findIndex(item => item.link_to === 'Timesheet' || item.url === '/desk/timesheet');
+				// Frappe omits Timesheet when this role cannot read it; Files
+				// remains the last daily-work item before optional settings.
+				if (timesheetIndex >= 0) assert.equal(timesheetIndex, index - 1);
+				assert.equal(index, items.length - (label === 'manager' ? 2 : 1));
+			}
+		}
+		const guestDesk = await fetch(state.base + '/desk/kanzlei-overview', {
+			redirect: 'manual', headers: { Host: state.site, 'X-Frappe-Site-Name': state.site },
+		});
+		assert.ok([301, 302, 403].includes(guestDesk.status));
+		if (guestDesk.status !== 403) assert.match(guestDesk.headers.get('location'), /^\/login\?/);
+		const ordinaryFolder = await stranger.call('suite.drive.api.files.create_folder', {
+			file_name: 'ordinary-navigation-' + state.run, parent: state.homes[2],
+		});
+		assert.equal(ordinaryFolder.is_folder, 1);
+		assert.equal(ordinaryFolder.folder, state.homes[2]);
+		assert.ok(!ordinaryFolder.kanzlei_drive_customer);
+		accepted.push('ERP Files menu is unique for staff and manager; portal/Guest Desk denied; staff without Customer access creates an ordinary Home folder');
 		const formSnapshot = await writer.call('frappe.client.get', { doctype: 'Customer', name: state.form_customer });
 		assert.ok(!formSnapshot.kanzlei_drive_folder);
 		const folderResults = await Promise.all([1, 2].map(() =>
@@ -190,7 +223,7 @@ print('ZIP byte checks passed')`], { encoding: 'utf8', input: JSON.stringify({ z
 		const listed = await reader.call('suite.drive.api.list.files', { entity_name: state.root });
 		assert.ok(listed.some(row => row.name === file.name));
 		accepted.push('authorized reload returns uploaded file');
-		console.log(JSON.stringify({ passed: accepted, staff_sessions: 4 }));
+		console.log(JSON.stringify({ passed: accepted, staff_sessions: 4, navigation_sessions: 2 }));
 	} finally {
 		for (const socket of sockets) socket.disconnect();
 	}

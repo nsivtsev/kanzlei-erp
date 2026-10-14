@@ -156,7 +156,58 @@ class TestKanzleiNavigation(FrappeTestCase):
 		self.assertNotIn("Einstellungen", persisted_labels)
 		self.assertNotIn("Rechnungen", labels)
 		self.assertNotIn("Wiederholungen", labels)
-		self.assertNotIn(frappe._("Files"), labels)
+		self.assertEqual(labels.count(frappe._("Files")), 1)
+		self.assertEqual(persisted_labels.count(frappe._("Files")), 1)
+
+	def drive_user(self, roles=("Projects User",), user_type="System User"):
+		with patch("frappe.core.doctype.user.user.throttle_user_creation"):
+			return frappe.get_doc({"doctype": "User", "email": f"drive-nav-{frappe.generate_hash(8)}@example.invalid",
+				"first_name": "Drive Navigation", "send_welcome_email": 0, "user_type": user_type,
+				"roles": [{"role": role} for role in roles]}).insert()
+
+	def test_staff_without_customer_access_sees_unique_drive_after_time_tracking(self):
+		user = self.drive_user()
+		frappe.set_user(user.name)
+		self.assertFalse(frappe.has_permission("Customer", "read"))
+		boot = get_bootinfo()
+		for _ in range(2):
+			configure_desk(boot)
+		items = boot.workspace_sidebar_item["kanzlei"]["items"]
+		links = [item for item in items if item.get("url") == "/drive"]
+		self.assertEqual(len(links), 1)
+		self.assertEqual(items[-1], links[0])
+		self.assertEqual(items[-2]["link_to"], "Timesheet")
+		self.assertNotIn("einstellungen", boot.workspace_sidebar_item)
+
+	def test_system_manager_sees_drive_before_settings_without_being_administrator(self):
+		user = self.drive_user(("System Manager",))
+		frappe.set_user(user.name)
+		boot = get_bootinfo()
+		configure_desk(boot)
+		items = boot.workspace_sidebar_item["kanzlei"]["items"]
+		self.assertEqual(sum(item.get("url") == "/drive" for item in items), 1)
+		self.assertEqual(items[-2]["url"], "/drive")
+		self.assertEqual(items[-1]["label"], "Einstellungen")
+
+	def test_drive_link_is_absent_without_suite_and_for_non_staff(self):
+		boot = get_bootinfo()
+		with patch("frappe.get_installed_apps", return_value=["frappe", "erpnext", "kanzlei_erp"]):
+			configure_desk(boot)
+		self.assertFalse(any(item.get("url") == "/drive" for item in boot.workspace_sidebar_item["kanzlei"]["items"]))
+		website = self.drive_user((), "Website User")
+		self.assertEqual(website.user_type, "Website User")
+		for user in ("Guest", website.name):
+			with self.subTest(user=user):
+				frappe.set_user(user)
+				boot.workspace_sidebar_item["kanzlei"]["items"].append({"label": "Stale Files", "url": "/drive"})
+				configure_desk(boot)
+				self.assertFalse(any(item.get("url") == "/drive" for item in boot.workspace_sidebar_item["kanzlei"]["items"]))
+
+	def test_drive_sidebar_labels_are_translated(self):
+		for lang, label in (("de", "Dateien"), ("ru", "Файлы")):
+			with self.subTest(lang=lang):
+				terms = get_translations_from_apps(lang)
+				self.assertEqual(terms.get("Files"), label)
 
 	def test_drive_link_remains_unique_after_boot_reconfiguration(self):
 		boot = get_bootinfo()

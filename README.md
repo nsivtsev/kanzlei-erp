@@ -147,12 +147,18 @@ Setup pauses Bench while installing dependencies and rebuilding, then starts it
 again; repeating it preserves the site and Drive files. A Suite checkout at a
 different commit stops setup rather than overwriting it.
 
-Administrator sees **Dateien / Files / Файлы** in Kanzlei, opening `/drive`.
-Create a folder, upload a PDF, and download it to verify access. Kanzlei remains
-the ERP home and ERPNext owns company setup; Suite's separate onboarding is
-marked complete without configuring its Mail, Meet or other products. Staff
-navigation, WebDAV, archive migration and additional
-backup scheduling are future steps. Suite's own roles and permission system
+Every saved **System User**, including staff without Customer access and System
+Managers, sees **Dateien / Files / Файлы** in Kanzlei when Suite is installed.
+It follows **Zeiterfassung**, before administrative **Einstellungen**, and opens
+`/drive` in a new tab. Guest and Website User do not receive this staff entry.
+Drive's top sidebar group includes **Zur Kanzlei / Back to Kanzlei / В Kanzlei**,
+returning to `/desk/kanzlei-overview` in the current tab. The return link waits
+for a successfully loaded profile with `user_type = System User`.
+Create an ordinary folder in Home, upload a PDF, and download it to verify access.
+Kanzlei remains the ERP home and ERPNext owns company setup; Suite's separate
+onboarding is marked complete without configuring its Mail, Meet or other products.
+Archive migration and additional backup scheduling are future steps.
+Suite's own roles and permission system
 remain active: hiding the navigation link is not a server-side access boundary.
 ERP attachments are managed from their original documents; Drive rename,
 move, trash and permanent deletion reject them before touching stored bytes,
@@ -187,10 +193,17 @@ ordinary Drive folders. The existing **Dokumente** tab still lists ERP-linked ma
 This access bridge requires the tracked Frappe and Suite patches applied by
 `scripts/fetch-suite.sh`, also copied into the production build. Patch application
 is idempotent and checks the source context; incompatible upstream updates stop
-setup/build. After applying patches, migrate the site, build Kanzlei assets and
-clear cache. A missing/trashed root is reported for administrator attention;
+setup/build. The installer accepts the exact v1/v2/v3 predecessors and rolls
+back both dependency patches atomically on conflict, preserving unrelated edits.
+After applying patches, migrate the site, build Suite and Kanzlei assets and
+clear Desk cache. Migration also invalidates Suite's cached user profiles so
+the new `user_type` field is available immediately. A missing/trashed root is
+reported for administrator attention;
 clicking the action never silently creates a replacement. See the
 [folder design](docs/plans/2026-10-12-mandant-drive-design.md).
+
+The [staff navigation verification](docs/reviews/2026-10-14-drive-navigation-verification.md)
+records automated and browser acceptance for BL-046.
 
 Drive also binds each File to its physical object. A second File cannot reuse
 Mandant bytes, thumbnails, trash objects or a protected directory, even when
