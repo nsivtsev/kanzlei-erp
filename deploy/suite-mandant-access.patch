@@ -1294,6 +1294,53 @@ index e7cd9c754..c57272e22 100644
 +  return createLink.submit()
 +}
  </script>
+diff --git a/frontend/src/apps/drive/components/Settings/StorageSettings.vue b/frontend/src/apps/drive/components/Settings/StorageSettings.vue
+index e12fccffb..2b9b844a8 100644
+--- a/frontend/src/apps/drive/components/Settings/StorageSettings.vue
++++ b/frontend/src/apps/drive/components/Settings/StorageSettings.vue
+@@ -2,11 +2,7 @@
+   <AppSettingsHeader :title="__('Statistics')" />
+   <AppSettingsBody>
+   <div class="flex items-center justify-between w-full mb-2">
+-    <span class="text-base-medium text-ink-gray-8"
+-      >You have used
+-      {{ formatSize(usedSpace) ? formatSize(usedSpace) + ' out' : 'none' }} of your
+-      {{ base2BlockSize(spaceLimit) }} ({{ formatPercent((usedSpace / spaceLimit) * 100) }})</span
+-    >
++    <span class="text-base-medium text-ink-gray-8">{{ storageLabel }}</span>
+   </div>
+   <div
+     v-if="usedSpace > 0"
+@@ -71,12 +67,18 @@ import AppSettingsHeader from '@/components/settings/AppSettingsHeader.vue'
+ import AppSettingsBody from '@/components/settings/AppSettingsBody.vue'
+ import { getIconUrl, openEntity, MIME_LIST_MAP } from '@/apps/drive/utils/files'
+ import { createResource } from 'frappe-ui'
+-import { ref } from 'vue'
++import { computed, ref } from 'vue'
+ import LucideCloud from '~icons/lucide/cloud'
+ 
+ const hoveredRow = ref(null)
+ const usedSpace = ref(0)
+ const spaceLimit = ref(0)
++const storageLabel = computed(() => {
++  const used = formatSize(usedSpace.value)
++  return spaceLimit.value > 0
++    ? __('{0} used out of {1} ({2})', [used, base2BlockSize(spaceLimit.value), formatPercent((usedSpace.value / spaceLimit.value) * 100)])
++    : __('{0} used, unlimited', [used])
++})
+ 
+ const storageBreakdown = createResource({
+   url: 'suite.drive.api.storage.storage_breakdown',
+@@ -96,7 +98,8 @@ const storageBreakdown = createResource({
+     Object.keys(res).forEach((kind) => {
+       res[kind].color = COLOR_MAP[kind]
+       res[kind].kind = kind
+-      res[kind].percentageRaw = (100 * res[kind].file_size) / spaceLimit.value
++      const denominator = spaceLimit.value > 0 ? spaceLimit.value : usedSpace.value
++      res[kind].percentageRaw = denominator ? (100 * res[kind].file_size) / denominator : 0
+       res[kind].percentageFormat = formatPercent(res[kind].percentageRaw)
+       res[kind].h_size = formatSize(res[kind].file_size)
+     })
 diff --git a/frontend/src/apps/drive/components/Sidebar.vue b/frontend/src/apps/drive/components/Sidebar.vue
 index b8978a02e..eaf0b9133 100644
 --- a/frontend/src/apps/drive/components/Sidebar.vue
@@ -1383,6 +1430,41 @@ index b8978a02e..eaf0b9133 100644
      move.submit({ entity_names: names }, { onSuccess: clearFromList })
    }
  }
+diff --git a/frontend/src/apps/drive/components/StorageBar.vue b/frontend/src/apps/drive/components/StorageBar.vue
+index 121bbe6da..b6d3239d9 100644
+--- a/frontend/src/apps/drive/components/StorageBar.vue
++++ b/frontend/src/apps/drive/components/StorageBar.vue
+@@ -5,6 +5,7 @@
+     class="cursor-pointer hover:bg-surface-gray-2"
+     :used-percentage
+     :label
++    :limited
+     :collapsed="!isExpanded"
+     @click="emitter.emit('showSettings', 'statistics')"
+   />
+@@ -20,13 +21,17 @@ const emitter = inject('emitter')
+ 
+ const props = defineProps(['isExpanded'])
+ 
+-const storageMax = computed(() => storageBar.data.limit || 5368709120)
++const storageMax = computed(() => storageBar.data?.limit || 0)
++const limited = computed(() => storageMax.value > 0)
+ 
+-const usedPercentage = computed(() => (100 * (storageBar.data.total_size || 0)) / storageMax.value)
++const usedPercentage = computed(() => limited.value ? (100 * (storageBar.data.total_size || 0)) / storageMax.value : 0)
+ 
+-const label = computed(
+-  () => formatSize(storageBar.data.total_size || 0) + ' used out of ' + base2BlockSize(storageMax.value),
+-)
++const label = computed(() => {
++  const used = formatSize(storageBar.data?.total_size || 0)
++  return limited.value
++    ? __('{0} used out of {1}', [used, base2BlockSize(storageMax.value)])
++    : __('{0} used, unlimited', [used])
++})
+ 
+ storageBar.fetch()
+ </script>
 diff --git a/frontend/src/apps/drive/data/breadcrumbs.ts b/frontend/src/apps/drive/data/breadcrumbs.ts
 index 6097d5c0b..ee2e8e69a 100644
 --- a/frontend/src/apps/drive/data/breadcrumbs.ts
@@ -2548,14 +2630,15 @@ index 974a08e14..20b399fc9 100644
        ((userResource.data?.roles as string[] | undefined) ?? []).includes('System Manager'),
      ),
 diff --git a/frontend/vitest.config.ts b/frontend/vitest.config.ts
-index ddf44aef9..99585ae11 100644
+index ddf44aef9..aa656a03f 100644
 --- a/frontend/vitest.config.ts
 +++ b/frontend/vitest.config.ts
-@@ -11,6 +11,21 @@ export default defineConfig({
+@@ -11,6 +11,22 @@ export default defineConfig({
  			// More specific first: a bare "frappe-ui" alias also matches "frappe-ui/…" imports.
  			"frappe-ui/experimental": path.resolve(__dirname, "src/test/frappe-ui-experimental-stub.ts"),
  			"frappe-ui": path.resolve(__dirname, "recorder/frappeUi.ts"),
 +			"~icons/lucide/alert-circle": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/cloud": path.resolve(__dirname, "src/test/icon-stub.ts"),
 +			"~icons/lucide/more-horizontal": path.resolve(__dirname, "src/test/icon-stub.ts"),
 +			"~icons/lucide/home": path.resolve(__dirname, "src/test/icon-stub.ts"),
 +			"~icons/lucide/users": path.resolve(__dirname, "src/test/icon-stub.ts"),
@@ -2573,7 +2656,7 @@ index ddf44aef9..99585ae11 100644
  			"~icons/lucide/scan": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/chevron-down": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/clock": path.resolve(__dirname, "src/test/icon-stub.ts"),
-@@ -27,6 +42,17 @@ export default defineConfig({
+@@ -27,6 +43,17 @@ export default defineConfig({
  			"~icons/lucide/corner-left-up": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/monitor-cog": path.resolve(__dirname, "src/test/icon-stub.ts"),
  			"~icons/lucide/star": path.resolve(__dirname, "src/test/icon-stub.ts"),
@@ -4458,6 +4541,90 @@ index 000000000..c70c9cd7f
 +    mocks.isStaff!.value = false
 +    await nextTick()
 +    expect(root.textContent).not.toContain('Back to Kanzlei')
++  })
++})
+diff --git a/frontend/src/apps/drive/components/StorageBar.test.ts b/frontend/src/apps/drive/components/StorageBar.test.ts
+new file mode 100644
+index 000000000..dd684d102
+--- /dev/null
++++ b/frontend/src/apps/drive/components/StorageBar.test.ts
+@@ -0,0 +1,78 @@
++import { createApp, defineComponent, h, nextTick } from 'vue'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const mocks = vi.hoisted(() => ({ breakdown: { limit: 0, total: [], entities: [] } as any }))
++vi.mock('@/apps/drive/resources/files', async () => {
++  const { reactive } = await import('vue')
++  return { storageBar: reactive({ loading: false, data: { total_size: 98_200_000, limit: 0 }, fetch: vi.fn() }) }
++})
++vi.mock('frappe-ui', () => ({
++  Tooltip: defineComponent({ setup: (_, { slots }) => () => h('div', slots.default?.()) }),
++  Button: { template: '<button><slot /></button>' },
++  createResource: (options: any) => {
++    const data = structuredClone(mocks.breakdown)
++    options.onSuccess(data)
++    return { data }
++  },
++}))
++vi.mock('@/components/settings/AppSettingsHeader.vue', () => ({ default: { template: '<header />' } }))
++vi.mock('@/components/settings/AppSettingsBody.vue', () => ({ default: { template: '<main><slot /></main>' } }))
++vi.mock('@/apps/drive/utils/files', () => ({
++  getIconUrl: () => '', openEntity: vi.fn(), MIME_LIST_MAP: { Image: ['image/png'], PDF: ['application/pdf'] },
++}))
++vi.mock('~icons/lucide/cloud', () => ({ default: { template: '<svg />' } }))
++import StorageBar from './StorageBar.vue'
++import StorageSettings from './Settings/StorageSettings.vue'
++import { storageBar } from '@/apps/drive/resources/files'
++
++let app: ReturnType<typeof createApp> | undefined
++let root: HTMLDivElement
++const translate = (message: string, args: any[] = []) => message.replace(/\{(\d+)\}/g, (_, i) => String(args[i]))
++beforeEach(() => {
++  vi.stubGlobal('__', translate)
++  storageBar.data = { total_size: 98_200_000, limit: 0 }
++  mocks.breakdown = { limit: 0, total: [{ mime_type: 'image/png', file_size: 2_000_000 }, { mime_type: 'application/pdf', file_size: 3_000_000 }], entities: [] }
++  root = document.createElement('div')
++})
++afterEach(() => { app?.unmount(); vi.unstubAllGlobals() })
++function mount(component: any, props = {}) {
++  app = createApp({ render: () => h(component, props) })
++  app.provide('emitter', { emit: vi.fn() })
++  app.config.globalProperties.__ = translate
++  app.mount(root)
++}
++
++describe('Drive storage quota display', () => {
++  it('shows unlimited usage without inventing a five GB quota', () => {
++    mount(StorageBar, { isExpanded: true })
++    expect(root.textContent).toContain('98.2 MB used, unlimited')
++    expect(root.textContent).not.toContain('5 GB')
++    expect(root.querySelector('[style]')?.getAttribute('style')).toContain('width: 0%')
++  })
++  it('does not show a percentage in the collapsed unlimited sidebar', () => {
++    mount(StorageBar, { isExpanded: false })
++    expect(root.textContent).not.toContain('%')
++  })
++  it('keeps real quotas and reacts when the quota becomes unlimited', async () => {
++    storageBar.data = { total_size: 1024 ** 3, limit: 10 * 1024 ** 3 }
++    mount(StorageBar, { isExpanded: true })
++    expect(root.textContent).toContain('used out of 10 GB')
++    expect(root.querySelector('[style]')?.getAttribute('style')).toContain('width: 10%')
++    storageBar.data.limit = 0
++    await nextTick()
++    expect(root.textContent).toContain('unlimited')
++  })
++  it('shows unlimited statistics with finite shares of used space', () => {
++    mount(StorageSettings)
++    expect(root.textContent).toContain('5.0 MB used, unlimited')
++    expect(root.innerHTML).not.toMatch(/NaN|Infinity/)
++    const widths = [...root.querySelectorAll('.h-7[style]')].map((el) => (el as HTMLElement).style.width)
++    expect(widths.sort()).toEqual(['40%', '60%'])
++  })
++  it('keeps the real quota in the statistics summary', () => {
++    mocks.breakdown.limit = 10 * 1024 ** 3
++    mount(StorageSettings)
++    expect(root.textContent).toContain('10 GB')
++    expect(root.textContent).not.toContain('unlimited')
 +  })
 +})
 diff --git a/frontend/src/apps/drive/data/mandantBreadcrumbs.test.ts b/frontend/src/apps/drive/data/mandantBreadcrumbs.test.ts
