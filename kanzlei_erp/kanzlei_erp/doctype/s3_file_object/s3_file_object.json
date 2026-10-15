@@ -1,0 +1,63 @@
+{
+ "doctype": "DocType",
+ "name": "S3 File Object",
+ "module": "Kanzlei ERP",
+ "custom": 0,
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "field_order": [
+  "file_url",
+  "object_key",
+  "file_size",
+  "sha256",
+  "content_type",
+  "source_file",
+  "keep_with_source"
+ ],
+ "fields": [
+  {
+   "fieldname": "file_url",
+   "fieldtype": "Small Text",
+   "reqd": 1,
+   "label": "File URL"
+  },
+  {
+   "fieldname": "object_key",
+   "fieldtype": "Small Text",
+   "reqd": 1,
+   "label": "Object Key"
+  },
+  {
+   "fieldname": "file_size",
+   "fieldtype": "Long Int",
+   "reqd": 1,
+   "label": "Size"
+  },
+  {
+   "fieldname": "sha256",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "label": "SHA-256"
+  },
+  {
+   "fieldname": "content_type",
+   "fieldtype": "Data",
+   "label": "Content Type"
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "keep_with_source",
+   "fieldtype": "Check",
+   "label": "Keep with Source",
+   "read_only": 1,
+   "default": "0"
+  }
+ ],
+ "permissions": [],
+ "track_changes": 0
+}

@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -310,6 +311,7 @@ def checksum(path):
 
 
 def verify_backup(backup):
+	backup = Path(backup).resolve()
 	manifest = read_json(backup / "manifest.json")
 	for name in ("database.sql.gz", "public.tgz", "private.tgz", "site_config.json", "production.env"):
 		if name not in manifest["checksums"]:
@@ -319,10 +321,27 @@ def verify_backup(backup):
 		if (
 			not path.is_relative_to(backup)
 			or not path.is_file()
-			or path.stat().st_size == 0
+			or (path.stat().st_size == 0 and not re.fullmatch(r"s3/objects/[0-9]{12}", name))
 			or checksum(path) != expected
 		):
 			raise ValueError("Backup checksum mismatch: " + name)
+	if manifest.get("s3"):
+		if "s3/manifest.json" not in manifest["checksums"]:
+			raise ValueError("Incomplete S3 backup manifest")
+		s3 = read_json(backup / "s3/manifest.json")
+		if s3.get("version") != 1 or not isinstance(s3.get("objects"), list):
+			raise ValueError("Invalid S3 backup manifest")
+		seen = set()
+		for item in s3["objects"]:
+			payload = item.get("payload", "")
+			if not isinstance(payload, str) or not re.fullmatch(r"objects/[0-9]{12}", payload) or payload in seen:
+				raise ValueError("Invalid S3 backup payload")
+			name = "s3/" + payload
+			if name not in manifest["checksums"] or manifest["checksums"][name] != item.get("sha256") or (backup / name).stat().st_size != item.get("size"):
+				raise ValueError("S3 backup checksum mismatch: " + payload)
+			seen.add(payload)
+	elif any(name.startswith("s3/") for name in manifest["checksums"]):
+		raise ValueError("S3 snapshot missing backup manifest marker")
 	return manifest
 
 
@@ -375,6 +394,17 @@ class Deployer:
 				"--backup-path-conf",
 				snapshot + "/site_config.json",
 			)
+			# Writers remain stopped throughout DB/files and object snapshots. Older
+			# release images have no exporter: permit only a genuinely disk-backed site.
+			compose.call(
+				"run", "--rm", "-T", "--no-deps", "-e", "SITE_NAME", "backend", "bash", "-euc",
+				"if env/bin/python -c 'import importlib.util; raise SystemExit(0 if importlib.util.find_spec(\"kanzlei_erp.s3_backup\") else 1)'; then\n"
+				+ "bench --site \"$SITE_NAME\" execute kanzlei_erp.s3_backup.export_snapshot --kwargs "
+				+ shlex.quote(json.dumps({"path": snapshot + "/s3"}))
+				+ "\nelse\nbench --site \"$SITE_NAME\" execute "
+				+ shlex.quote('frappe.throw("S3 backup support missing in current image") if frappe.db.exists("DocType", "Drive Disk Settings") and frappe.db.get_single_value("Drive Disk Settings", "enabled") else None')
+				+ "\nfi",
+			)
 			self.commands.run(["docker", "cp", container + ":" + snapshot + "/.", str(backup)])
 		finally:
 			with contextlib.suppress(Exception):
@@ -388,6 +418,7 @@ class Deployer:
 			backup / "manifest.json",
 			{
 				"previous": previous,
+				"s3": (backup / "s3/manifest.json").is_file(),
 				"checksums": {
 					str(path.relative_to(backup)): checksum(path)
 					for path in backup.rglob("*")
@@ -615,8 +646,15 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 			shutil.rmtree(backup)
 
 
-def restore_snapshot(compose, backup):
+def restore_snapshot(compose, backup, s3_target=None):
 	# Mount the host backup read-only; passwords remain process environment values.
+	target_mount = ["-v", str(s3_target) + ":/s3-target.json:ro"] if s3_target else []
+	s3_kwargs = {"path": "/tmp/kanzlei-restore/s3"}
+	if s3_target:
+		s3_kwargs["target"] = "/tmp/kanzlei-restore/s3-target.json"
+	s3_command = "bench --site \"$SITE_NAME\" execute kanzlei_erp.s3_backup.restore_snapshot --kwargs " + shlex.quote(json.dumps(s3_kwargs))
+	# The command is embedded inside the existing su single-quoted script.
+	s3_command = s3_command.replace("'", "'\"'\"'")
 	compose.call(
 		"run",
 		"--rm",
@@ -630,12 +668,15 @@ def restore_snapshot(compose, backup):
 		"SITE_NAME",
 		"-v",
 		str(backup) + ":/restore:ro",
+		*target_mount,
 		"backend",
 		"bash",
 		"-euc",
 		"""
 install -d -o frappe -g frappe -m 700 /tmp/kanzlei-restore
 cp /restore/database.sql.gz /restore/public.tgz /restore/private.tgz /tmp/kanzlei-restore/
+if [ -d /restore/s3 ]; then cp -a /restore/s3 /tmp/kanzlei-restore/; fi
+if [ -f /s3-target.json ]; then cp /s3-target.json /tmp/kanzlei-restore/s3-target.json; fi
 chown -R frappe:frappe /tmp/kanzlei-restore
 install -o frappe -g frappe -m 600 /restore/site_config.json "sites/$SITE_NAME/site_config.json"
 export HOME=/home/frappe
@@ -645,12 +686,15 @@ bench --site "$SITE_NAME" set-config maintenance_mode 1
 rm -rf "sites/$SITE_NAME/public/files" "sites/$SITE_NAME/private/files"
 mkdir -p "sites/$SITE_NAME/public/files" "sites/$SITE_NAME/private/files"
 bench --site "$SITE_NAME" restore /tmp/kanzlei-restore/database.sql.gz --db-root-password "$DB_PASSWORD" --with-public-files /tmp/kanzlei-restore/public.tgz --with-private-files /tmp/kanzlei-restore/private.tgz --force
+if [ -f /tmp/kanzlei-restore/s3/manifest.json ]; then
+""" + s3_command + """
+fi
 '
 """,
 	)
 
 
-def restore(root, backup, confirm_site, *, commands=None, smoke=None):
+def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=None):
 	root, backup = Path(root).resolve(), Path(backup).resolve()
 	commands, smoke = commands or Commands(), smoke or smoke_check
 	with deployment_lock(root):
@@ -661,6 +705,15 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None):
 		config = read_config(root)
 		if confirm_site != config["SITE_NAME"] or previous["site"] != confirm_site:
 			raise ValueError("Explicit site confirmation must match the backup and current site")
+		if manifest.get("s3") and read_json(backup / "s3/manifest.json").get("enabled"):
+			if (config["HTTPS_ENABLED"] == "0" or config["DOMAIN"].endswith(".localhost")) and not s3_target:
+				raise ValueError("Local S3 restore requires an explicit S3 target configuration")
+		if s3_target:
+			s3_target = Path(s3_target).resolve()
+			if not s3_target.is_file() or s3_target.stat().st_mode & 0o077:
+				raise ValueError("S3 target must be a private JSON file with permissions 600")
+			if not isinstance(read_json(s3_target), dict):
+				raise ValueError("S3 target must contain a JSON object")
 		saved_config = read_config(root, backup / "production.env")
 		for key in ("SITE_NAME", "PROJECT_NAME", "PLATFORM", "DB_PASSWORD"):
 			if saved_config[key] != config[key]:
@@ -683,7 +736,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None):
 			config = read_config(root)
 			compose = Compose(root, recovery_release, previous["image"], commands, config)
 			compose.call("run", "--rm", "-T", "configurator")
-			restore_snapshot(compose, backup)
+			restore_snapshot(compose, backup, s3_target=s3_target)
 			# Do not execute Redis jobs that reference the discarded database state.
 			for service in ("redis-cache", "redis-queue"):
 				compose.call("exec", "-T", service, "redis-cli", "FLUSHALL")
@@ -720,6 +773,7 @@ def main():
 	recovery = sub.add_parser("restore")
 	recovery.add_argument("--backup", type=Path, required=True)
 	recovery.add_argument("--confirm-site", required=True)
+	recovery.add_argument("--s3-target", type=Path, help="Private JSON containing complete destination S3 settings")
 	args = parser.parse_args()
 	os.umask(0o077)
 
@@ -734,7 +788,7 @@ def main():
 				args.root, args.release, args.image, args.revision, args.tag, resume=args.resume
 			).deploy()
 		else:
-			restore(args.root, args.backup, args.confirm_site)
+			restore(args.root, args.backup, args.confirm_site, s3_target=args.s3_target)
 	except Exception as error:
 		parser.exit(1, str(error) + "\n")
 

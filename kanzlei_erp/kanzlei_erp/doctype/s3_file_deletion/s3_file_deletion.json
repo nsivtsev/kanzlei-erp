@@ -1,0 +1,21 @@
+{
+ "doctype": "DocType",
+ "name": "S3 File Deletion",
+ "module": "Kanzlei ERP",
+ "custom": 0,
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "field_order": [
+  "object_key"
+ ],
+ "fields": [
+  {
+   "fieldname": "object_key",
+   "fieldtype": "Small Text",
+   "reqd": 1,
+   "label": "Object Key"
+  }
+ ],
+ "permissions": [],
+ "track_changes": 0
+}

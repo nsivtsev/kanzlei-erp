@@ -21,6 +21,9 @@ def configure():
 	apps = frappe.get_installed_apps()
 	if "suite" not in apps:
 		return
+	from kanzlei_erp.object_storage import configure as configure_storage
+
+	configure_storage()
 	# Adding Suite to an existing site would otherwise give its home/setup hooks priority.
 	if "kanzlei_erp" in apps and apps[-1] != "kanzlei_erp":
 		frappe.db.set_global("installed_apps", frappe.as_json([app for app in apps if app != "kanzlei_erp"] + ["kanzlei_erp"]))

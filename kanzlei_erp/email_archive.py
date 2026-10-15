@@ -432,10 +432,15 @@ def _ensure_attachment_bytes(mail, communication, repair=True):
 		for row in frappe.get_all("File", filters={
 			"attached_to_doctype": "Communication", "attached_to_name": communication.name, "is_private": 1,
 		}, fields=["name", "file_url"]):
-			if not row.file_url or not row.file_url.startswith("/private/files/"):
+			if not row.file_url:
 				continue
 			try:
-				data = Path(frappe.get_doc("File", row.name).get_full_path()).read_bytes()
+				from kanzlei_erp.object_storage import open_file
+				file = frappe.get_doc("File", row.name)
+				if file.is_remote_file:
+					continue
+				with open_file(file) as source:
+					data = source.read()
 			except OSError:
 				continue
 			actual[hashlib.sha256(data).hexdigest()] += 1

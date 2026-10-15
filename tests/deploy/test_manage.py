@@ -246,6 +246,65 @@ class DeploymentTests(unittest.TestCase):
 		with self.assertRaisesRegex(ValueError, "older"):
 			deployer.deploy()
 
+
+	def test_s3_export_runs_before_snapshot_copy_and_failure_blocks_migration(self):
+		commands = FakeCommands()
+		self.deployer(commands).deploy()
+		export = next(i for i, call in enumerate(commands.calls) if "kanzlei_erp.s3_backup.export_snapshot" in " ".join(call))
+		copy = next(i for i, call in enumerate(commands.calls) if call[:2] == ["docker", "cp"])
+		self.assertLess(export, copy)
+		class BrokenS3(FakeCommands):
+			def run(self, args, **kwargs):
+				if "kanzlei_erp.s3_backup.export_snapshot" in " ".join(args):
+					raise RuntimeError("S3 export failed")
+				return super().run(args, **kwargs)
+		# A fresh candidate release ensures this goes through the backup path again.
+		commands = BrokenS3()
+		with self.assertRaisesRegex(RuntimeError, "S3 export"):
+			self.deployer(commands).backup(self.state)
+		self.assertFalse(any("migrate" in call for call in commands.calls))
+
+	def test_restore_script_restores_s3_before_returning_to_smoke(self):
+		commands = FakeCommands()
+		compose = manager.Compose(self.root, self.release, self.old_image, commands)
+		manager.restore_snapshot(compose, self.root / "backups" / "example")
+		script = commands.calls[-1][-1]
+		self.assertIn("kanzlei_erp.s3_backup.restore_snapshot", script)
+		self.assertLess(script.index("bench --site \"$SITE_NAME\" restore"), script.index("kanzlei_erp.s3_backup.restore_snapshot"))
+
+	def test_backup_checks_allow_verified_empty_s3_objects(self):
+		self.deployer().deploy()
+		backup = next((self.root / "backups").iterdir())
+		(backup / "s3/objects").mkdir(parents=True)
+		payload = backup / "s3/objects/000000000000"
+		payload.write_bytes(b"")
+		s3 = {"version": 1, "enabled": True, "bucket": "bucket", "prefix": "site/", "objects": [{"key": "empty", "payload": "objects/000000000000", "size": 0, "sha256": manager.checksum(payload)}]}
+		manager.atomic_json(backup / "s3/manifest.json", s3)
+		manifest = manager.read_json(backup / "manifest.json")
+		manifest["s3"] = True
+		for path in (payload, backup / "s3/manifest.json"):
+			manifest["checksums"][str(path.relative_to(backup))] = manager.checksum(path)
+		manager.atomic_json(backup / "manifest.json", manifest)
+		manager.verify_backup(backup)
+
+	def test_local_s3_restore_requires_explicit_target_before_docker_changes(self):
+		self.deployer().deploy()
+		backup = next((self.root / "backups").iterdir())
+		manifest = manager.read_json(backup / "manifest.json")
+		manifest["s3"] = True
+		(backup / "s3").mkdir()
+		manager.atomic_json(backup / "s3/manifest.json", {"version": 1, "enabled": True, "bucket": "bucket", "prefix": "site/", "objects": []})
+		manifest["checksums"]["s3/manifest.json"] = manager.checksum(backup / "s3/manifest.json")
+		manager.atomic_json(backup / "manifest.json", manifest)
+		# Mark this as a local restore without altering the backup's production credentials.
+		self.config.write_text(self.config.read_text().replace("erp.example.com", "erp.localhost") + "HTTPS_ENABLED=0\n")
+		manifest["previous"]["site"] = "erp.localhost"
+		manager.atomic_json(backup / "manifest.json", manifest)
+		commands = FakeCommands()
+		with self.assertRaisesRegex(ValueError, "S3.*target"):
+			manager.restore(self.root, backup, "erp.localhost", commands=commands)
+		self.assertEqual(commands.calls, [])
+
 	def test_restore_rejects_corrupted_backup_before_docker_changes(self):
 		self.deployer().deploy()
 		backup = next((self.root / "backups").iterdir())

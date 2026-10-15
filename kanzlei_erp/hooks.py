@@ -17,6 +17,16 @@ override_whitelisted_methods = {
 	"suite.slides.doctype.presentation.presentation.create_presentation": "kanzlei_erp.mandant_drive.create_presentation",
 }
 extend_doctype_class = {"File": ["kanzlei_erp.suite_file.ERPAttachmentGuard"]}
+write_file = "kanzlei_erp.object_storage.write_file"
+file_content_from_url = ["kanzlei_erp.object_storage.url_content"]
+drive_s3_client = ["kanzlei_erp.object_storage.client"]
+drive_s3_content = ["kanzlei_erp.object_storage.open_binding"]
+drive_s3_key = ["kanzlei_erp.object_storage.resolve_key"]
+drive_s3_rebind = ["kanzlei_erp.object_storage.replace_content"]
+drive_s3_write_intent = ["kanzlei_erp.object_storage.track_write"]
+before_request = ["kanzlei_erp.s3_http.before_request"]
+after_request = ["kanzlei_erp.object_storage.cleanup_temporary_files"]
+after_job = ["kanzlei_erp.object_storage.cleanup_temporary_files"]
 drive_entity_access = ["kanzlei_erp.mandant_drive.entity_access"]
 drive_entity_access_batch = ["kanzlei_erp.mandant_drive.entity_access_batch"]
 drive_entity_actions_batch = ["kanzlei_erp.mandant_drive.entity_actions_batch"]
@@ -56,6 +66,7 @@ fixtures = [
 ]
 override_doctype_dashboards = {"Customer": "kanzlei_erp.navigation.customer_dashboard"}
 doctype_js = {
+	"Drive Disk Settings": "public/js/s3_storage_settings.js",
 	"Customer": "public/js/customer.js",
 	"Task": "public/js/task.js",
 	"FiBu Package": "public/js/fibu_package.js",
@@ -64,7 +75,8 @@ doctype_js = {
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
-	"Drive Disk Settings": {"on_update": "kanzlei_erp.drive_storage.invalidate"},
+	"Drive Disk Settings": {"validate": "kanzlei_erp.object_storage.validate_settings", "on_update": "kanzlei_erp.drive_storage.invalidate"},
+	"S3 File Object": {"validate": "kanzlei_erp.object_storage.protect_binding", "on_trash": "kanzlei_erp.object_storage.protect_binding"},
 	"ToDo": {"validate": "kanzlei_erp.fibu_questions.validate_question_assignment"},
 	"DocShare": {"validate": "kanzlei_erp.fibu_questions.validate_question_share"},
 	"Customer": {"validate": ["kanzlei_erp.fibu_checklist.validate_customer_sources", "kanzlei_erp.mandant_drive.validate_customer"]},
@@ -79,10 +91,10 @@ doc_events = {
 		"before_validate": ["kanzlei_erp.drive_storage.validate_binding_event", "kanzlei_erp.mandant_drive.prepare_file"],
 		"validate": "kanzlei_erp.fibu_materials.validate_fibu_attachment",
 		"on_trash": ["kanzlei_erp.fibu_materials.validate_fibu_attachment", "kanzlei_erp.mandant_drive.protect_root"],
-		"after_insert": "kanzlei_erp.drive_realtime.changed",
-		"on_update": "kanzlei_erp.drive_realtime.changed",
-		"after_delete": "kanzlei_erp.drive_realtime.changed",
+		"after_insert": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation"],
+		"on_update": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation"],
+		"after_delete": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation"],
 	},
 }
-scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"]}
+scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"], "hourly": ["kanzlei_erp.object_storage.retry_deletions"]}
 after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles", "kanzlei_erp.suite_setup.configure"]

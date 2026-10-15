@@ -12,6 +12,7 @@ EOF
   echo "Created local credentials in .env"
 fi
 
+bash scripts/setup-minio.sh --credentials-only
 compose=(docker compose --env-file .env -f .devcontainer/docker-compose.yml)
 "${compose[@]}" config --quiet
 rm -f development/frappe-bench/.kanzlei-ready
@@ -92,4 +93,5 @@ touch .kanzlei-ready
 '
 
 echo "Kanzlei ERP setup finished. Open http://development.localhost:8100"
+bash scripts/setup-minio.sh
 echo "Login: Administrator; password is LOCAL_ADMIN_PASSWORD in .env"
