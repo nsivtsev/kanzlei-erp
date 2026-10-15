@@ -193,7 +193,7 @@ ordinary Drive folders. The existing **Dokumente** tab still lists ERP-linked ma
 This access bridge requires the tracked Frappe and Suite patches applied by
 `scripts/fetch-suite.sh`, also copied into the production build. Patch application
 is idempotent and checks the source context; incompatible upstream updates stop
-setup/build. The installer accepts the exact v1/v2/v3 predecessors and rolls
+setup/build. The installer accepts the exact v1–v5 predecessors and rolls
 back both dependency patches atomically on conflict, preserving unrelated edits.
 After applying patches, migrate the site, build Suite and Kanzlei assets and
 clear Desk cache. Migration also invalidates Suite's cached user profiles so
@@ -215,8 +215,22 @@ visible-tab return and explicit refresh, with no persisted list cache or polling
 `kanzlei_erp.mandant_drive.list_mandanten` paginates readable records only and
 checks current Customer rights; granted and revoked access appear on refresh.
 Suite entity navigation context is supplied after entity read authorization.
-The exact BL-046 patch is preserved as v4; the installer supports v1–v4 upgrades
-and atomic rollback. See [BL-047 acceptance](docs/reviews/2026-10-14-drive-mandanten-verification.md).
+The exact BL-046 patch is preserved as v4. See
+[BL-047 acceptance](docs/reviews/2026-10-14-drive-mandanten-verification.md).
+
+Drive receives a server-verified `mandant_policy` through the batched
+`drive_entity_actions_batch` hook after read authorization. Menus, selections,
+shortcuts, uploads, paste, trash and drag-and-drop apply the same action rules.
+Forbidden commands are hidden; an ERP notice links to the Customer separately.
+Writers can upload files and create folders/HTTP(S) links in the root and its
+subfolders. Root rename/move/removal, native editors and Drive sharing are hidden.
+Readers retain viewing and downloading. Creation waits for current permissions;
+returning to the tab refreshes them and stale route/session responses are ignored.
+Moves validate all sources and the destination, stay within one Mandant and only
+update the list after server success. Ordinary files retain Home/Site destinations
+and cannot move into managed folders. The exact BL-047 patch is preserved as v5;
+clean/v1–v5 upgrades, repeat application and atomic rollback are covered. See
+[BL-048 acceptance](docs/reviews/2026-10-15-drive-actions-verification.md).
 
 Drive also binds each File to its physical object. A second File cannot reuse
 Mandant bytes, thumbnails, trash objects or a protected directory, even when
@@ -255,9 +269,8 @@ native documents and links, count only readable items, deduplicate overlapping
 selections and preserve files when archive names collide. Unreadable uploaded
 bytes fail the whole build. Old archive tokens require rebuilding.
 
-The current Suite patch supports exact v1 and v2 predecessors; v2 preserves the
-previous security patch. Update backend and Suite assets together, back up the
-site, migrate, rebuild, clear cache and restart services. No File schema change
+The v2 Suite patch preserves the previous security patch. Update backend and Suite
+assets together, back up the site, migrate, rebuild, clear cache and restart services. No File schema change
 or data migration is required. See the
 [download verification](docs/reviews/2026-10-13-drive-downloads-verification.md).
 

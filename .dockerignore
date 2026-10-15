@@ -13,6 +13,7 @@
 !deploy/suite-mandant-access-v2.patch
 !deploy/suite-mandant-access-v3.patch
 !deploy/suite-mandant-access-v4.patch
+!deploy/suite-mandant-access-v5.patch
 !deploy/frappe-mandant-access-v1.patch
 !scripts/
 !scripts/fetch-suite.sh

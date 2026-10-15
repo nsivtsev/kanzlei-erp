@@ -29,6 +29,36 @@ index d2ca7d31f..dca435630 100644
          {
            label: 'Recents',
            route: { name: 'drive-Recents' },
+diff --git a/frontend/src/apps/drive/components/DriveListRow.vue b/frontend/src/apps/drive/components/DriveListRow.vue
+index 9cd702c36..294d4406b 100644
+--- a/frontend/src/apps/drive/components/DriveListRow.vue
++++ b/frontend/src/apps/drive/components/DriveListRow.vue
+@@ -40,7 +40,7 @@
+           draggingNames.has(row.name) ? 'opacity-60 hover:shadow-none' : '',
+           dragOverItem === row.name ? '!bg-surface-gray-3' : '',
+         ]"
+-        :draggable="renamingEntity !== row.name"
++        :draggable="canAct(row, 'move') && renamingEntity !== row.name"
+         :route="routeFor(row)"
+         :data-testid="`drive-entity-${row.name}`"
+         :data-selected="selections.has(row.name) || undefined"
+@@ -162,6 +162,8 @@
+   </template>
+ </template>
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import { ListCell, ListRow } from 'frappe-ui/list'
+ import { Avatar, Button, Checkbox, Skeleton, Tooltip } from 'frappe-ui'
+ import { computed, ref } from 'vue'
+@@ -204,6 +206,7 @@ const draggingNames = computed(() => {
+ })
+ 
+ const onDragStart = (e, row) => {
++  if (!canAct(row, 'move')) { e.preventDefault(); return }
+   draggedItem.value = row.name
+   e.dataTransfer?.setData('application/x-filename', row.name)
+   e.dataTransfer?.setData(
 diff --git a/frontend/src/apps/drive/components/DriveToolBar.vue b/frontend/src/apps/drive/components/DriveToolBar.vue
 index 1cb541b4a..1a264f733 100644
 --- a/frontend/src/apps/drive/components/DriveToolBar.vue
@@ -46,19 +76,28 @@ index 1cb541b4a..1a264f733 100644
            <Button variant="outline" :tooltip="item.label" @click.once="item.action(selections)">
              <template #icon>
 diff --git a/frontend/src/apps/drive/components/EditableBreadcrumbs.vue b/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
-index 7d44ef608..ff5f26cda 100644
+index 7d44ef608..29f11afd5 100644
 --- a/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
 +++ b/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
-@@ -32,7 +32,7 @@ const loading = computed(
+@@ -16,6 +16,8 @@
+   </div>
+ </template>
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import { Breadcrumbs, Skeleton } from 'frappe-ui'
+ import { computed } from 'vue'
+ import { renamingEntity } from '@/apps/drive/data/selection'
+@@ -32,7 +34,7 @@ const loading = computed(
  )
  
  const isEditing = computed(
 -  () => props.entity && renamingEntity.value === props.entity.name,
-+  () => props.entity && !props.items.at(-1)?.readonly && renamingEntity.value === props.entity.name,
++  () => canAct(props.entity, 'rename') && !props.items.at(-1)?.readonly && renamingEntity.value === props.entity.name,
  )
  
  const parentItems = computed(() => props.items.slice(0, -1))
-@@ -45,7 +45,7 @@ const displayItems = computed(() => {
+@@ -45,7 +47,7 @@ const displayItems = computed(() => {
    const last = items[items.length - 1]
    items[items.length - 1] = {
      ...last,
@@ -67,6 +106,36 @@ index 7d44ef608..ff5f26cda 100644
    }
    return items
  })
+diff --git a/frontend/src/apps/drive/components/EntityDialogs.vue b/frontend/src/apps/drive/components/EntityDialogs.vue
+index 4e0090ba6..d6734b8be 100644
+--- a/frontend/src/apps/drive/components/EntityDialogs.vue
++++ b/frontend/src/apps/drive/components/EntityDialogs.vue
+@@ -1,12 +1,12 @@
+ <template>
+   <ShareDialog
+-    v-if="dialog === 's'"
++    v-if="dialog === 's' && canActSelection(entities, 'share')"
+     v-model="dialog"
+     :file="entities[0]"
+     @success="() => resource?.fetch?.(resource.params)"
+   />
+   <MoveDialog
+-    v-else-if="dialog === 'm'"
++    v-else-if="dialog === 'm' && canActSelection(entities, 'move')"
+     v-model="dialog"
+     :entities="entities"
+     @complete="onMoveComplete"
+@@ -19,7 +19,9 @@
+ </template>
+ 
+ <script setup>
+-import { computed } from 'vue'
++import { computed, watch } from 'vue'
++import { canActSelection } from '@/apps/drive/utils/actionPolicy'
++
+ 
+ import { ShareDialog, MoveDialog, InfoDialog } from '@/apps/drive/ui/drive'
+ 
 diff --git a/frontend/src/apps/drive/components/FileRender.vue b/frontend/src/apps/drive/components/FileRender.vue
 index c6572bdbc..c7a8a2e8a 100644
 --- a/frontend/src/apps/drive/components/FileRender.vue
@@ -221,8 +290,150 @@ index 43b8fc89c..000000000
 -)
 -const download = () => (window.location.ref = srcUrl.value)
 -</script>
+diff --git a/frontend/src/apps/drive/components/FileUploader.vue b/frontend/src/apps/drive/components/FileUploader.vue
+index 5730b2350..88fd2643e 100644
+--- a/frontend/src/apps/drive/components/FileUploader.vue
++++ b/frontend/src/apps/drive/components/FileUploader.vue
+@@ -2,7 +2,11 @@
+   <div id="fileSelection" class="hidden" />
+ </template>
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import { ref, onMounted, onBeforeUnmount, inject, watch } from 'vue'
++import { frappeRequest } from 'frappe-ui'
++import { useSessionStore } from '@/boot/session'
+ import { useRoute } from 'vue-router'
+ import { addUpload, updateUpload } from '@/apps/drive/data/uploads'
+ import { currentFolder } from '@/apps/drive/data/currentFolder'
+@@ -16,6 +20,14 @@ defineEmits(['success'])
+ const dropzone = ref()
+ const computedFullPath = ref('')
+ const emitter = inject('emitter')
++let epoch = 0
++let lastDestination = null
++let pickerDestination = null
++watch(() => currentFolder.value.entity, entity => {
++  if (entity?.name) lastDestination = { name: entity.name, parent: currentFolder.value.name, epoch }
++}, { immediate: true })
++const session = useSessionStore()
++watch(() => [session.user, session.isLoggedIn], () => { epoch++; lastDestination = null; pickerDestination = null; dropzone.value?.removeAllFiles(true) }, { flush: 'sync' })
+ 
+ watch(route, (to) => {
+   if (!dropzone.value) return
+@@ -124,12 +136,23 @@ onMounted(() => {
+       Accept: 'application/json',
+     },
+     addRemoveLinks: true,
+-    accept: function (file, done) {
+-      if (file.size == 0) {
+-        done('Empty files will not be uploaded.')
+-      } else {
++    accept: async function (file, done) {
++      if (!file.size) { done('Empty files will not be uploaded.'); return }
++      const current = epoch
++      const routeName = route.name
++      const parent = file.parent ?? currentFolder.value.name
++      const destination = file.targetName || currentFolder.value.entity?.name ||
++        (pickerDestination?.parent === parent ? pickerDestination.name : null) ||
++        (lastDestination?.parent === parent ? lastDestination.name : null)
++      try {
++        if (!destination || !['drive-Home', 'drive-Folder'].includes(route.name)) throw new Error('No destination')
++        const response = await frappeRequest({ url: '/api/method/suite.drive.api.permissions.get_entity_with_permissions',
++          method: 'GET', params: { entity_name: destination } })
++        const target = response?.message ?? response
++        if (file._actions_cancelled || file.status === Dropzone.CANCELED) { done('Upload cancelled'); return }
++        if (current !== epoch || route.name !== routeName || currentFolder.value.name !== parent || !canAct(target, 'upload')) throw new Error('Access changed')
+         done()
+-      }
++      } catch { done(__('You do not have upload access to this folder.')) }
+     },
+     sending: function (file, _, formData) {
+       if (file.lastModified) formData.append('file_modified', file.lastModified)
+@@ -154,6 +177,9 @@ onMounted(() => {
+ 
+   dropzone.value.on('addedfile', function (file) {
+     file.parent = currentFolder.value.name
++    file.targetName = currentFolder.value.entity?.name ||
++      (pickerDestination?.parent === file.parent ? pickerDestination.name : null) ||
++      (lastDestination?.parent === file.parent ? lastDestination.name : null)
+     emitter.emit('refresh')
+     addUpload({
+       uuid: file.upload.uuid,
+@@ -177,6 +203,7 @@ onMounted(() => {
+       file.newFullPath = newFullPathName(k, computedFullPath.value, a)
+     }
+   })
++  dropzone.value.on('removedfile', file => { file._actions_cancelled = true })
+   dropzone.value.on('queuecomplete', function () {
+     dropzone.value.files = dropzone.value.files.filter((file) => file.status === Dropzone.ERROR)
+     if (!dropzone.value.files.length) computedFullPath.value = ''
+@@ -231,6 +258,8 @@ onMounted(() => {
+   })
+ })
+ useEmitter('uploadFile', () => {
++  if (!canAct(currentFolder.value.entity, 'upload')) return
++  pickerDestination = { name: currentFolder.value.entity.name, parent: currentFolder.value.name, epoch }
+   if (dropzone.value.hiddenFileInput) {
+     dropzone.value.hiddenFileInput.removeAttribute('webkitdirectory')
+     dropzone.value.hiddenFileInput.click()
+@@ -240,28 +269,33 @@ useEmitter('cancelUpload', (uuid) => {
+   const files = dropzone.value.files
+   for (let i = 0; i < files.length; i++) {
+     if (files[i].upload.uuid === uuid) {
++      files[i]._actions_cancelled = true
+       dropzone.value.removeFile(files[i])
+     }
+   }
+ })
+-useEmitter('retryUpload', (uuid) => {
+-  const file = dropzone.value.files.find((f) => f.upload.uuid === uuid)
+-  if (file) {
+-    file.status = Dropzone.ADDED
+-    dropzone.value.enqueueFile(file)
+-    dropzone.value.processFile(file)
+-    updateUpload({
+-      uuid,
+-      error: null,
+-      progress: 0,
+-      completed: false,
+-    })
+-  }
++useEmitter('retryUpload', async (uuid) => {
++  const zone = dropzone.value
++  const file = zone.files.find(f => f.upload.uuid === uuid)
++  if (!file || file._actions_cancelled || !canAct(currentFolder.value.entity, 'upload') ||
++      (file.parent || '') !== (currentFolder.value.name || '')) return
++  const current = epoch
++  // Re-run Dropzone's size/type checks and our live permission preflight.
++  const accepted = await new Promise(resolve => zone.accept(file, error => resolve(!error)))
++  if (!accepted || current !== epoch || file._actions_cancelled || !zone.files.includes(file)) return
++  file.accepted = true
++  file.status = Dropzone.ADDED
++  zone.enqueueFile(file)
++  zone.processFile(file)
++  updateUpload({ uuid, error: null, progress: 0, completed: false })
+ })
+ useEmitter('cancelAllUploads', () => {
++  dropzone.value.files.forEach(file => { file._actions_cancelled = true })
+   dropzone.value.removeAllFiles(true)
+ })
+ useEmitter('uploadFolder', () => {
++  if (!canAct(currentFolder.value.entity, 'upload')) return
++  pickerDestination = { name: currentFolder.value.entity.name, parent: currentFolder.value.name, epoch }
+   if (dropzone.value.hiddenFileInput) {
+     dropzone.value.hiddenFileInput.setAttribute('webkitdirectory', true)
+     dropzone.value.hiddenFileInput.click()
+@@ -269,6 +303,7 @@ useEmitter('uploadFolder', () => {
+ })
+ 
+ onBeforeUnmount(() => {
++  epoch++
+   dropzone.value.destroy()
+ })
+ </script>
 diff --git a/frontend/src/apps/drive/components/GenericPage.test.ts b/frontend/src/apps/drive/components/GenericPage.test.ts
-index e1bafb2f2..40bdb45b2 100644
+index e1bafb2f2..704e04104 100644
 --- a/frontend/src/apps/drive/components/GenericPage.test.ts
 +++ b/frontend/src/apps/drive/components/GenericPage.test.ts
 @@ -30,7 +30,11 @@ vi.mock('./ListView.vue', () => ({
@@ -238,7 +449,19 @@ index e1bafb2f2..40bdb45b2 100644
  vi.mock('./Navbar.vue', () => ({ default: defineComponent(stub) }))
  vi.mock('./NoFilesSection.vue', () => ({ default: defineComponent(stub) }))
  vi.mock('./UploadTracker.vue', () => ({ default: defineComponent(stub) }))
-@@ -123,9 +127,10 @@ function mountPage(grouper: (rows: unknown[]) => unknown) {
+@@ -46,9 +50,8 @@ vi.mock('frappe-ui', () => ({
+   shellScrollContainer: (frappeUI.scrollHost = ref(null)),
+   useKeyboardShortcut: vi.fn(),
+ }))
+-vi.mock('vue-router', () => ({
+-  useRoute: () => ({ name: 'drive-Recents', params: {} }),
+-}))
++const routeState = vi.hoisted(() => ({ name: 'drive-Recents', params: {} }))
++vi.mock('vue-router', () => ({ useRoute: () => routeState }))
+ vi.mock('@vueuse/core', () => ({
+   onKeyDown: vi.fn(),
+   useEventListener: vi.fn(),
+@@ -123,9 +126,10 @@ function mountPage(grouper: (rows: unknown[]) => unknown) {
    )
    app.config.errorHandler = (err) => errors.push(String(err))
    app.config.warnHandler = (msg) => errors.push(msg)
@@ -251,7 +474,7 @@ index e1bafb2f2..40bdb45b2 100644
  }
  
  // Recents' groupByTime — the shape that matters is a fresh object per call.
-@@ -212,7 +217,7 @@ function mountPaginated(firstPage: {
+@@ -212,7 +216,7 @@ function mountPaginated(firstPage: {
          }),
      })
    )
@@ -260,7 +483,7 @@ index e1bafb2f2..40bdb45b2 100644
    app.mount(document.createElement('div'))
    return { app, getEntities }
  }
-@@ -424,3 +429,56 @@ describe('GenericPage pagination', () => {
+@@ -424,3 +428,65 @@ describe('GenericPage pagination', () => {
      app.unmount()
    })
  })
@@ -317,11 +540,33 @@ index e1bafb2f2..40bdb45b2 100644
 +    app.unmount()
 +  })
 +})
++
++it('keeps per-entity restore and permanent-delete actions in Trash', () => {
++  routeState.name = 'drive-Trash'
++  const { app } = mountPage(rows => rows)
++  expect(toolbar.actions.map(a => a.label)).toContain('Restore')
++  expect(toolbar.actions.map(a => a.label)).toContain('Delete forever')
++  app.unmount()
++  routeState.name = 'drive-Recents'
++})
 diff --git a/frontend/src/apps/drive/components/GenericPage.vue b/frontend/src/apps/drive/components/GenericPage.vue
-index 2e5a47951..8c77db376 100644
+index 2e5a47951..6d453274f 100644
 --- a/frontend/src/apps/drive/components/GenericPage.vue
 +++ b/frontend/src/apps/drive/components/GenericPage.vue
-@@ -59,6 +59,7 @@ import {
+@@ -31,9 +31,11 @@
+     <UploadTracker />
+   </Transition>
+   <ListDialogs v-model="listDialog" :list="props.getEntities" :parent="route.params.entityName"
+-    :entities="activeEntity ? [activeEntity] : selectedEntitities" />
++    :entities="activeEntity ? [activeEntity] : selectedEntitities" :parent-entity="verify?.loading ? null : verify?.data" />
+ </template>
+ <script setup>
++import { canAct, canActSelection, canMoveTo, resolveDragged } from '@/apps/drive/utils/actionPolicy'
++
+ import ListView from '@/apps/drive/components/ListView.vue'
+ import GridView from '@/apps/drive/components/GridView.vue'
+ import DriveToolBar from '@/apps/drive/components/DriveToolBar.vue'
+@@ -59,6 +61,7 @@ import {
  } from '@/apps/drive/resources/files'
  import { confirmRestore, confirmRemove, confirmDeleteForever } from '@/apps/drive/utils/confirmActions'
  import { entitiesDownload } from '@/apps/drive/utils/download'
@@ -329,7 +574,7 @@ index 2e5a47951..8c77db376 100644
  import { ref, computed, watch, watchEffect, provide, inject, onBeforeUnmount, nextTick } from 'vue'
  import { useRoute } from 'vue-router'
  import { useEventListener } from '@vueuse/core'
-@@ -83,6 +84,7 @@ import { move } from '@/apps/drive/resources/files'
+@@ -83,6 +86,7 @@ import { move } from '@/apps/drive/resources/files'
  import DriveListSkeleton from '@/apps/drive/components/DriveListSkeleton.vue'
  import { settings } from '@/apps/drive/resources/permissions'
  import emitter from '@/apps/drive/emitter'
@@ -337,7 +582,173 @@ index 2e5a47951..8c77db376 100644
  import { useEmitter } from '@/apps/drive/utils/useEmitter'
  import { getFileLink } from '@/apps/drive/ui/drive/js/utils'
  
-@@ -566,12 +568,8 @@ const actionItems = computed(() => {
+@@ -180,7 +184,14 @@ watch(
+   { immediate: true, deep: true }
+ )
+ 
++watch(() => [props.verify?.data, props.verify?.loading, route.name], () => {
++  setCurrentFolder({ entity: props.verify?.loading ? null : props.verify?.data || null })
++}, { immediate: true, deep: true })
++
+ const selections = ref(new Set())
++watch(() => [props.verify?.loading, props.verify?.error], ([loading, error]) => {
++  if (loading || error) { selections.value = new Set(); activeEntity.value = null; listDialog.value = '' }
++})
+ const selectionMode = computed(() => selections.value.size > 0)
+ const viewEl = ref(null)
+ const allRows = computed(() => [
+@@ -239,13 +250,13 @@ useKeyboardShortcut([
+     combo: 'Ctrl+M',
+     description: __('Move selected files'),
+     group: __('List'),
+-    handler: () => emitter.emit('move'),
++    handler: () => canActSelection(selectedEntitities.value, 'move') && emitter.emit('move'),
+   },
+   {
+     combo: 'Mod+Backspace',
+     description: __('Delete selected files'),
+     group: __('List'),
+-    handler: () => emitter.emit('remove'),
++    handler: () => canActSelection(selectedEntitities.value, 'trash') && emitter.emit('remove'),
+   },
+   {
+     combo: 'Mod+Enter',
+@@ -260,9 +271,7 @@ useKeyboardShortcut([
+ ])
+ 
+ const verifyAccess = computed(() => props.verify?.data || !props.verify)
+-watchEffect(() => {
+-  if (verifyAccess.value?.write) useEventListener('paste', pasteObj)
+-})
++useEventListener('paste', pasteObj)
+ 
+ const pageStart = ref(0)
+ const hasNextPage = ref(false)
+@@ -286,6 +295,7 @@ const queryParams = () => {
+ 
+ const refreshData = () => {
+   const res = props.getEntities
++  res.abort?.()
+   const params = queryParams()
+   const epoch = ++queryEpoch
+   pageStart.value = 0
+@@ -406,6 +416,8 @@ watch(
+   { immediate: true }
+ )
+ onBeforeUnmount(() => {
++  setCurrentFolder({ entity: null })
++  props.getEntities.abort?.()
+   queryEpoch++
+   scrollHost.value?.removeEventListener('scroll', onHostScroll)
+ })
+@@ -420,6 +432,24 @@ watch(
+   { immediate: true, deep: false }
+ )
+ useEmitter('refresh', refreshData)
++const session = useSessionStore()
++watch(() => [session.user, session.isLoggedIn], () => {
++  queryEpoch++
++  props.getEntities.abort?.()
++  listDialog.value = ''
++  selections.value = new Set()
++  activeEntity.value = null
++  props.getEntities.setData([])
++  setCurrentFolder({ entity: null, entities: [] })
++  if (session.isLoggedIn) refreshData()
++}, { flush: 'sync' })
++useEventListener(window, 'focus', () => {
++  if (!props.verify && session.isLoggedIn) refreshData()
++})
++useEventListener(document, 'visibilitychange', () => {
++  if (!props.verify && session.isLoggedIn && document.visibilityState !== 'hidden') refreshData()
++})
++
+ 
+ // Removes entities from the currently rendered list once a confirm-dialog
+ // write (remove/restore/delete forever) succeeds server-side. Provided so
+@@ -436,7 +466,7 @@ provide('removeFromList', removeFromList)
+ useEmitter('remove-file', (item) => {
+   const names = Array.isArray(item) ? item : [item]
+   const entities = allRows.value.filter((e) => names.includes(e.name))
+-  if (!entities.length) return
++  if (entities.length !== names.length || !canActSelection(entities, 'trash')) return
+   confirmRemove(entities, { onSuccess: () => removeFromList(entities) })
+ })
+ 
+@@ -451,29 +481,27 @@ const removeFile = (file, target) => {
+   if (targetRow) targetRow.child_count = (targetRow.child_count || 0) + 1
+   props.getEntities.setData(props.getEntities.data)
+ }
+-const onDrop = (targetFile, draggedItem) => {
+-  if (!targetFile.is_folder || !draggedItem) return
+-  // If the dragged item is part of the current selection, move the whole
+-  // selection; otherwise just move the dragged item.
+-  const names = selections.value.has(draggedItem)
+-    ? [...selections.value]
+-    : [draggedItem]
+-  const toMove = names.filter((name) => name !== targetFile.name)
+-  if (!toMove.length) return
+-  move.submit(
+-    { entity_names: toMove, new_parent: targetFile.name },
+-    {
+-      // The rows were removed optimistically — put them back if the server said no.
+-      onError: () => {
+-        refreshData()
+-        refreshExpanded(sortOrder.value)
+-      },
+-    }
+-  )
+-  toMove.forEach((name) => removeFile(name, targetFile.name))
+-  if (expandedFolders.value.has(targetFile.name))
+-    refreshFolder(targetFile.name, sortOrder.value)
+-  selections.value = new Set()
++const onDrop = async (targetFile, draggedItem) => {
++  if (!draggedItem) return
++  const names = selections.value.has(draggedItem) ? [...selections.value] : [draggedItem]
++  const entities = resolveDragged(names, allRows.value)
++  const epoch = queryEpoch
++  if (!canMoveTo(entities, targetFile)) return
++  try {
++    // Resolve full destination ancestry before any request or optimistic UI change.
++    const result = await frappeRequest({ url: '/api/method/suite.drive.api.permissions.get_entity_with_permissions',
++      method: 'GET', params: { entity_name: targetFile.name } })
++    const target = result?.message ?? result
++    if (epoch !== queryEpoch || !canMoveTo(entities, target)) return
++    await move.submit({ entity_names: names, new_parent: target.name })
++    if (epoch !== queryEpoch) return
++    names.forEach(name => removeFile(name, target.name))
++    if (expandedFolders.value.has(target.name)) refreshFolder(target.name, sortOrder.value)
++    selections.value = new Set()
++  } catch {
++    refreshData()
++    props.verify?.fetch?.(props.verify.params)
++  }
+ }
+ useEmitter('remove-file-ui', removeFile)
+ 
+@@ -517,6 +545,7 @@ const actionItems = computed(() => {
+     return [
+       {
+         label: 'Restore',
++        isEnabled: (e) => canAct(e, 'restore'),
+         icon: LucideRotateCcw,
+         action: (entities) => confirmRestore(entities, { onSuccess: () => removeFromList(entities) }),
+         multi: true,
+@@ -526,11 +555,11 @@ const actionItems = computed(() => {
+         label: 'Delete forever',
+         icon: LucideTrash,
+         action: (entities) => confirmDeleteForever(entities, { onSuccess: () => removeFromList(entities) }),
+-        isEnabled: () => route.name === 'drive-Trash',
++        isEnabled: (e) => canAct(e, 'delete'),
+         multi: true,
+         danger: true,
+       },
+-    ].filter((a) => !a.isEnabled || a.isEnabled())
++    ]
+   } else {
+     return [
+       {
+@@ -566,12 +595,8 @@ const actionItems = computed(() => {
        {
          label: __('Download'),
          icon: LucideDownload,
@@ -352,7 +763,47 @@ index 2e5a47951..8c77db376 100644
          action: (entities) => entitiesDownload(entities),
          multi: true,
          important: true,
-@@ -674,32 +672,42 @@ const actionItems = computed(() => {
+@@ -603,23 +628,24 @@ const actionItems = computed(() => {
+       {
+         label: __('Share'),
+         icon: LucideShare2,
+-        action: () => (listDialog.value = 's'),
+-        isEnabled: (e) => e.share && isManaged(e),
++        action: (entities) => canActSelection(entities, 'share') && (listDialog.value = 's'),
++        isEnabled: (e) => canAct(e, 'share'),
+         important: true,
+       },
+       {
+         label: __('Rename'),
+         icon: LucideSquarePen,
+-        action: ([entity]) => startRename(entity.name),
+-        isEnabled: (e) => isManaged(e) && e.write,
++        action: ([entity]) => canAct(entity, 'rename') && startRename(entity.name),
++        isEnabled: (e) => canAct(e, 'rename'),
+       },
+       {
+         label: __('Move'),
+         icon: LucideArrowLeftRight,
+-        action: () => (listDialog.value = 'm'),
+-        isEnabled: (e) => isManaged(e) && e.write,
++        action: (entities) => canActSelection(entities, 'move') && (listDialog.value = 'm'),
++        isEnabled: (e) => canAct(e, 'move'),
+         multi: true,
+         important: true,
++        isEnabledForSelection: (entities) => canActSelection(entities, 'move'),
+       },
+       {
+         label: __('Favourite'),
+@@ -664,7 +690,7 @@ const actionItems = computed(() => {
+         label: __('Delete'),
+         icon: LucideTrash,
+         action: (entities) => confirmRemove(entities, { onSuccess: () => removeFromList(entities) }),
+-        isEnabled: (e) => e.write,
++        isEnabled: (e) => canAct(e, 'trash'),
+         important: true,
+         multi: true,
+         theme: 'red',
+@@ -674,32 +700,42 @@ const actionItems = computed(() => {
  })
  
  const socket = inject('socket')
@@ -421,11 +872,177 @@ index 2e5a47951..8c77db376 100644
  </script>
  <style>
  .file-drag #drop-area {
+diff --git a/frontend/src/apps/drive/components/GridView.vue b/frontend/src/apps/drive/components/GridView.vue
+index 15214f6e3..c78cca23e 100644
+--- a/frontend/src/apps/drive/components/GridView.vue
++++ b/frontend/src/apps/drive/components/GridView.vue
+@@ -17,7 +17,7 @@
+         draggingNames.has(file.name) ? 'opacity-60 hover:shadow-none' : '',
+         dragOverItem === file.name ? '!bg-surface-gray-3' : '',
+       ]"
+-      :draggable="renamingEntity !== file.name"
++      :draggable="canAct(file, 'move') && renamingEntity !== file.name"
+       @dragstart="onDragStart($event, file)"
+       @dragend="draggedItem = null"
+       @dragleave="dragOverItem = null"
+@@ -90,6 +90,8 @@
+ </template>
+ 
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import GridItem from '@/apps/drive/components/GridItem.vue'
+ import ContextMenu from '@/apps/drive/components/ContextMenu.vue'
+ import NoFilesSection from '@/apps/drive/components/NoFilesSection.vue'
+@@ -225,6 +227,7 @@ const draggingNames = computed(() => {
+ })
+ 
+ const onDragStart = (e, file) => {
++  if (!canAct(file, 'move')) { e.preventDefault(); return }
+   draggedItem.value = file.name
+   e.dataTransfer?.setData('application/x-filename', file.name)
+   e.dataTransfer?.setData(
+diff --git a/frontend/src/apps/drive/components/ListDialogs.vue b/frontend/src/apps/drive/components/ListDialogs.vue
+index 92de9476a..024de9486 100644
+--- a/frontend/src/apps/drive/components/ListDialogs.vue
++++ b/frontend/src/apps/drive/components/ListDialogs.vue
+@@ -1,25 +1,25 @@
+ <template>
+   <NewFolderDialog
+-    v-if="dialog === 'f'"
++    v-if="dialog === 'f' && canAct(parentEntity, 'create_folder')"
+     v-model="dialog"
+-    :parent="folderParent"
++    :parent="folderParent" :parent-entity="parentEntity"
+     @success="(data) => addToList(data, 'Folder')"
+   />
+   <NewLinkDialog
+-    v-else-if="dialog === 'l'"
++    v-else-if="dialog === 'l' && canAct(parentEntity, 'create_link')"
+     v-model="dialog"
+-    :parent="folderParent"
++    :parent="folderParent" :parent-entity="parentEntity"
+     @success="(data) => addToList(data, 'Link')"
+   />
+ 
+   <ShareDialog
+-    v-else-if="dialog === 's'"
++    v-else-if="dialog === 's' && canActSelection(entities, 'share')"
+     v-model="dialog"
+     :file="entities[0]"
+     @success="() => props.list?.fetch?.(props.list.params)"
+   />
+   <MoveDialog
+-    v-else-if="dialog === 'm'"
++    v-else-if="dialog === 'm' && canActSelection(entities, 'move')"
+     v-model="dialog"
+     :entities="entities"
+     @success="removeFromList(entities)"
+@@ -32,7 +32,9 @@
+ </template>
+ 
+ <script setup>
+-import { computed } from 'vue'
++import { computed, watch } from 'vue'
++import { canAct, canActSelection } from '@/apps/drive/utils/actionPolicy'
++
+ import { useTimeAgo } from '@vueuse/core'
+ import { useRoute } from 'vue-router'
+ 
+@@ -42,6 +44,7 @@ import { ShareDialog, MoveDialog, InfoDialog } from '@/apps/drive/ui/drive'
+ 
+ const props = defineProps({
+   list: Object,
++  parentEntity: Object,
+   entities: {
+     type: Array,
+     default: () => [],
+@@ -54,6 +57,11 @@ const props = defineProps({
+ 
+ const dialog = defineModel(String)
+ const route = useRoute()
++watch(() => [props.parent, props.parentEntity, props.entities], () => {
++  const action = { f: 'create_folder', l: 'create_link' }[dialog.value]
++  if (action && !canAct(props.parentEntity, action)) dialog.value = ''
++  if (['s', 'm'].includes(dialog.value) && !canActSelection(props.entities, dialog.value === 'm' ? 'move' : 'share')) dialog.value = ''
++}, { deep: true })
+ 
+ const folderParent = computed(
+   () => props.parent ?? route.params.entityName ?? '',
+@@ -61,22 +69,10 @@ const folderParent = computed(
+ 
+ const resetDialog = () => (dialog.value = '')
+ 
+-function addToList(data, file_type) {
++function addToList() {
+   resetDialog()
+-  if (!props.list) return
+-  const now = Date()
+-  data = {
+-    ...data,
+-    modified: now,
+-    file_type,
+-    share_count: 0,
+-    read: 1,
+-    write: 1,
+-    share: 1,
+-    comment: 1,
+-    relativeModified: useTimeAgo(now),
+-  }
+-  props.list.data.push(data)
++  // The server supplies actual permissions and Mandant policy for the new row.
++  props.list?.fetch?.(props.list.params)
+ }
+ 
+ function removeFromList(entities) {
 diff --git a/frontend/src/apps/drive/components/Navbar.vue b/frontend/src/apps/drive/components/Navbar.vue
-index ad41a07b8..d22f395b5 100644
+index ad41a07b8..3d70b126c 100644
 --- a/frontend/src/apps/drive/components/Navbar.vue
 +++ b/frontend/src/apps/drive/components/Navbar.vue
-@@ -67,6 +67,7 @@ import emitter from '@/apps/drive/emitter'
+@@ -2,7 +2,7 @@
+   <nav id="navbar" ondragstart="return false;" ondrop="return false;"
+     class="sticky top-0 z-20 bg-surface-base border-b px-5 py-2.5 h-12 shrink-0 flex justify-between">
+     <slot name="breadcrumbs">
+-      <EditableBreadcrumbs :items="breadcrumbItems" :entity="rootEntity || null"
++      <EditableBreadcrumbs :items="breadcrumbItems" :entity="$route.name === 'drive-Home' ? null : rootEntity || null"
+         class="select-none truncate max-w-[80%]" />
+     </slot>
+ 
+@@ -22,7 +22,7 @@
+         <Button class="hidden md:block" variant="solid" label="Try out Drive"
+           @click="open('https://frappecloud.com/dashboard/signup?product=drive')" />
+       </template>
+-      <Dropdown v-else-if="defaultActions" :options="defaultActions" align="end" :button="{
++      <Dropdown v-else-if="defaultActions && $route.name !== 'drive-Home'" :options="defaultActions" align="end" :button="{
+         variant: 'ghost',
+         icon: LucideMoreHorizontal,
+         label: 'Entity actions',
+@@ -32,8 +32,7 @@
+         isLoggedIn &&
+         // Nothing of yours to create into on Home's shared tab
+         !($route.name === 'drive-Home' && shareView) &&
+-        // Assume upload to remove flash
+-        (!props.rootResource?.data || !!props.rootResource.data.upload)
++        canAct(props.rootResource?.loading ? null : props.rootResource?.data, 'upload')
+       " :button="{
+           variant: 'solid',
+           id: 'create-button',
+@@ -53,8 +52,14 @@
+     </div>
+     <EntityDialogs v-model="entityDialog" :resource="props.rootResource" :entities="dialogEntities" />
+   </nav>
++  <div v-if="rootEntity?.mandant_policy" class="flex flex-wrap items-center gap-2 px-5 py-2 text-p-sm text-ink-gray-6 bg-surface-gray-1" data-testid="mandant-access-notice">
++    <span>{{ __('Access is managed through the customer in ERP') }}</span>
++    <Button v-if="rootEntity.mandant?.customer_url" variant="ghost" :label="__('Open customer in ERP')"
++      @click="open(rootEntity.mandant.customer_url)" />
++  </div>
+ </template>
+ <script setup>
++import { canAct, canActSelection } from '@/apps/drive/utils/actionPolicy'
+ import EntityDialogs from '@/apps/drive/components/EntityDialogs.vue'
+ import { Button, Dropdown } from 'frappe-ui'
+ import EditableBreadcrumbs from '@/apps/drive/components/EditableBreadcrumbs.vue'
+@@ -67,6 +72,7 @@ import emitter from '@/apps/drive/emitter'
  import { useEmitter } from '@/apps/drive/utils/useEmitter'
  import { ref, computed, inject, h } from 'vue'
  import { entitiesDownload } from '@/apps/drive/utils/download'
@@ -433,7 +1050,7 @@ index ad41a07b8..d22f395b5 100644
  import { getRecents, getTrash, getFavourites, toggleFav, rootInfo } from '@/apps/drive/resources/files'
  import { apps } from '@/apps/drive/resources/permissions'
  import { useRoute } from 'vue-router'
-@@ -75,7 +76,6 @@ import {
+@@ -75,7 +81,6 @@ import {
    dynamicList,
    isManaged,
    isAttachmentRef,
@@ -441,7 +1058,54 @@ index ad41a07b8..d22f395b5 100644
    openEntity,
  } from '@/apps/drive/utils/files'
  import { getFileLink } from '@/apps/drive/ui/drive/js/utils'
-@@ -224,9 +224,7 @@ const defaultActions = computed(() => {
+@@ -138,7 +143,7 @@ const listDialog = inject('listDialog', null)
+ // standalone entity pages (e.g. File.vue), where removal just navigates away.
+ const removeFromList = inject('removeFromList', null)
+ const entityDialog = ref('')
+-const rootEntity = computed(() => props.rootResource?.data?.file_name && props.rootResource?.data)
++const rootEntity = computed(() => !props.rootResource?.loading && props.rootResource?.data?.file_name && props.rootResource?.data)
+ // The shared root is readable by everyone by definition, so the marker there
+ // says nothing - it's only news on a folder that could have been restricted.
+ const generalAccess = computed(() =>
+@@ -155,16 +160,21 @@ function openListDialog(type) {
+ }
+ 
+ function openEntityDialog(type) {
++  const action = { s: 'share', m: 'move' }[type]
++  if (action && !canActSelection(dialogEntities.value, action)) return
+   entityDialog.value = type
+ }
+ 
+ function routeDialog(type) {
++  const action = { s: 'share', m: 'move' }[type]
++  if (action && !canActSelection(dialogEntities.value, action)) return
+   if (listDialog) openListDialog(type)
+   else openEntityDialog(type)
+ }
+ 
+ function removeCurrentEntities() {
+   const entities = dialogEntities.value
++  if (!canActSelection(entities, 'trash')) return
+   confirmRemove(entities, {
+     onSuccess: () => {
+       removeFromList?.(entities)
+@@ -185,12 +195,12 @@ useEmitter('share', () => routeDialog('s'))
+ // breadcrumb on an entity page.
+ useEmitter('rename', () => {
+   const target = dialogEntities.value[0]
+-  if (target) startRename(target.name)
++  if (canAct(target, 'rename')) startRename(target.name)
+ })
+ useEmitter('remove', removeCurrentEntities)
+ useEmitter('move', () => routeDialog('m'))
+-useEmitter('newFolder', () => openListDialog('f'))
+-useEmitter('newLink', () => openListDialog('l'))
++useEmitter('newFolder', () => canAct(rootEntity.value, 'create_folder') && openListDialog('f'))
++useEmitter('newLink', () => canAct(rootEntity.value, 'create_link') && openListDialog('l'))
+ 
+ const defaultActions = computed(() => {
+   if (!rootEntity.value?.file_name) return
+@@ -224,9 +234,7 @@ const defaultActions = computed(() => {
          {
            label: __('Download'),
            icon: LucideDownload,
@@ -452,11 +1116,199 @@ index ad41a07b8..d22f395b5 100644
            onClick: () => entitiesDownload([rootEntity.value]),
          },
          {
+@@ -249,19 +257,19 @@ const defaultActions = computed(() => {
+           label: __('Share'),
+           icon: LucideShare2,
+           onClick: () => openEntityDialog('s'),
+-          isEnabled: () => rootEntity.value.share && isManaged(rootEntity.value),
++          isEnabled: () => canAct(rootEntity.value, 'share') && isManaged(rootEntity.value),
+         },
+         {
+           label: __('Rename'),
+           icon: LucideSquarePen,
+-          onClick: () => startRename(rootEntity.value.name),
+-          isEnabled: () => rootEntity.value.write && isManaged(rootEntity.value),
++          onClick: () => canAct(rootEntity.value, 'rename') && startRename(rootEntity.value.name),
++          isEnabled: () => canAct(rootEntity.value, 'rename') && isManaged(rootEntity.value),
+         },
+         {
+           label: __('Move'),
+           icon: LucideArrowLeftRight,
+           onClick: () => openEntityDialog('m'),
+-          isEnabled: () => rootEntity.value.write && isManaged(rootEntity.value),
++          isEnabled: () => canAct(rootEntity.value, 'move') && isManaged(rootEntity.value),
+         },
+         {
+           label: __('Favourite'),
+@@ -296,7 +304,7 @@ const defaultActions = computed(() => {
+           label: __('Delete'),
+           icon: LucideTrash,
+           onClick: removeCurrentEntities,
+-          isEnabled: () => rootEntity.value.write,
++          isEnabled: () => canAct(rootEntity.value, 'trash'),
+           theme: 'red',
+         },
+       ],
+@@ -339,34 +347,37 @@ const button = computed(() => possibleButtons.find((k) => k.route == route.name)
+ 
+ const newEntityOptions = computed(() => [
+   {
+-    group: 'Create',
++    group: rootEntity.value?.mandant_policy ? __('Folders and HTTP(S) links') : 'Create',
+     options: dynamicList([
+       {
+         label: 'Document',
+         icon: LucideFilePlus2,
+-        onClick: () => newExternal('Document'),
++        onClick: () => canAct(rootEntity.value, 'create_native') && newExternal('Document'),
++        cond: canAct(rootEntity.value, 'create_native'),
+       },
+       {
+         label: 'Presentation',
+         icon: LucideGalleryVerticalEnd,
+-        onClick: () => newExternal('Presentation'),
+-        cond: isPrivate.value && apps.data?.find?.((k) => k.name === 'slides'),
++        onClick: () => canAct(rootEntity.value, 'create_native') && newExternal('Presentation'),
++        cond: canAct(rootEntity.value, 'create_native') && isPrivate.value && apps.data?.find?.((k) => k.name === 'slides'),
+       },
+       {
+         label: 'Spreadsheet',
+         icon: LucideSheet,
+-        onClick: () => newExternal('Spreadsheet'),
+-        cond: isPrivate.value && apps.data?.find?.((k) => k.name === 'sheets'),
++        onClick: () => canAct(rootEntity.value, 'create_native') && newExternal('Spreadsheet'),
++        cond: canAct(rootEntity.value, 'create_native') && isPrivate.value && apps.data?.find?.((k) => k.name === 'sheets'),
+       },
+       {
+         label: 'Folder',
+         icon: LucideFolderPlus,
+-        onClick: () => openListDialog('f'),
++        onClick: () => canAct(rootEntity.value, 'create_folder') && openListDialog('f'),
++        cond: canAct(rootEntity.value, 'create_folder'),
+       },
+       {
+         label: 'Link',
+         icon: LucideLink,
+-        onClick: () => openListDialog('l'),
++        onClick: () => canAct(rootEntity.value, 'create_link') && openListDialog('l'),
++        cond: canAct(rootEntity.value, 'create_link'),
+       },
+     ]),
+   },
+@@ -376,12 +387,12 @@ const newEntityOptions = computed(() => [
+       {
+         label: 'Upload File',
+         icon: LucideFileUp,
+-        onClick: () => emitter.emit('uploadFile'),
++        onClick: () => canAct(rootEntity.value, 'upload') && emitter.emit('uploadFile'),
+       },
+       {
+         label: 'Upload Folder',
+         icon: LucideFolderUp,
+-        onClick: () => emitter.emit('uploadFolder'),
++        onClick: () => canAct(rootEntity.value, 'upload') && emitter.emit('uploadFolder'),
+       },
+     ],
+   },
+diff --git a/frontend/src/apps/drive/components/NewFolderDialog.vue b/frontend/src/apps/drive/components/NewFolderDialog.vue
+index 5d3fe2255..5402f6126 100644
+--- a/frontend/src/apps/drive/components/NewFolderDialog.vue
++++ b/frontend/src/apps/drive/components/NewFolderDialog.vue
+@@ -3,7 +3,7 @@
+     {
+       label: 'Create',
+       variant: 'solid',
+-      disabled: folderName.length === 0,
++      disabled: !canAct(parentEntity, 'create_folder') || folderName.length === 0,
+       loading: createFolder.loading,
+       onClick: submit,
+     },
+@@ -21,11 +21,14 @@
+ </template>
+ 
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import { ref } from 'vue'
+ import { Dialog, createResource, FormControl } from 'frappe-ui'
+ 
+ const props = defineProps({
+   parent: String,
++  parentEntity: Object,
+ })
+ const emit = defineEmits(['success'])
+ 
+@@ -52,5 +55,5 @@ const createFolder = createResource({
+     emit('success', data)
+   },
+ })
+-const submit = () => createFolder.submit(folderName.value.trim())
++const submit = () => canAct(props.parentEntity, 'create_folder') && createFolder.submit(folderName.value.trim())
+ </script>
+diff --git a/frontend/src/apps/drive/components/NewLinkDialog.vue b/frontend/src/apps/drive/components/NewLinkDialog.vue
+index e7cd9c754..c57272e22 100644
+--- a/frontend/src/apps/drive/components/NewLinkDialog.vue
++++ b/frontend/src/apps/drive/components/NewLinkDialog.vue
+@@ -3,14 +3,14 @@
+     {
+       label: 'Create',
+       variant: 'solid',
+-      disabled: !file_name.trim() || !link.trim() || createLink.loading,
++      disabled: !canAct(parentEntity, 'create_link') || !file_name.trim() || !link.trim() || createLink.loading,
+       loading: createLink.loading,
+-      onClick: createLink.submit,
++      onClick: submit,
+     },
+   ]" @close="dialogType = ''">
+     <div class="flex flex-col gap-4">
+       <FormControl v-model="file_name" autofocus label="Link name" type="text" @keydown="createLink.error = null" />
+-      <FormControl v-model="link" label="URL" type="url" @keydown.enter="createLink.submit"
++      <FormControl v-model="link" label="URL" type="url" @keydown.enter="submit"
+         @keydown="createLink.error = null" />
+     </div>
+     <ErrorMessage v-if="createLink.error" class="pt-4" :message="createLink.error" />
+@@ -18,11 +18,14 @@
+ </template>
+ 
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++
+ import { ref } from 'vue'
+ import { Dialog, createResource, FormControl, ErrorMessage } from 'frappe-ui'
+ 
+ const props = defineProps({
+   parent: String,
++  parentEntity: Object,
+ })
+ const emit = defineEmits(['success'])
+ 
+@@ -51,4 +54,11 @@ const createLink = createResource({
+     emit('success', data)
+   },
+ })
++const submit = () => {
++  if (!canAct(props.parentEntity, 'create_link')) return
++  if (props.parentEntity?.mandant_policy) {
++    try { if (!['http:', 'https:'].includes(new URL(link.value).protocol)) return } catch { return }
++  }
++  return createLink.submit()
++}
+ </script>
 diff --git a/frontend/src/apps/drive/components/Sidebar.vue b/frontend/src/apps/drive/components/Sidebar.vue
-index b8978a02e..b37d6cabf 100644
+index b8978a02e..eaf0b9133 100644
 --- a/frontend/src/apps/drive/components/Sidebar.vue
 +++ b/frontend/src/apps/drive/components/Sidebar.vue
-@@ -23,7 +23,7 @@ import { rootInfo } from '@/apps/drive/resources/files'
+@@ -14,6 +14,9 @@
+   <SettingsDialog v-model:open="showSettings" :suggested-tab="suggestedTab" />
+ </template>
+ <script setup>
++import { canMoveTo, resolveDragged } from '@/apps/drive/utils/actionPolicy'
++import { currentFolder } from '@/apps/drive/data/currentFolder'
++
+ import FrappeDriveLogo from '@/apps/drive/components/FrappeDriveLogo.vue'
+ 
+ import StorageBar from './StorageBar.vue'
+@@ -23,7 +26,7 @@ import { rootInfo } from '@/apps/drive/resources/files'
  import { dynamicList, isApple } from '@/apps/drive/utils/files'
  
  import { useCurrentUser, useSessionStore } from '@/boot/session'
@@ -465,7 +1317,7 @@ index b8978a02e..b37d6cabf 100644
  import { getRootSection } from '@/apps/drive/data/breadcrumbs'
  import { sidebarCollapsed } from '@/apps/drive/data/prefs'
  import LucideClock from '~icons/lucide/clock'
-@@ -138,7 +138,13 @@ const sidebarItems = computed(() => {
+@@ -138,7 +141,13 @@ const sidebarItems = computed(() => {
      route.name === routeName || first.name === routeName
    return dynamicList([
      {
@@ -480,7 +1332,7 @@ index b8978a02e..b37d6cabf 100644
          {
            label: __('Search'),
            icon: LucideSearch,
-@@ -152,16 +158,23 @@ const sidebarItems = computed(() => {
+@@ -152,16 +161,23 @@ const sidebarItems = computed(() => {
            isActive: active('drive-Inbox'),
            suffix: notifCount.data ? String(notifCount.data) : undefined,
          },
@@ -506,7 +1358,7 @@ index b8978a02e..b37d6cabf 100644
          {
            label: 'Recents',
            to: { name: 'drive-Recents' },
-@@ -193,7 +206,7 @@ const sidebarItems = computed(() => {
+@@ -193,7 +209,7 @@ const sidebarItems = computed(() => {
            icon: LucideTrash,
            isActive: active('drive-Trash'),
          },
@@ -515,11 +1367,29 @@ index b8978a02e..b37d6cabf 100644
      },
      {
        label: 'Browse',
+@@ -237,12 +253,13 @@ const handleDrop = (e, space) => {
+     const single = e.dataTransfer.getData('application/x-filename')
+     if (single) names = [single]
+   }
+-  if (!names.length) return
++  const entities = resolveDragged(names, currentFolder.value.entities)
++  if (!entities.length) return
+   const clearFromList = () =>
+     names.forEach((name) => emitter.emit('remove-file-ui', name))
+   if (space.label === 'Trash') {
+     emitter.emit('remove-file', names)
+-  } else if (space.label === 'Home') {
++  } else if (space.label === 'Home' && canMoveTo(entities, { name: '__home__', is_folder: 1, upload: 1 })) {
+     move.submit({ entity_names: names }, { onSuccess: clearFromList })
+   }
+ }
 diff --git a/frontend/src/apps/drive/data/breadcrumbs.ts b/frontend/src/apps/drive/data/breadcrumbs.ts
-index 6097d5c0b..883bd034c 100644
+index 6097d5c0b..ee2e8e69a 100644
 --- a/frontend/src/apps/drive/data/breadcrumbs.ts
 +++ b/frontend/src/apps/drive/data/breadcrumbs.ts
-@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
+@@ -1,7 +1,9 @@
++import { canAct } from '@/apps/drive/utils/actionPolicy'
+ import { computed, ref } from 'vue'
  import emitter from '@/apps/drive/emitter'
  import router from '@/apps/drive/router'
  import { rootInfo } from '@/apps/drive/resources/files'
@@ -527,7 +1397,7 @@ index 6097d5c0b..883bd034c 100644
  import { shareView } from '@/apps/drive/data/prefs'
  import { useSessionStore } from '@/boot/session'
  
-@@ -92,6 +93,8 @@ export function isHomeContext() {
+@@ -92,6 +94,8 @@ export function isHomeContext() {
  
  /** Build navbar crumbs from entity API payload — pure, no side effects. */
  function buildBreadCrumbs(entity: Record<string, unknown>) {
@@ -536,6 +1406,176 @@ index 6097d5c0b..883bd034c 100644
    let breadcrumbs = [
      ...((entity.breadcrumbs as Array<Record<string, unknown>>) || []),
    ]
+@@ -167,7 +171,7 @@ function buildBreadCrumbs(entity: Record<string, unknown>) {
+     res.push({
+       label: folder.file_name,
+       name: folder.name,
+-      onClick: final ? () => entity.write && emitter.emit('rename') : undefined,
++      onClick: final ? () => canAct(entity, 'rename') && emitter.emit('rename') : undefined,
+       route: final
+         ? null
+         : { name: 'drive-Folder', params: { entityName: folder.name } },
+diff --git a/frontend/src/apps/drive/data/currentFolder.ts b/frontend/src/apps/drive/data/currentFolder.ts
+index 687873ace..42b3a3c2f 100644
+--- a/frontend/src/apps/drive/data/currentFolder.ts
++++ b/frontend/src/apps/drive/data/currentFolder.ts
+@@ -1,6 +1,7 @@
+ import { ref } from 'vue'
+ 
+ type CurrentFolder = {
++  entity?: Record<string, any> | null
+   name: string
+   entities: Record<string, unknown>[]
+ }
+diff --git a/frontend/src/apps/drive/pages/DriveLayout.vue b/frontend/src/apps/drive/pages/DriveLayout.vue
+index d42cb8cd3..38189301b 100644
+--- a/frontend/src/apps/drive/pages/DriveLayout.vue
++++ b/frontend/src/apps/drive/pages/DriveLayout.vue
+@@ -39,6 +39,8 @@
+   </FrappeUIProvider>
+ </template>
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
++import { currentFolder } from '@/apps/drive/data/currentFolder'
+ import Sidebar from '@/apps/drive/components/Sidebar.vue'
+ import FDialogs from '@/apps/drive/components/FDialogs.vue'
+ import BottomBar from '@/apps/drive/components/BottomBar.vue'
+@@ -87,7 +89,8 @@ const unregisterPaletteGroups = root.registerPaletteGroups('drive-layout', () =>
+ 
+   if (
+     ['drive-Folder', 'drive-Home'].includes(String(route.name)) &&
+-    !(route.name === 'drive-Home' && shareView.value)
++    !(route.name === 'drive-Home' && shareView.value) &&
++    canAct(currentFolder.value.entity, 'upload')
+   ) {
+     commands.push(
+       {
+diff --git a/frontend/src/apps/drive/pages/File.test.ts b/frontend/src/apps/drive/pages/File.test.ts
+index 6a063baa5..cae54b0a2 100644
+--- a/frontend/src/apps/drive/pages/File.test.ts
++++ b/frontend/src/apps/drive/pages/File.test.ts
+@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
+   updateURLSlug: vi.fn(),
+ }))
+ 
++vi.mock('@/apps/drive/utils/useVerifiedEntity', () => ({ useVerifiedEntity: () => ({ data: null, error: null, loading: false, fetch: mocks.fileFetch }) }))
+ vi.mock('frappe-ui', () => ({
+   Button: defineComponent({ template: '<button />' }),
+   createResource: (options: { url: string }) =>
+diff --git a/frontend/src/apps/drive/pages/File.vue b/frontend/src/apps/drive/pages/File.vue
+index b32db3461..dc7f7adb2 100644
+--- a/frontend/src/apps/drive/pages/File.vue
++++ b/frontend/src/apps/drive/pages/File.vue
+@@ -36,6 +36,7 @@
+ </template>
+ 
+ <script setup>
++import { useVerifiedEntity } from '@/apps/drive/utils/useVerifiedEntity'
+ import { setActiveEntity } from '@/apps/drive/data/selection'
+ import {
+   pageBreadcrumbs,
+@@ -43,7 +44,7 @@ import {
+   clearCrumbEntity,
+ } from '@/apps/drive/data/breadcrumbs'
+ import Navbar from '@/apps/drive/components/Navbar.vue'
+-import { ref, computed, onMounted, onUnmounted } from 'vue'
++import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+ import { Button } from 'frappe-ui'
+ import FileRender from '@/apps/drive/components/FileRender.vue'
+ import FilePreviewSkeleton from '@/apps/drive/components/FileTypePreview/FilePreviewSkeleton.vue'
+@@ -123,7 +124,7 @@ const trackVisit = createResource({
+   url: 'suite.drive.api.files.track_visit',
+ })
+ 
+-const file = createResource({
++const file = useVerifiedEntity({
+   url: 'suite.drive.api.permissions.get_entity_with_permissions',
+   params: { entity_name: props.entityName },
+   transform(entity) {
+@@ -138,6 +139,7 @@ function scrollEntity(negative = false) {
+   if (currentEntity.value) fetchFile(currentEntity.value.name)
+ }
+ 
++watch(() => props.entityName, (name) => file.fetch({ entity_name: name }))
+ onMounted(() => {
+   fetchFile(props.entityName)
+ })
+diff --git a/frontend/src/apps/drive/pages/Folder.vue b/frontend/src/apps/drive/pages/Folder.vue
+index b64926d1b..18f5eac2f 100644
+--- a/frontend/src/apps/drive/pages/Folder.vue
++++ b/frontend/src/apps/drive/pages/Folder.vue
+@@ -11,6 +11,7 @@
+ </template>
+ 
+ <script setup>
++import { useVerifiedEntity } from '@/apps/drive/utils/useVerifiedEntity'
+ import GenericPage from '@/apps/drive/components/GenericPage.vue'
+ import { watch, computed, onUnmounted } from 'vue'
+ import { createResource } from 'frappe-ui'
+@@ -28,7 +29,7 @@ const props = defineProps({
+ })
+ watch(
+   () => props.entityName,
+-  (name) => setCurrentFolder({ name: name || '' }),
++  (name) => setCurrentFolder({ name: name || '', entity: null }),
+   { immediate: true },
+ )
+ 
+@@ -54,7 +55,7 @@ onUnmounted(() => clearCrumbEntity(props.entityName))
+ 
+ const entityName = computed(() => props.entityName)
+ /** Permissions + metadata for the folder in the URL — not global state. */
+-const folder = createResource({
++const folder = useVerifiedEntity({
+   url: 'suite.drive.api.permissions.get_entity_with_permissions',
+   transform(entity) {
+     return prettyData([entity])[0]
+diff --git a/frontend/src/apps/drive/pages/Personal.vue b/frontend/src/apps/drive/pages/Personal.vue
+index 6b4851dd5..d7f823103 100644
+--- a/frontend/src/apps/drive/pages/Personal.vue
++++ b/frontend/src/apps/drive/pages/Personal.vue
+@@ -10,16 +10,26 @@
+       title: 'No files yet',
+       description: 'Upload to get started!',
+     }
+-    " :verify="!shareView && {
+-          data: {
+-            write: 1,
+-            upload: 1,
+-          },
+-        }
+-        " />
++    " :verify="!shareView ? home : null" />
+ </template>
+ 
+ <script setup>
++import { watch, onBeforeUnmount } from 'vue'
++import { rootInfo } from '@/apps/drive/resources/files'
++import { useSessionStore } from '@/boot/session'
++import { useVerifiedEntity } from '@/apps/drive/utils/useVerifiedEntity'
++const session = useSessionStore()
++const home = useVerifiedEntity()
++let epoch = 0
++async function loadHome() {
++  const current = ++epoch
++  home.invalidate()
++  const roots = await rootInfo.fetch()
++  if (current !== epoch) return
++  const name = roots?.home || rootInfo.data?.home
++  if (name) home.fetch({ entity_name: name })
++}
++watch(() => [session.user, session.isLoggedIn], loadHome, { immediate: true, flush: 'sync' })
+ import GenericPage from '@/apps/drive/components/GenericPage.vue'
+ import { getPersonal, getShared } from '@/apps/drive/resources/files'
+ import { shareView } from '@/apps/drive/data/prefs'
+@@ -27,5 +37,6 @@ import { setCurrentFolder } from '@/apps/drive/data/currentFolder'
+ import LucideHome from '~icons/lucide/home'
+ import LucideUsers from '~icons/lucide/users'
+ 
+-setCurrentFolder({ name: '' })
++setCurrentFolder({ name: '', entity: null })
++onBeforeUnmount(() => epoch++)
+ </script>
 diff --git a/frontend/src/apps/drive/routes.ts b/frontend/src/apps/drive/routes.ts
 index f05aaab75..f594279d9 100644
 --- a/frontend/src/apps/drive/routes.ts
@@ -554,10 +1594,14 @@ index f05aaab75..f594279d9 100644
          path: 'inbox',
          name: 'drive-Inbox',
 diff --git a/frontend/src/apps/drive/runtime.ts b/frontend/src/apps/drive/runtime.ts
-index 09f3a1edf..0f2a22368 100644
+index 09f3a1edf..170f06b2e 100644
 --- a/frontend/src/apps/drive/runtime.ts
 +++ b/frontend/src/apps/drive/runtime.ts
-@@ -4,15 +4,18 @@ import { createResource } from 'frappe-ui'
+@@ -1,23 +1,28 @@
+ import type { RouteLocationNormalized } from 'vue-router'
+ import { createResource } from 'frappe-ui'
+ 
++import { setCurrentFolder } from '@/apps/drive/data/currentFolder'
  import { setActiveEntity } from '@/apps/drive/data/selection'
  import { setupTheme } from '@/utils/setupTheme'
  
@@ -579,6 +1623,514 @@ index 09f3a1edf..0f2a22368 100644
    }
  }
  
+ export const beforeEach = (_to: RouteLocationNormalized) => {
+   setActiveEntity(null)
++  setCurrentFolder({ entity: null })
+ }
+ 
+ export function afterEach(to: { fullPath: string }) {
+diff --git a/frontend/src/apps/drive/ui/drive/components/MoveDialog.vue b/frontend/src/apps/drive/ui/drive/components/MoveDialog.vue
+index cb516d613..6b783ee1d 100644
+--- a/frontend/src/apps/drive/ui/drive/components/MoveDialog.vue
++++ b/frontend/src/apps/drive/ui/drive/components/MoveDialog.vue
+@@ -1,362 +1,93 @@
+ <template>
+-  <Dialog v-model:open="open" size="lg" @close="dialogType = ''">
+-    <template #default>
+-      <div>
+-        <div class="text-xl-semibold flex text-nowrap overflow-hidden pr-8 mb-4">
+-          <template v-if="props.entities.length > 1">
+-            Moving {{ props.entities.length }} items
+-          </template>
+-          <template v-else>
+-            Moving "
+-            <div class="truncate max-w-[80%]">
+-              {{ props.entities[0].file_name }}
+-            </div>
+-            "
+-          </template>
+-        </div>
+-        <Tabs v-model="activeTab" :tabs="tabs">
+-          <template #tab-panel>
+-            <div class="px-1 py-1 h-64 overflow-auto flex flex-col">
+-              <Tree v-if="tree.children.length" :nodes="tree.children" node-key="value" guides="none">
+-                <template #item="{ node, expanded, hasChildren, toggle }">
+-                  <div class="group grow min-w-0 flex items-center gap-2 rounded-4 px-1 -mx-1"
+-                    :class="entities[0].folder === node.value
+-                      ? 'cursor-not-allowed'
+-                      : 'cursor-pointer hover:bg-surface-gray-2'"
+-                    @click.stop="openEntity(node)">
+-                    <button v-if="hasChildren" class="flex shrink-0 text-ink-gray-5 hover:text-ink-gray-8"
+-                      @click.stop="
+-                        () => {
+-                          if (!expanded)
+-                            node.children.forEach((k) =>
+-                              fetchFolderContents(k, { entity_name: k.value }, true),
+-                            )
+-                          toggle()
+-                        }
+-                      ">
+-                      <LucideChevronDown v-if="expanded" class="size-3.5" />
+-                      <LucideChevronRight v-else class="size-3.5" />
+-                    </button>
+-                    <span v-else class="w-3.5 shrink-0" />
+-                    <LucideFolder class="size-4 shrink-0 text-ink-gray-5" />
+-                    <div v-if="node.value === null" class="grow">
+-                      <Input v-model="node.label" autofocus type="text" input-class="!h-6" @click.stop
+-                        @keydown.enter="openEntity(node)" />
+-                    </div>
+-                    <span v-else class="grow truncate text-base"
+-                      :class="selected === node.value ? 'font-medium text-ink-gray-9' : 'text-ink-gray-8'">{{
+-                        node.label }}<span v-if="entities[0].folder === node.value" class="text-ink-gray-5 font-normal">
+-                        (current)</span></span>
+-                    <Button v-if="entities[0].folder !== node.value"
+-                      class="shrink-0 opacity-0 group-hover:opacity-100" variant="ghost" @click.stop="
+-                        () => {
+-                          node.children.push({
+-                            parent: node.value,
+-                            value: null,
+-                            label: 'New folder',
+-                          })
+-                          if (!expanded) toggle()
+-                        }
+-                      ">
+-                      <template #icon><LucideFolderPlus class="size-4" /></template>
+-                    </Button>
+-                    <LucideCheck v-if="selected === node.value" class="shrink-0 size-4 text-ink-gray-6" />
+-                  </div>
+-                </template>
+-              </Tree>
+-              <div v-if="tree.loading" class="space-y-1 py-1">
+-                <div v-for="i in 4" :key="i" class="flex items-center gap-1.5 h-7 px-1">
+-                  <Skeleton class="size-3.5 rounded-4 shrink-0" />
+-                  <Skeleton class="size-4 rounded-4 shrink-0" />
+-                  <Skeleton class="h-3 rounded-4" :style="{ width: folderWidths[(i - 1) % folderWidths.length] }" />
+-                </div>
+-              </div>
+-              <div v-else-if="!tree.children.length" class="flex justify-center flex-1">
+-                <div class="self-center text-sm text-ink-gray-6 flex flex-col gap-2">
+-                  <LucideFolderClosed class="size-5 self-center" />
+-                  No folders found
+-                </div>
+-              </div>
+-            </div>
+-          </template>
+-        </Tabs>
+-        <div class="flex items-center justify-between border-t border-outline-gray-1 pt-4">
+-          <div class="flex items-center my-auto justify-start">
+-            <p class="text-sm text-ink-gray-5 pr-1 shrink-0">Moving to:</p>
+-            <Dropdown v-if="dropDownBreadcrumbs.length" class="h-7" :options="dropDownBreadcrumbs">
+-              <Button variant="ghost">
+-                <LucideEllipsis class="size-3.5" />
+-              </Button>
+-            </Dropdown>
+-            <span v-if="dropDownBreadcrumbs.length" class="text-ink-gray-5 mx-0.5">
+-              {{ '/' }}
+-            </span>
+-            <div class="flex w-48 overflow-auto">
+-              <div v-for="(crumb, index) in slicedBreadcrumbs" :key="index" class="flex items-center">
+-                <span v-if="breadcrumbs.length > 1 && index > 0" class="text-ink-gray-5 mx-0.5">
+-                  {{ '/' }}
+-                </span>
+-                <Button
+-                  variant="ghost"
+-                  size="sm"
+-                  :label="crumb.file_name"
+-                  :tooltip="crumb.file_name"
+-                  class="truncate max-w-20"
+-                  :class="index === slicedBreadcrumbs.length - 1
+-                    ? 'text-ink-gray-9 font-medium'
+-                    : 'text-ink-gray-5'
+-                  "
+-                  @click="closeEntity(crumb.name)"
+-                />
+-              </div>
+-            </div>
+-          </div>
+-          <Button variant="solid" class="ml-auto" size="sm"
+-            :loading="move.loading" @click="moveFile">
+-            <template #prefix>
+-              <LucideArrowLeftRight class="size-4" />
+-            </template>
+-            Move
+-          </Button>
+-        </div>
+-      </div>
+-    </template>
++  <Dialog v-model:open="open" size="lg" :title="__('Move items')" @close="dialogType = ''">
++    <p v-if="scope" class="mb-3 text-p-sm text-ink-gray-6">{{ __('Files can only be moved within the same Mandant') }}</p>
++    <Tabs v-if="!scope" v-model="activeTab" :tabs="tabs" />
++    <div class="my-3 flex flex-wrap items-center gap-1">
++      <Button v-for="crumb in breadcrumbs" :key="crumb.name" variant="ghost" :label="crumb.file_name"
++        :disabled="state.loading || state.moving" @click="state.load(crumb.name)" />
++    </div>
++    <div class="min-h-48 max-h-64 overflow-auto flex flex-col gap-1">
++      <p v-if="state.loading" class="text-p-sm text-ink-gray-5">{{ __('Loading...') }}</p>
++      <Button v-for="folder in state.children" :key="folder.name" variant="ghost" class="justify-start"
++        icon-left="lucide-folder" :label="folder.file_name" :disabled="state.moving" @click="state.load(folder.name)" />
++      <p v-if="!state.loading && !state.children.length" class="text-p-sm text-ink-gray-5">{{ __('No folders found') }}</p>
++    </div>
++    <div v-if="canAct(state.target, 'create_folder')" class="flex gap-2 my-3">
++      <TextInput v-model="folderName" :placeholder="__('New folder')" :disabled="state.moving || creating"
++        @keydown.enter="createFolder" />
++      <Button :label="__('Create folder')" :disabled="!folderName.trim() || state.moving || creating" @click="createFolder" />
++    </div>
++    <p v-if="state.error || creationError" role="alert" class="my-3 text-p-sm text-ink-red-7">{{ __(state.error || creationError) }}</p>
++    <div class="flex justify-between items-center gap-3 pt-3 border-t border-outline-gray-1">
++      <span class="text-p-sm text-ink-gray-6">{{ __('Moving to:') }} {{ state.target?.file_name }}</span>
++      <Button variant="solid" :label="__('Move')" :disabled="!state.canMove" :loading="state.moving" @click="submit" />
++    </div>
+   </Dialog>
+ </template>
+ <script setup>
+-import { watch, computed, h, ref, reactive } from 'vue'
+-
+-import {
+-  createResource,
+-  Dialog,
+-  Button,
+-  Tabs,
+-  Dropdown,
+-  Tree,
+-   TextInput as Input,
+-  Skeleton,
+-  toast,
+-} from 'frappe-ui'
+-import { move, rootInfo } from '../js/resources'
+-
+-import LucideBuilding2 from '~icons/lucide/building-2'
+-import LucideCheck from '~icons/lucide/check'
+-import LucideChevronDown from '~icons/lucide/chevron-down'
+-import LucideChevronRight from '~icons/lucide/chevron-right'
+-import LucideFolder from '~icons/lucide/folder'
+-import LucideFolderPlus from '~icons/lucide/folder-plus'
+-import LucideFolderClosed from '~icons/lucide/folder-closed'
+-import LucideHome from '~icons/lucide/home'
+-import LucideArrowLeftRight from '~icons/lucide/arrow-left-right'
+-import LucideEllipsis from '~icons/lucide/ellipsis'
+-
+-const folderWidths = ['45%', '60%', '38%', '52%']
+-
+-const props = defineProps({
+-  entities: {
+-    type: Object,
+-    required: false,
+-    default: null,
+-  },
+-})
++import { computed, onBeforeUnmount, ref, watch } from 'vue'
++import { Dialog, Button, Tabs, TextInput, frappeRequest } from 'frappe-ui'
++import { rootInfo } from '../js/resources'
++import { useSessionStore } from '@/boot/session'
++import { canAct, canActSelection, moveScope } from '@/apps/drive/utils/actionPolicy'
++import { moveDestination } from '@/apps/drive/utils/moveDestination'
++const props = defineProps({ entities: { type: Array, default: () => [] } })
+ const emit = defineEmits(['success', 'complete'])
+-
+ const dialogType = defineModel()
+ const open = ref(true)
+-
++const session = useSessionStore()
++const scope = computed(() => moveScope(props.entities))
+ const activeTab = ref('home')
+-rootInfo.fetch()
+-
+-// Reopen at the folder the user last moved into this session, so repeated moves
+-// to the same place don't start from root each time.
+-const LAST_MOVE_KEY = 'drive:last-move-dest'
+-function lastMoveParent() {
+-  try {
+-    const saved = JSON.parse(sessionStorage.getItem(LAST_MOVE_KEY) || 'null')
+-    if (!saved || typeof saved !== 'object') return ''
+-    return saved.parent || ''
+-  } catch {
+-    return ''
+-  }
++const tabs = computed(() => [{ label: __('Home'), value: 'home' }, { label: __('Site'), value: 'site' }])
++const call = async (method, params, write = false) => {
++  const response = await frappeRequest({ url: '/api/method/' + method, method: write ? 'POST' : 'GET', params })
++  return response?.message ?? response
+ }
+-const tree = reactive({
+-  name: '',
+-  label: 'Home',
+-  children: [],
+-  options: {
+-    isCollapsed: true,
+-  },
+-})
+-
+-// State variables
+-const selected = ref('')
+-const breadcrumbs = ref([{ name: '', file_name: 'Home' }])
+-
+-// iconLeft, not icon: `icon` makes an icon-only trigger and drops the label.
+-const tabs = computed(() => [
+-  { label: 'Home', value: 'home', iconLeft: h(LucideHome, { class: 'size-4' }) },
+-  { label: 'Site', value: 'site', iconLeft: h(LucideBuilding2, { class: 'size-4' }) },
+-])
+-
+-const folderContents = createResource({
+-  url: 'suite.drive.api.list.files',
+-  makeParams: (params) => ({
+-    ...params,
+-    file_kinds: '["Folder"]',
+-  }),
++const state = moveDestination(() => props.entities, {
++  detail: name => call('suite.drive.api.permissions.get_entity_with_permissions', { entity_name: name }),
++  list: (name, start) => call('suite.drive.api.list.files', { entity_name: name, file_kinds: '["Folder"]', paginated: 1, start, limit: 100 }),
++  create: (name, parent) => call('suite.drive.api.files.create_folder', { file_name: name, parent }, true),
++  move: (names, parent) => call('suite.drive.api.files.move', { entity_names: names, new_parent: parent }, true),
+ })
+-
+-const fetchFolderContents = (tree, params = {}, nested = false) => {
+-  folderContents.fetch(params, {
+-    onSuccess: (data) => {
+-      tree.children = []
+-      data.forEach((item) => {
+-        const node = reactive({
+-          ...item,
+-          label: item.file_name,
+-          value: item.name,
+-          children: [],
+-          expanded: false,
+-        })
+-        tree.children.push(node)
+-        if (!nested)
+-          fetchFolderContents(
+-            node,
+-            { ...params, entity_name: node.value },
+-            true,
+-          )
+-      })
+-      tree.loading = false
+-    },
+-  })
++const breadcrumbs = computed(() => state.target?.breadcrumbs || [])
++const storageKey = computed(() => `drive:last-move-dest:${encodeURIComponent(session.user || 'Guest')}:${scope.value || 'ordinary'}`)
++async function initialize(remember = true) {
++  if (!canActSelection(props.entities, 'move')) { state.invalidate(); return }
++  if (!scope.value && !rootInfo.data) await rootInfo.fetch()
++  const fallback = scope.value || (activeTab.value === 'site' ? rootInfo.data?.root : rootInfo.data?.home)
++  if (!fallback) return
++  let remembered
++  try { if (remember) remembered = JSON.parse(sessionStorage.getItem(storageKey.value) || 'null')?.parent } catch {}
++  await state.load(remembered || fallback)
++  if (!state.target && remembered) await state.load(fallback)
+ }
+-
+-const selectedPerms = createResource({
+-  url: 'suite.drive.api.permissions.get_entity_with_permissions',
+-  makeParams: () => ({
+-    entity_name: selected.value,
+-  }),
+-  onSuccess: (data) => {
+-    breadcrumbs.value = data.breadcrumbs.map((k) => ({
+-      ...k,
+-      file_name: k.name === rootInfo.data?.home ? 'Home' : k.file_name,
+-    }))
+-  },
+-  onError: () => {
+-    // Remembered folder is gone or inaccessible — fall back to the root.
+-    selected.value = ''
+-    breadcrumbs.value = [{ name: '', file_name: 'Home' }]
+-  },
+-})
+-
+-watch(
+-  activeTab,
+-  (newValue) => {
+-    selected.value = ''
+-    tree.loading = true
+-    tree.children = []
+-    if (newValue === 'home') {
+-      breadcrumbs.value = [{ name: '', file_name: 'Home' }]
+-      fetchFolderContents(tree)
+-    } else {
+-      breadcrumbs.value = [{ name: '', file_name: 'Site' }]
+-      fetchFolderContents(tree, { entity_name: rootInfo.data?.root })
+-    }
+-    // Re-applied on every tab switch, which resets `selected` above.
+-    const remembered = lastMoveParent()
+-    if (remembered) {
+-      selected.value = remembered
+-      selectedPerms.fetch()
+-    }
+-  },
+-  { immediate: true },
+-)
+-
+-// Breadcrumb logic
+-const slicedBreadcrumbs = computed(() => {
+-  if (breadcrumbs.value.length > 3) {
+-    return breadcrumbs.value.slice(-3)
+-  }
+-  return breadcrumbs.value
+-})
+-
+-const dropDownBreadcrumbs = computed(() => {
+-  const allExceptLastTwo = breadcrumbs.value.slice(0, -3)
+-  return allExceptLastTwo.map((item) => {
+-    return {
+-      ...item,
+-      icon: null,
+-      label: item.file_name,
+-      onClick: () => closeEntity(item.name),
+-    }
+-  })
+-})
+-
+-// New folder logic
+-const createdNode = ref(null)
+-const createFolder = createResource({
+-  url: 'suite.drive.api.files.create_folder',
+-  makeParams(params) {
+-    return params
+-  },
+-  validate(params) {
+-    if (!params?.file_name) return false
+-  },
+-  onSuccess(data) {
+-    createdNode.value.value = data.name
+-    createdNode.value.children = []
+-    selected.value = data.name
+-    selectedPerms.fetch()
+-    createdNode.value = null
+-  },
+-  onError() {
+-    toast.error('There is already a folder with this name here.')
+-  },
+-})
+-
+-// Selection logic
+-function openEntity(node) {
+-  if (props.entities[0].folder === node.value) return
+-  if (!node.value) {
+-    createdNode.value = node
+-    createFolder.fetch({
+-      file_name: node.label,
+-      parent: node.parent,
+-    })
+-  } else {
+-    selected.value = node.value
+-    selectedPerms.fetch({
+-      entity_name: selected.value,
+-    })
+-  }
+-}
+-
+-function closeEntity(name) {
+-  const index = breadcrumbs.value.findIndex((obj) => obj.name === name)
+-  if (breadcrumbs.value.length > 1 && index !== breadcrumbs.value.length - 1) {
+-    breadcrumbs.value = breadcrumbs.value.slice(0, index + 1)
+-    selected.value = breadcrumbs.value[breadcrumbs.value.length - 1].name
+-    folderContents.fetch({
+-      entity_name: selected.value,
+-    })
+-  }
++watch(activeTab, () => initialize(false))
++// Any login/logout, including the same account, closes and invalidates the dialog.
++watch(() => [session.user, session.isLoggedIn], () => { state.invalidate(); open.value = false; dialogType.value = '' }, { flush: 'sync' })
++watch(() => props.entities, () => {
++  if (!canActSelection(props.entities, 'move')) { state.invalidate(); open.value = false; dialogType.value = '' }
++}, { deep: true })
++const folderName = ref('')
++const creating = ref(false)
++const creationError = ref('')
++async function createFolder() {
++  if (!folderName.value.trim() || !canAct(state.target, 'create_folder') || creating.value) return
++  creating.value = true
++  creationError.value = ''
++  try { if (await state.createFolder(folderName.value)) folderName.value = '' }
++  finally { creating.value = false }
+ }
+-
+-const moveFile = async () => {
++async function submit() {
++  if (!await state.submit()) return
++  try { sessionStorage.setItem(storageKey.value, JSON.stringify({ parent: state.target.name })) } catch {}
+   emit('success')
+-  await move.submit({
+-    entity_names: props.entities.map((obj) => obj.name),
+-    new_parent: selected.value,
+-  })
+-  try {
+-    sessionStorage.setItem(
+-      LAST_MOVE_KEY,
+-      JSON.stringify({ parent: selected.value }),
+-    )
+-  } catch {
+-    // sessionStorage unavailable — non-fatal.
+-  }
+-  open.value = false
+   emit('complete')
++  open.value = false
++  dialogType.value = ''
+ }
++initialize()
++const refresh = () => { if (document.visibilityState !== 'hidden' && state.target) state.load(state.target.name) }
++window.addEventListener('focus', refresh)
++document.addEventListener('visibilitychange', refresh)
++onBeforeUnmount(() => { state.invalidate(); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) })
+ </script>
+diff --git a/frontend/src/apps/drive/ui/drive/components/ShareDialog.vue b/frontend/src/apps/drive/ui/drive/components/ShareDialog.vue
+index 6fef4e0a5..935f0b4e7 100644
+--- a/frontend/src/apps/drive/ui/drive/components/ShareDialog.vue
++++ b/frontend/src/apps/drive/ui/drive/components/ShareDialog.vue
+@@ -1,5 +1,5 @@
+ <template>
+-  <Dialog v-model:open="open" size="lg">
++  <Dialog v-if="canAct(file, 'share')" v-model:open="open" size="lg">
+     <template #title>
+       <div class="grid grid-cols-[minmax(0,1fr)] pr-3">
+         <div class="text-xl-semibold text-ink-gray-8 flex text-nowrap overflow-hidden">
+@@ -99,6 +99,7 @@
+   </Dialog>
+ </template>
+ <script setup>
++import { canAct } from '@/apps/drive/utils/actionPolicy'
+ import { ref, computed, watch, h } from 'vue'
+ import { useSessionStore } from '@/boot/session'
+ import {
+@@ -134,9 +135,11 @@ const props = defineProps({
+ })
+ const emit = defineEmits(['success'])
+ 
+-props.usersWithAccess.fetch({ entity: props.file.name })
+-props.users.fetch()
+-getUserGroups.fetch()
++if (canAct(props.file, 'share')) {
++  props.usersWithAccess.fetch({ entity: props.file.name })
++  props.users.fetch()
++  getUserGroups.fetch()
++}
+ 
+ const levelOptions = [
+   {
+@@ -206,6 +209,7 @@ createResource({
+   },
+ })
+ const updateGeneralAccess = (level, perms) => {
++  if (!canAct(props.file, 'share')) return
+   if (level !== 'restricted') {
+     props.updateAccess.submit({
+       entity_name: props.file.name,
+@@ -256,6 +260,7 @@ watch(
+ )
+ 
+ const inviteUsers = () => {
++  if (!canAct(props.file, 'share')) return
+   const access = getAccess(accessToAdd.value)
+   for (let user of usersToAdd.value) {
+     const r = {
+@@ -278,6 +283,7 @@ const inviteUsers = () => {
+ }
+ 
+ const updatePermissions = (user, val, entity_name, idx) => {
++  if (!canAct(props.file, 'share')) return
+   if (val === 'remove') {
+     props.usersWithAccess.data.splice(idx, 1)
+     return props.updateAccess.submit({
 diff --git a/frontend/src/apps/drive/ui/drive/js/utils.js b/frontend/src/apps/drive/ui/drive/js/utils.js
 index 28c53d540..f74ceb87c 100644
 --- a/frontend/src/apps/drive/ui/drive/js/utils.js
@@ -660,6 +2212,62 @@ index 28c53d540..f74ceb87c 100644
    }
 +  router.push(entityRoute(entity))
  }
+diff --git a/frontend/src/apps/drive/utils/confirmActions.js b/frontend/src/apps/drive/utils/confirmActions.js
+index 333bfa2ac..66d434ec8 100644
+--- a/frontend/src/apps/drive/utils/confirmActions.js
++++ b/frontend/src/apps/drive/utils/confirmActions.js
+@@ -1,3 +1,4 @@
++import { canActSelection } from '@/apps/drive/utils/actionPolicy'
+ import { dialog, call, toast } from 'frappe-ui'
+ import { useTimeAgo } from '@vueuse/core'
+ import { getTrash, toggleFav, clearRecent, clearTrash } from '@/apps/drive/resources/files.js'
+@@ -16,6 +17,7 @@ function entityNames(entities) {
+ }
+ 
+ export function confirmRestore(entities, { onSuccess } = {}) {
++  if (!canActSelection(entities, 'restore')) return
+   const label = itemString(entities)
+   dialog.confirm({
+     title: `Restore ${label}`,
+@@ -24,6 +26,7 @@ export function confirmRestore(entities, { onSuccess } = {}) {
+     }.`,
+     confirmLabel: 'Restore',
+     onConfirm: async () => {
++      if (!canActSelection(entities, 'restore')) return
+       await call('suite.drive.api.files.remove_or_restore', {
+         entity_names: entityNames(entities),
+       })
+@@ -36,6 +39,7 @@ export function confirmRestore(entities, { onSuccess } = {}) {
+ }
+ 
+ export function confirmRemove(entities, { onSuccess } = {}) {
++  if (!canActSelection(entities, 'trash')) return
+   const label = itemString(entities)
+   dialog.confirm({
+     title: `Move ${label} to Trash`,
+@@ -43,6 +47,7 @@ export function confirmRemove(entities, { onSuccess } = {}) {
+     confirmLabel: 'Move to Trash',
+     theme: 'red',
+     onConfirm: async () => {
++      if (!canActSelection(entities, 'trash')) return
+       await call('suite.drive.api.files.remove_or_restore', {
+         entity_names: entityNames(entities),
+       })
+@@ -66,12 +71,14 @@ export function confirmRemove(entities, { onSuccess } = {}) {
+ }
+ 
+ export function confirmDeleteForever(entities, { onSuccess } = {}) {
++  if (!canActSelection(entities, 'delete')) return
+   const label = itemString(entities)
+   dialog.danger({
+     title: `Delete ${label}`,
+     message: `${entityLabel(entities)} will be deleted — you can no longer access it. This is an irreversible action.`,
+     confirmLabel: 'Delete forever',
+     onConfirm: async () => {
++      if (!canActSelection(entities, 'delete')) return
+       await call('suite.drive.api.files.delete_entities', {
+         entity_names: entityNames(entities),
+       })
 diff --git a/frontend/src/apps/drive/utils/download.js b/frontend/src/apps/drive/utils/download.js
 index efd84845f..7d2071f7e 100644
 --- a/frontend/src/apps/drive/utils/download.js
@@ -751,17 +2359,18 @@ index efd84845f..7d2071f7e 100644
      timer = setTimeout(() => finish(reject, new Error('Timed out preparing download')), timeout)
    })
 diff --git a/frontend/src/apps/drive/utils/files.js b/frontend/src/apps/drive/utils/files.js
-index 7f6ae7128..b43c6cca1 100644
+index 7f6ae7128..db9adc451 100644
 --- a/frontend/src/apps/drive/utils/files.js
 +++ b/frontend/src/apps/drive/utils/files.js
-@@ -1,4 +1,6 @@
+@@ -1,4 +1,7 @@
++import { canAct } from '@/apps/drive/utils/actionPolicy'
  import router from '@/apps/drive/router'
 +import { entityRoute, folderRoute } from './navigation'
 +export { folderRoute } from './navigation'
  
  import '@/apps/drive/data/breadcrumbs'
  import { currentFolder } from '@/apps/drive/data/currentFolder'
-@@ -103,23 +105,6 @@ export function isVirtual(entity) {
+@@ -103,23 +106,6 @@ export function isVirtual(entity) {
    return entity?.kind === 'virtual'
  }
  
@@ -785,7 +2394,7 @@ index 7f6ae7128..b43c6cca1 100644
  export const openEntity = (entity, new_tab = false) => {
    if (isVirtual(entity)) return router.push(folderRoute(entity))
  
-@@ -136,43 +121,16 @@ export const openEntity = (entity, new_tab = false) => {
+@@ -136,43 +122,16 @@ export const openEntity = (entity, new_tab = false) => {
    if (new_tab) {
      return window.open(getFileLink(entity, false), '_blank')
    }
@@ -833,6 +2442,22 @@ index 7f6ae7128..b43c6cca1 100644
  }
  
  function trimCommonPrefix(a, b) {
+@@ -506,6 +465,7 @@ async function uploadImage(file, params) {
+ }
+ 
+ export const pasteObj = (e) => {
++  if (!canAct(currentFolder.value.entity, 'upload')) return
+   const clipboardItems = Array.from(e.clipboardData?.items || [])
+   if (clipboardItems.some((item) => item.type.includes('image'))) {
+     e.preventDefault()
+@@ -533,6 +493,7 @@ export const pasteObj = (e) => {
+ }
+ 
+ export const newExternal = async (type) => {
++  if (['drive-Home', 'drive-Folder'].includes(router.currentRoute.value.name) && !canAct(currentFolder.value.entity, 'create_native')) return
+   if (type === 'Presentation') {
+     router.push({
+       name: 'slides-editor-new',
 diff --git a/frontend/src/apps/drive/utils/openEntity.test.ts b/frontend/src/apps/drive/utils/openEntity.test.ts
 index 6d365b821..0cfe4e981 100644
 --- a/frontend/src/apps/drive/utils/openEntity.test.ts
@@ -873,6 +2498,32 @@ index 3d76c1db4..31b581f23 100644
    })
  }
  // passthrough: sonner's loading→success/error toast, updated in place by id
+diff --git a/frontend/src/apps/drive/utils/useInlineRename.js b/frontend/src/apps/drive/utils/useInlineRename.js
+index 0ed4db60a..90da4cce7 100644
+--- a/frontend/src/apps/drive/utils/useInlineRename.js
++++ b/frontend/src/apps/drive/utils/useInlineRename.js
+@@ -1,3 +1,4 @@
++import { canAct } from '@/apps/drive/utils/actionPolicy'
+ import { nextTick, ref } from 'vue'
+ import { renamingEntity, stopRename } from '@/apps/drive/data/selection'
+ import { rename } from '@/apps/drive/ui/drive/js/resources'
+@@ -51,7 +52,7 @@ export function useInlineRename(source) {
+ 
+   function start() {
+     const e = entity()
+-    if (!e) return
++    if (!canAct(e, 'rename')) { stopRename(); return }
+     draft.value = e.file_name || ''
+     openedAt = now()
+     // Focus + select once the input is in the DOM. Re-assert on a macrotask and
+@@ -84,6 +85,7 @@ export function useInlineRename(source) {
+   function submit() {
+     const e = entity()
+     if (!e || renamingEntity.value !== e.name) return
++    if (!canAct(e, 'rename')) { stopRename(); return }
+     const title = draft.value.trim()
+     stopRename()
+     if (!title || title === e.file_name) return
 diff --git a/frontend/src/boot/session.ts b/frontend/src/boot/session.ts
 index 974a08e14..20b399fc9 100644
 --- a/frontend/src/boot/session.ts
@@ -998,7 +2649,7 @@ index b00b05417..e835411bf 100644
 +        self.assertIsNone(unwrap(account.get_logged_in_user)())
 +        self.frappe.get_doc.assert_not_called()
 diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
-index 86a738764..e355b3877 100644
+index 86a738764..50e14b96a 100644
 --- a/suite/drive/api/files.py
 +++ b/suite/drive/api/files.py
 @@ -5,6 +5,7 @@ import re
@@ -1400,7 +3051,29 @@ index 86a738764..e355b3877 100644
  
  
  @frappe.whitelist()
-@@ -940,7 +943,7 @@ def search(query: str):
+@@ -852,7 +855,9 @@ def _add_presentation_thumbnails(rows):
+         if row.get("content_doctype") == "Presentation" and row.get("content_docname")
+     }
+     if not names:
+-        return rows
++        from suite.drive.utils.actions import add_action_policies
++
++        return add_action_policies(rows)
+     thumbnails = {
+         row.name: row.thumbnail
+         for row in frappe.get_all(
+@@ -864,7 +869,9 @@ def _add_presentation_thumbnails(rows):
+     for row in rows:
+         if row.get("content_doctype") == "Presentation":
+             row["thumbnail"] = thumbnails.get(row.get("content_docname"))
+-    return rows
++    from suite.drive.utils.actions import add_action_policies
++
++    return add_action_policies(rows)
+ 
+ 
+ SEARCH_QUERY = """
+@@ -940,7 +947,7 @@ def search(query: str):
          return _add_presentation_thumbnails(rows)
      except Exception as e:
          frappe.log_error(frappe.get_traceback(), "Frappe Drive Search Error")
@@ -1409,8 +3082,23 @@ index 86a738764..e355b3877 100644
  
  
  @frappe.whitelist(allow_guest=True)
+diff --git a/suite/drive/api/list.py b/suite/drive/api/list.py
+index 9a522e7c0..fa05c1b37 100644
+--- a/suite/drive/api/list.py
++++ b/suite/drive/api/list.py
+@@ -549,7 +549,9 @@ def _visible_rows(res, entity_name):
+         hide_storage_key(r)
+         r |= get_user_access(name)
+ 
+-    return [r for r in res if r["read"]]
++    from suite.drive.utils.actions import add_action_policies
++
++    return add_action_policies([r for r in res if r["read"]])
+ 
+ 
+ @frappe.whitelist()
 diff --git a/suite/drive/api/permissions.py b/suite/drive/api/permissions.py
-index 80b8eac84..1a17b5cad 100644
+index 80b8eac84..3d9ad88d4 100644
 --- a/suite/drive/api/permissions.py
 +++ b/suite/drive/api/permissions.py
 @@ -41,7 +41,32 @@ def get_user_access(entity: str | Document | frappe._dict):
@@ -1462,6 +3150,16 @@ index 80b8eac84..1a17b5cad 100644
      # General access marker: -2 public (link), -1 site users, 0 restricted.
      default = 0
      if get_user_access_for_user(entity, "Guest")["read"]:
+@@ -160,6 +194,9 @@ def get_entity_with_permissions(entity_name: str | None = None):
+         default = -1
+     return_obj["share_count"] = default
+ 
++    from suite.drive.utils.actions import add_action_policies
++
++    add_action_policies([return_obj])
+     return_obj["kind"] = entity_kind(entity)
+     hide_storage_key(return_obj)
+ 
 diff --git a/suite/drive/api/tests/test_files.py b/suite/drive/api/tests/test_files.py
 index 0a5c55c71..d3bfa4dc8 100644
 --- a/suite/drive/api/tests/test_files.py
@@ -1556,6 +3254,19 @@ index 0a5c55c71..d3bfa4dc8 100644
                  file.save()
  
      def test_ordered_chunks_are_assembled_byte_for_byte(self):
+diff --git a/suite/drive/overrides/file.py b/suite/drive/overrides/file.py
+index f71621e4e..17accc875 100644
+--- a/suite/drive/overrides/file.py
++++ b/suite/drive/overrides/file.py
+@@ -384,7 +384,7 @@ class File(FrappeFile):
+         self.flags.drive_disk_rename = True
+         self.file_name = new_file_name
+         # Flat storage keys by id, so a name has no bearing on any path.
+-        if not self.manager.flat:
++        if not self.manager.flat and not self._not_in_disk():
+             path = self.manager.rename(self)
+             if self.file_url and not self._not_in_disk():
+                 self.recursive_path_move(self.file_url, path)
 diff --git a/suite/drive/tests/test_download_archive.py b/suite/drive/tests/test_download_archive.py
 index 4d4c76811..2f5b491db 100644
 --- a/suite/drive/tests/test_download_archive.py
@@ -2150,12 +3861,126 @@ index 000000000..5aa0face1
 +    app.unmount()
 +  })
 +})
+diff --git a/frontend/src/apps/drive/components/FileUploader.test.ts b/frontend/src/apps/drive/components/FileUploader.test.ts
+new file mode 100644
+index 000000000..bf534a76d
+--- /dev/null
++++ b/frontend/src/apps/drive/components/FileUploader.test.ts
+@@ -0,0 +1,108 @@
++import { createApp, h, nextTick, reactive, ref } from 'vue'
++import { beforeEach, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ zone: null as any, handlers: {} as any, request: vi.fn(), folder: null as any, session: null as any }))
++vi.mock('dropzone', async () => {
++  const RealDropzone = (await vi.importActual<any>('dropzone')).default
++  class Dropzone {
++    static forElement() { throw new Error('no existing uploader') }
++    static ERROR = 'error'
++    static ADDED = 'added'
++    static CANCELED = 'canceled'
++    options: any; files = []; hiddenFileInput = document.createElement('input')
++    accept(file, done) { return RealDropzone.prototype.accept.call(this, file, done) }
++    enqueueFile = vi.fn(file => { if (!file.accepted) throw new Error('File has not been accepted'); file.status = 'queued' })
++    processFile = vi.fn()
++    on = vi.fn(); destroy = vi.fn(); removeAllFiles = vi.fn(); removeFile = vi.fn()
++    constructor(_selector, options) { this.options = options; mocks.zone = this }
++  }
++  return { default: Dropzone }
++})
++vi.mock('frappe-ui', () => ({ frappeRequest: mocks.request }))
++vi.mock('vue-router', () => ({ useRoute: () => reactive({ name: 'drive-Folder' }) }))
++vi.mock('@/boot/session', () => ({ useSessionStore: () => mocks.session }))
++vi.mock('@/apps/drive/data/currentFolder', () => ({ currentFolder: mocks.folder = ref({}) }))
++vi.mock('@/apps/drive/data/uploads', () => ({ addUpload: vi.fn(), updateUpload: vi.fn() }))
++vi.mock('@/apps/drive/resources/files', () => ({ storageBar: {} }))
++vi.mock('@/apps/drive/utils/useEmitter', () => ({ useEmitter: (name, fn) => mocks.handlers[name] = fn }))
++import FileUploader from './FileUploader.vue'
++beforeEach(() => {
++  window.__ = text => text
++  mocks.session = reactive({ user: 'writer', isLoggedIn: true })
++  mocks.folder.value = { name: 'folder', entity: { name: 'folder', is_folder: 1, upload: 1 } }
++  mocks.request.mockReset().mockResolvedValue({ name: 'folder', is_folder: 1, upload: 1 })
++})
++function mount() {
++  const app = createApp({ render: () => h(FileUploader) })
++  app.provide('emitter', { emit: vi.fn() })
++  app.mount(document.createElement('div'))
++  return app
++}
++it('checks upload access after returning from the OS picker while folder context refreshes', async () => {
++  const app = mount()
++  mocks.handlers.uploadFile()
++  mocks.folder.value.entity = null
++  const done = vi.fn()
++  await mocks.zone.options.accept({ size: 10, parent: 'folder' }, done)
++  expect(mocks.request).toHaveBeenCalled()
++  expect(done).toHaveBeenCalledWith()
++  app.unmount()
++})
++it('refuses upload when the fresh server check denies access', async () => {
++  const app = mount()
++  mocks.request.mockResolvedValue({ name: 'folder', is_folder: 1, upload: 0 })
++  const done = vi.fn()
++  await mocks.zone.options.accept({ size: 10, parent: 'folder' }, done)
++  expect(done).toHaveBeenCalledWith(expect.any(String))
++  app.unmount()
++})
++
++it('discards a pending upload authorization when the session changes', async () => {
++  const app = mount()
++  let finish: (value: any) => void
++  mocks.request.mockImplementation(() => new Promise(resolve => finish = resolve))
++  const done = vi.fn()
++  const pending = mocks.zone.options.accept({ size: 10, parent: 'folder' }, done)
++  mocks.session.isLoggedIn = false
++  finish!({ name: 'folder', is_folder: 1, upload: 1 })
++  await pending
++  expect(done).toHaveBeenCalledWith(expect.any(String))
++  app.unmount()
++})
++
++it('re-accepts a previously denied file before retrying after access is restored', async () => {
++  const app = mount()
++  const file = { parent: 'folder', size: 10, status: 'error', accepted: false, upload: { uuid: 'retry' } }
++  mocks.zone.files = [file]
++  await mocks.handlers.retryUpload('retry')
++  expect(file.accepted).toBe(true)
++  expect(mocks.zone.enqueueFile).toHaveBeenCalledWith(file)
++  expect(mocks.zone.processFile).toHaveBeenCalledWith(file)
++  app.unmount()
++})
++it('does not authorize a file removed while its permission request is pending', async () => {
++  const app = mount()
++  let finish: (value: any) => void
++  mocks.request.mockImplementation(() => new Promise(resolve => finish = resolve))
++  const file = { parent: 'folder', size: 10, upload: { uuid: 'cancel' } }
++  mocks.zone.files = [file]
++  const done = vi.fn()
++  const pending = mocks.zone.options.accept(file, done)
++  mocks.handlers.cancelUpload('cancel')
++  finish!({ name: 'folder', is_folder: 1, upload: 1 }); await pending
++  expect(done).toHaveBeenCalledWith(expect.any(String))
++  app.unmount()
++})
++
++it('does not enqueue a canceled retry after its deferred access check completes', async () => {
++  const app = mount()
++  let finish: (value: any) => void
++  mocks.request.mockImplementation(() => new Promise(resolve => finish = resolve))
++  const file = { parent: 'folder', size: 10, status: 'error', accepted: false, upload: { uuid: 'retry-cancel' } }
++  mocks.zone.files = [file]
++  const pending = mocks.handlers.retryUpload('retry-cancel')
++  mocks.handlers.cancelAllUploads()
++  finish!({ name: 'folder', is_folder: 1, upload: 1 }); await pending
++  expect(mocks.zone.enqueueFile).not.toHaveBeenCalled()
++  expect(mocks.zone.processFile).not.toHaveBeenCalled()
++  app.unmount()
++})
 diff --git a/frontend/src/apps/drive/components/Navbar.test.ts b/frontend/src/apps/drive/components/Navbar.test.ts
 new file mode 100644
-index 000000000..58886c31b
+index 000000000..7445ea100
 --- /dev/null
 +++ b/frontend/src/apps/drive/components/Navbar.test.ts
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,88 @@
 +import { createApp, defineComponent, h, ref } from 'vue'
 +import { beforeEach, describe, expect, it, vi } from 'vitest'
 +const mocks = vi.hoisted(() => ({ download: vi.fn() }))
@@ -2176,14 +4001,15 @@ index 000000000..58886c31b
 +vi.mock('@/apps/drive/resources/files', () => ({ getRecents: {}, getTrash: {}, getFavourites: {}, toggleFav: {}, rootInfo: { data: {} } }))
 +vi.mock('@/apps/drive/resources/permissions', () => ({ apps: { data: [] } }))
 +vi.mock('vue-router', () => ({ useRoute: () => ({ name: 'drive-File' }) }))
-+vi.mock('@/apps/drive/utils/files', () => ({ newExternal: vi.fn(), dynamicList: (rows) => rows, isManaged: () => true, isAttachmentRef: () => false, isVirtual: (e) => e.kind === 'virtual', openEntity: vi.fn() }))
++vi.mock('@/apps/drive/utils/files', () => ({ newExternal: vi.fn(), dynamicList: (rows) => rows.filter(row => !('cond' in row) || row.cond), isManaged: () => true, isAttachmentRef: () => false, isVirtual: (e) => e.kind === 'virtual', openEntity: vi.fn() }))
 +vi.mock('@/apps/drive/ui/drive/js/utils', () => ({ getFileLink: vi.fn() }))
 +vi.mock('@/apps/drive/utils/confirmActions', () => ({ confirmRemove: vi.fn(), confirmClearRecents: vi.fn(), confirmClearFavourites: vi.fn(), confirmClearTrash: vi.fn() }))
 +import Navbar from './Navbar.vue'
-+function mount(entity) {
++function mount(entity, routeName = 'drive-File', loading = false) {
 +  const root = document.createElement('div')
-+  const app = createApp({ render: () => h(Navbar, { rootResource: { data: { name: 'file-1', file_name: 'Report.docx', ...entity } } }) })
-+  app.config.globalProperties.$route = { name: 'drive-File' }
++  const app = createApp({ render: () => h(Navbar, { rootResource: { loading, data: { name: 'file-1', file_name: 'Report.docx', ...entity } } }) })
++  app.config.globalProperties.__ = (text: string) => text
++  app.config.globalProperties.$route = { name: routeName }
 +  app.provide('inIframe', false)
 +  app.mount(root)
 +  return { app, root }
@@ -2208,6 +4034,40 @@ index 000000000..58886c31b
 +    expect(root.textContent).toContain('Download')
 +    app.unmount()
 +  })
++})
++
++describe('Mandant navbar actions', () => {
++  it('keeps root uploads but hides structural changes, sharing and native editors', () => {
++    const { app, root } = mount({ is_folder: 1, write: 1, upload: 1, share: 1,
++      mandant: { customer_url: '/desk/customer/client', folder: 'file-1' },
++      mandant_policy: { root: 'file-1', is_root: true, actions: { rename: false, move: false, trash: false, share: false, create_native: false, upload: true, create_folder: true, create_link: true } } })
++    expect(root.textContent).not.toContain('Rename')
++    expect(root.textContent).not.toContain('Delete')
++    expect(root.textContent).not.toContain('Share')
++    expect(root.textContent).toContain('Access is managed through the customer in ERP')
++    app.unmount()
++  })
++})
++
++it('keeps ordinary Home creation and upload commands, while withholding them during permission loading', () => {
++  const { app, root } = mount({ is_folder: 1, upload: 1, write: 1 }, 'drive-Home')
++  expect(root.textContent).toContain('Document')
++  expect(root.textContent).toContain('Folder')
++  expect(root.textContent).toContain('Upload File')
++  app.unmount()
++  const pending = mount({ is_folder: 1, upload: 1, write: 1 }, 'drive-Folder', true)
++  expect(pending.root.textContent).not.toContain('Upload File')
++  pending.app.unmount()
++})
++it('offers only folders, HTTP(S) links and uploads for a writable Mandant', () => {
++  const { app, root } = mount({ is_folder: 1, upload: 1, write: 1,
++    mandant_policy: { root: 'file-1', actions: { upload: true, create_folder: true, create_link: true, create_native: false } } }, 'drive-Folder')
++  expect(root.textContent).toContain('Upload File')
++  expect(root.textContent).toContain('Folder')
++  expect(root.textContent).not.toContain('Document')
++  expect(root.textContent).not.toContain('Presentation')
++  expect(root.textContent).not.toContain('Spreadsheet')
++  app.unmount()
 +})
 diff --git a/frontend/src/apps/drive/components/Sidebar.test.ts b/frontend/src/apps/drive/components/Sidebar.test.ts
 new file mode 100644
@@ -2323,10 +4183,11 @@ index 000000000..4b7b59857
 +})
 diff --git a/frontend/src/apps/drive/data/mandantBreadcrumbs.ts b/frontend/src/apps/drive/data/mandantBreadcrumbs.ts
 new file mode 100644
-index 000000000..36a144f57
+index 000000000..22a628209
 --- /dev/null
 +++ b/frontend/src/apps/drive/data/mandantBreadcrumbs.ts
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,24 @@
++import { canAct } from '@/apps/drive/utils/actionPolicy'
 +import emitter from '@/apps/drive/emitter'
 +
 +type Crumb = { label: string; name: string; route: unknown; onClick?: () => void; readonly?: boolean }
@@ -2346,7 +4207,7 @@ index 000000000..36a144f57
 +    const final = child.name === entity.name
 +    trail.push({ label: child.file_name, name: child.name,
 +      route: final ? null : { name: 'drive-Folder', params: { entityName: child.name } },
-+      onClick: final && entity.write ? () => emitter.emit('rename') : undefined })
++      onClick: final && canAct(entity, 'rename') ? () => emitter.emit('rename') : undefined })
 +  })
 +  return trail
 +}
@@ -2532,6 +4393,81 @@ index 000000000..5f61ce549
 +    expect(window.translatedMessages['Back to Kanzlei']).toBe('Zur Kanzlei')
 +  })
 +})
+diff --git a/frontend/src/apps/drive/ui/drive/components/MoveDialog.test.ts b/frontend/src/apps/drive/ui/drive/components/MoveDialog.test.ts
+new file mode 100644
+index 000000000..cb18e8b02
+--- /dev/null
++++ b/frontend/src/apps/drive/ui/drive/components/MoveDialog.test.ts
+@@ -0,0 +1,69 @@
++import { createApp, defineComponent, h, nextTick, reactive } from 'vue'
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ request: vi.fn(), session: null as any }))
++vi.mock('frappe-ui', () => ({
++  frappeRequest: mocks.request,
++  Dialog: defineComponent({ setup: (_, { slots }) => () => h('div', slots.default?.()) }),
++  Button: defineComponent({ props: ['label', 'disabled'], emits: ['click'], setup: (p, { emit }) => () => h('button', { disabled: p.disabled, onClick: () => emit('click') }, p.label) }),
++  Tabs: defineComponent({ props: ['tabs'], emits: ['update:modelValue'], setup: (p, { emit }) => () => h('div', p.tabs.map(t => h('button', { onClick: () => emit('update:modelValue', t.value) }, t.label))) }),
++  TextInput: { template: '<input />' },
++}))
++vi.mock('../js/resources', () => ({ rootInfo: { data: { home: 'home', root: 'site' }, fetch: vi.fn() } }))
++vi.mock('@/boot/session', () => ({ useSessionStore: () => mocks.session }))
++import MoveDialog from './MoveDialog.vue'
++const tick = async () => { for (let i = 0; i < 12; i++) await nextTick() }
++const folder = name => ({ name, file_name: name, is_folder: 1, read: 1, upload: 1, write: 1, breadcrumbs: [{ name, file_name: name }] })
++function mount(entities) {
++  const container = document.createElement('div')
++  const success = vi.fn()
++  const app = createApp({ render: () => h(MoveDialog, { entities, onSuccess: success }) })
++  app.config.globalProperties.__ = text => text
++  app.mount(container)
++  return { app, container, success }
++}
++beforeEach(() => {
++  window.__ = text => text
++  sessionStorage.clear()
++  mocks.session = reactive({ user: 'employee', isLoggedIn: true })
++  mocks.request.mockReset().mockImplementation(async ({ url, params }) => {
++    if (url.endsWith('list.files')) return { rows: [], has_next: false }
++    return folder(params.entity_name)
++  })
++})
++describe('Move dialog wiring', () => {
++  it('honours explicit Home/Site tabs after restoring a remembered folder', async () => {
++    sessionStorage.setItem('drive:last-move-dest:employee:ordinary', JSON.stringify({ parent: 'remembered' }))
++    const { app, container } = mount([{ name: 'file', folder: 'old', write: 1 }])
++    await tick()
++    expect(container.textContent).toContain('remembered')
++    const site = [...container.querySelectorAll('button')].find(b => b.textContent === 'Site')!
++    site.click(); await tick()
++    expect(container.textContent).toContain('Moving to: site')
++    app.unmount()
++  })
++  it('does not remove items or emit success when the server rejects a move', async () => {
++    const source = { name: 'file', folder: 'old', write: 1 }
++    mocks.request.mockImplementation(async ({ url, params }) => {
++      if (url.endsWith('list.files')) return { rows: [], has_next: false }
++      if (url.endsWith('files.move')) throw new Error('Access revoked')
++      return params.entity_name === 'file' ? source : folder(params.entity_name)
++    })
++    const { app, container, success } = mount([source]); await tick()
++    const move = [...container.querySelectorAll('button')].find(b => b.textContent === 'Move')!
++    expect(move.disabled).toBe(false)
++    move.click(); await tick()
++    expect(success).not.toHaveBeenCalled()
++    expect(container.textContent).toContain('Could not move these items')
++    app.unmount()
++  })
++  it('hides ordinary tabs for a Mandant and closes on a session change', async () => {
++    const policy = { root: 'client', actions: { move: true, upload: true, create_folder: true } }
++    mocks.request.mockImplementation(async ({ url, params }) => url.endsWith('list.files') ? { rows: [], has_next: false } : { ...folder(params.entity_name), mandant_policy: policy })
++    const { app, container } = mount([{ name: 'file', folder: 'old', write: 1, mandant_policy: policy }]); await tick()
++    expect([...container.querySelectorAll('button')].map(b => b.textContent)).not.toContain('Site')
++    mocks.session.isLoggedIn = false; await tick()
++    const move = [...container.querySelectorAll('button')].find(b => b.textContent === 'Move')
++    expect(move?.disabled ?? true).toBe(true)
++    app.unmount()
++  })
++})
 diff --git a/frontend/src/apps/drive/ui/drive/js/utils.test.ts b/frontend/src/apps/drive/ui/drive/js/utils.test.ts
 new file mode 100644
 index 000000000..802aa0dd6
@@ -2582,6 +4518,96 @@ index 000000000..802aa0dd6
 +      .toBe('http://localhost' + path)
 +  })
 +})
+diff --git a/frontend/src/apps/drive/utils/actionPolicy.test.ts b/frontend/src/apps/drive/utils/actionPolicy.test.ts
+new file mode 100644
+index 000000000..b33964243
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/actionPolicy.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, it } from 'vitest'
++import { canAct, canActSelection, canMoveTo, moveScope, resolveDragged } from './actionPolicy'
++const ordinary = (name = 'file') => ({ name, read: 1, write: 1, upload: 1, share: 1, kind: 'native', status: 'Active' })
++const managed = (name = 'file', root = 'client-a', isRoot = false) => ({ ...ordinary(name),
++  mandant_policy: { root, is_root: isRoot, actions: { rename: !isRoot, move: !isRoot, trash: !isRoot,
++    share: false, create_native: false, upload: true, create_folder: true, create_link: true } } })
++describe('Drive action policy', () => {
++  it('intersects ordinary permissions and server restrictions without disabling root uploads', () => {
++    const root = { ...managed('client-a', 'client-a', true), is_folder: 1 }
++    expect(canAct(root, 'rename')).toBe(false)
++    expect(canAct(root, 'trash')).toBe(false)
++    expect(canAct(root, 'upload')).toBe(true)
++    expect(canAct(root, 'share')).toBe(false)
++    expect(canAct(root, 'create_native')).toBe(false)
++    expect(canAct({ ...managed(), write: 0 }, 'move')).toBe(false)
++    expect(canAct(ordinary(), 'rename')).toBe(true)
++    expect(canAct(null, 'upload')).toBe(false)
++  })
++  it('fails closed for incomplete policies and mixed selections', () => {
++    expect(canAct({ ...managed(), mandant_policy: { root: null, actions: {} } }, 'move')).toBe(false)
++    expect(canActSelection([managed(), ordinary('b')], 'move')).toBe(false)
++    expect(canActSelection([managed(), managed('b', 'client-b')], 'move')).toBe(false)
++    expect(canActSelection([managed(), managed('b', 'client-a', true)], 'trash')).toBe(false)
++    expect(canActSelection([], 'trash')).toBe(false)
++    expect(moveScope([managed(), managed('b')])).toBe('client-a')
++    expect(moveScope([ordinary()])).toBe(null)
++  })
++  it('allows only same-domain writable destinations, excluding self and descendants', () => {
++    const sources = [{ ...managed('folder'), is_folder: 1, folder: 'parent' }]
++    const root = { ...managed('client-a', 'client-a', true), is_folder: 1 }
++    expect(canMoveTo(sources, root)).toBe(true)
++    expect(canMoveTo(sources, { ...ordinary('home'), is_folder: 1 })).toBe(false)
++    expect(canMoveTo([ordinary()], root)).toBe(false)
++    expect(canMoveTo(sources, { ...root, upload: 0 })).toBe(false)
++    expect(canMoveTo(sources, { ...managed('folder'), is_folder: 1 })).toBe(false)
++    expect(canMoveTo(sources, { ...managed('child'), is_folder: 1, breadcrumbs: [{ name: 'folder' }] })).toBe(false)
++    expect(canMoveTo(sources, { ...managed('parent'), is_folder: 1 })).toBe(false)
++  })
++  it('rejects unknown drag payloads rather than silently moving a subset', () => {
++    expect(resolveDragged(['file', 'unknown'], [managed()])).toEqual([])
++    expect(resolveDragged(['file'], [managed()])).toHaveLength(1)
++    expect(resolveDragged('file', [managed()])).toEqual([])
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/actionPolicy.ts b/frontend/src/apps/drive/utils/actionPolicy.ts
+new file mode 100644
+index 000000000..29487bcf7
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/actionPolicy.ts
+@@ -0,0 +1,34 @@
++/** UI restrictions intersect existing access; the server still authorizes every write. */
++type Entity = Record<string, any>
++export function canAct(entity: Entity | null | undefined, action: string): boolean {
++  if (!entity || entity._actions_pending || entity.read === 0) return false
++  const policy = entity.mandant_policy
++  if (policy && (!policy.root || policy.actions?.[action] !== true)) return false
++  const access = ['upload', 'create_folder', 'create_link', 'create_native'].includes(action)
++    ? entity.upload : action === 'share' ? entity.share : entity.write
++  if (!access || entity.external || ['virtual', 'attachment'].includes(entity.kind)) return false
++  if (['restore', 'delete'].includes(action)) return !entity.status || entity.status === 'Trashed'
++  return !entity.status || entity.status === 'Active'
++}
++/** undefined means mixed/invalid, null means ordinary Drive. */
++export function moveScope(entities: Entity[]): string | null | undefined {
++  if (!entities.length) return undefined
++  const scopes = entities.map(e => e.mandant_policy ? e.mandant_policy.root || undefined : null)
++  return scopes[0] !== undefined && scopes.every(scope => scope === scopes[0]) ? scopes[0] : undefined
++}
++export function canActSelection(entities: Entity[], action: string): boolean {
++  return !!entities.length && entities.every(e => canAct(e, action)) &&
++    (action !== 'move' || moveScope(entities) !== undefined)
++}
++export function canMoveTo(entities: Entity[], target: Entity | null | undefined): boolean {
++  if (!canActSelection(entities, 'move') || !target?.is_folder || !canAct(target, 'upload')) return false
++  const targetScope = target.mandant_policy ? target.mandant_policy.root || undefined : null
++  if (moveScope(entities) !== targetScope) return false
++  const ancestors = new Set((target.breadcrumbs || []).map((e: Entity) => e.name))
++  return entities.every(e => e.name !== target.name && !ancestors.has(e.name) && e.folder !== target.name)
++}
++export function resolveDragged(names: unknown, rows: Entity[]): Entity[] {
++  if (!Array.isArray(names) || !names.length || names.some(n => typeof n !== 'string')) return []
++  const resolved = [...new Set(names)].map(name => rows.find(e => e.name === name))
++  return resolved.every(Boolean) ? resolved as Entity[] : []
++}
 diff --git a/frontend/src/apps/drive/utils/download.test.ts b/frontend/src/apps/drive/utils/download.test.ts
 new file mode 100644
 index 000000000..057818a15
@@ -2852,6 +4878,164 @@ index 000000000..fb1558ab0
 +  })
 +  return { rows, search, loading, error, actionError, hasNext, creating, refresh, loadMore: () => load(true), createFolder }
 +}
+diff --git a/frontend/src/apps/drive/utils/moveDestination.test.ts b/frontend/src/apps/drive/utils/moveDestination.test.ts
+new file mode 100644
+index 000000000..53e651df7
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/moveDestination.test.ts
+@@ -0,0 +1,70 @@
++import { describe, expect, it, vi } from 'vitest'
++import { moveDestination } from './moveDestination'
++const file = { name: 'file', folder: 'old', write: 1, mandant_policy: { root: 'root', actions: { move: true } } }
++const root = { name: 'root', file_name: 'Client', is_folder: 1, upload: 1, mandant_policy: { root: 'root', actions: { upload: true, create_folder: true } }, breadcrumbs: [{ name: 'root' }] }
++function setup(overrides = {}) {
++  const api = { detail: vi.fn(async (name) => name === 'file' ? file : root),
++    list: vi.fn(async () => ({ rows: [], has_next: false })), move: vi.fn(async () => ({})), ...overrides }
++  return { api, state: moveDestination(() => [file], api) }
++}
++describe('move destination', () => {
++  it('has no enabled target until checked and preserves the dialog on server failure', async () => {
++    const { state, api } = setup({ move: vi.fn().mockRejectedValue(new Error('revoked')) })
++    expect(state.canMove).toBe(false)
++    await state.load('root')
++    expect(state.canMove).toBe(true)
++    expect(await state.submit()).toBe(false)
++    expect(state.error).toBeTruthy()
++    expect(state.target?.name).toBe('root')
++    expect(api.move).toHaveBeenCalledOnce()
++  })
++  it('excludes managed foreign/ordinary destinations and moved source folders', async () => {
++    const { state } = setup({ list: vi.fn(async () => ({ rows: [
++      { ...root, name: 'allowed' }, { ...root, name: 'file' },
++      { ...root, name: 'foreign', mandant_policy: { root: 'other', actions: { upload: true } } },
++      { name: 'ordinary', is_folder: 1, upload: 1 }], has_next: false })) })
++    await state.load('root')
++    expect(state.children.map(e => e.name)).toEqual(['allowed'])
++  })
++  it('rechecks both source and target before moving and does not send a stale grant', async () => {
++    const { state, api } = setup()
++    await state.load('root')
++    api.detail.mockResolvedValue({ ...file, write: 0 })
++    expect(await state.submit()).toBe(false)
++    expect(api.move).not.toHaveBeenCalled()
++  })
++  it('ignores late destinations after invalidation', async () => {
++    let resolve: (v: any) => void
++    const { state } = setup({ detail: vi.fn(() => new Promise(r => resolve = r)) })
++    const pending = state.load('root')
++    state.invalidate()
++    resolve!(root); await pending
++    expect(state.target).toBe(null)
++    expect(state.canMove).toBe(false)
++  })
++})
++
++it('does not create a folder after the dialog was invalidated during its permission check', async () => {
++  let resolve: (v: any) => void
++  const create = vi.fn()
++  const { state, api } = setup({ create })
++  await state.load('root')
++  api.detail.mockImplementation(() => new Promise(r => resolve = r))
++  const pending = state.createFolder('Invoices')
++  state.invalidate()
++  resolve!(root)
++  expect(await pending).toBe(false)
++  expect(create).not.toHaveBeenCalled()
++})
++
++it('keeps readable ordinary ancestors navigable without offering them as a destination', async () => {
++  const source = { name: 'file', folder: 'old', write: 1 }
++  const state = moveDestination(() => [source], {
++    detail: async name => ({ name, is_folder: 1, read: 1, upload: name === 'home' ? 1 : 0 }),
++    list: async () => ({ rows: [{ name: 'readonly', is_folder: 1, read: 1, upload: 0 }], has_next: false }),
++  })
++  await state.load('home')
++  expect(state.children.map(e => e.name)).toContain('readonly')
++  await state.load('readonly')
++  expect(state.canMove).toBe(false)
++})
+diff --git a/frontend/src/apps/drive/utils/moveDestination.ts b/frontend/src/apps/drive/utils/moveDestination.ts
+new file mode 100644
+index 000000000..ae9a4108d
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/moveDestination.ts
+@@ -0,0 +1,76 @@
++import { reactive } from 'vue'
++import { canAct, canMoveTo, moveScope } from './actionPolicy'
++type Entity = Record<string, any>
++/** Checked destination navigation. UI success is published only after the write completes. */
++export function moveDestination(sources: () => Entity[], api: any) {
++  let generation = 0
++  const state = reactive({
++    target: null as Entity | null, children: [] as Entity[], loading: false, moving: false, error: '',
++    get canMove() { return !state.loading && !state.moving && canMoveTo(sources(), state.target) },
++    invalidate() { generation++; state.target = null; state.children = []; state.loading = false },
++    async load(name: string) {
++      const current = ++generation
++      state.loading = true
++      state.target = null
++      state.children = []
++      state.error = ''
++      try {
++        const target = await api.detail(name)
++        if (current !== generation) return
++        const scope = target.mandant_policy ? target.mandant_policy.root || undefined : null
++        if (!target.is_folder || scope !== moveScope(sources())) throw new Error('Invalid move destination')
++        if (sources().some(e => e.name === target.name || (target.breadcrumbs || []).some((a: Entity) => a.name === e.name)))
++          throw new Error('Cannot move a folder into itself')
++        state.target = target
++        let start = 0
++        do {
++          const response = await api.list(name, start)
++          if (current !== generation) return
++          const rows = Array.isArray(response) ? response : response.rows
++          state.children.push(...(rows || []).filter((row: Entity) => {
++            const rowScope = row.mandant_policy ? row.mandant_policy.root || undefined : null
++            return row.is_folder && rowScope === moveScope(sources()) && row.read !== 0 && !sources().some(e => e.name === row.name)
++          }))
++          if (!response.has_next || response.next_start == null || response.next_start <= start) break
++          start = response.next_start
++        } while (true)
++      } catch {
++        if (current === generation) { state.error = 'This folder is unavailable or you no longer have access.'; state.target = null }
++      } finally { if (current === generation) state.loading = false }
++    },
++    async createFolder(name: string) {
++      if (!name.trim() || !canAct(state.target, 'create_folder') || state.loading || state.moving) return false
++      const current = generation
++      const parent = state.target!.name
++      try {
++        const target = await api.detail(parent)
++        if (current !== generation || !canAct(target, 'create_folder')) return false
++        const created = await api.create(name.trim(), parent)
++        if (current !== generation) return false
++        await state.load(created.name)
++        return true
++      } catch {
++        if (current === generation) state.error = 'Could not create this folder. Check access and try again.'
++        return false
++      }
++    },
++    async submit() {
++      if (!state.canMove || !state.target) return false
++      const current = generation
++      const name = state.target.name
++      const selected = sources().map(e => e.name)
++      state.moving = true
++      state.error = ''
++      try {
++        const [target, ...entities] = await Promise.all([api.detail(name), ...selected.map(id => api.detail(id))])
++        if (current !== generation || !canMoveTo(entities, target)) throw new Error('Move access changed')
++        await api.move(selected, name)
++        return current === generation
++      } catch {
++        if (current === generation) state.error = 'Could not move these items. Check access and try again.'
++        return false
++      } finally { state.moving = false }
++    },
++  })
++  return state
++}
 diff --git a/frontend/src/apps/drive/utils/navigation.js b/frontend/src/apps/drive/utils/navigation.js
 new file mode 100644
 index 000000000..f5097e107
@@ -2996,6 +5180,110 @@ index 000000000..615aa3956
 +    expect(toast.promise).toBe(mocks.promise)
 +  })
 +})
+diff --git a/frontend/src/apps/drive/utils/useVerifiedEntity.ts b/frontend/src/apps/drive/utils/useVerifiedEntity.ts
+new file mode 100644
+index 000000000..0756bf72e
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/useVerifiedEntity.ts
+@@ -0,0 +1,31 @@
++import { onBeforeUnmount, watch } from 'vue'
++import { frappeRequest } from 'frappe-ui'
++import { useSessionStore } from '@/boot/session'
++import emitter from '@/apps/drive/emitter'
++import { verifiedEntity } from './verifiedEntity'
++/** Single source for entity-page grants, including route/session/focus refresh. */
++export function useVerifiedEntity(options: any = {}) {
++  const session = useSessionStore()
++  const resource = verifiedEntity(async params => {
++    const response = await frappeRequest({ url: '/api/method/suite.drive.api.permissions.get_entity_with_permissions',
++      method: 'GET', params })
++    return response?.message ?? response
++  }, options)
++  const refresh = () => {
++    if (document.visibilityState === 'hidden' || !resource.params.entity_name) return
++    resource.fetch()
++    emitter.emit('refresh')
++  }
++  watch(() => [session.user, session.isLoggedIn], () => {
++    resource.invalidate()
++    if (resource.params.entity_name) refresh()
++  }, { flush: 'sync' })
++  window.addEventListener('focus', refresh)
++  document.addEventListener('visibilitychange', refresh)
++  onBeforeUnmount(() => {
++    resource.invalidate()
++    window.removeEventListener('focus', refresh)
++    document.removeEventListener('visibilitychange', refresh)
++  })
++  return resource
++}
+diff --git a/frontend/src/apps/drive/utils/verifiedEntity.test.ts b/frontend/src/apps/drive/utils/verifiedEntity.test.ts
+new file mode 100644
+index 000000000..28f0989ad
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/verifiedEntity.test.ts
+@@ -0,0 +1,27 @@
++import { describe, expect, it, vi } from 'vitest'
++import { verifiedEntity } from './verifiedEntity'
++const deferred = () => { let resolve: (v: any) => void; const promise = new Promise(r => resolve = r); return { promise, resolve: (v: any) => resolve(v) } }
++describe('verified entity requests', () => {
++  it('discards late route and session responses and clears write grants during refresh', async () => {
++    const a = deferred(), b = deferred()
++    const request = vi.fn().mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
++    const resource = verifiedEntity(request)
++    const first = resource.fetch({ entity_name: 'old' })
++    expect(resource.data).toBe(null)
++    const second = resource.fetch({ entity_name: 'new' })
++    b.resolve({ name: 'new', upload: 0 }); await second
++    a.resolve({ name: 'old', upload: 1 }); await first
++    expect(resource.data).toEqual({ name: 'new', upload: 0 })
++    resource.invalidate()
++    expect(resource.data).toBe(null)
++  })
++  it('invalidates a pending request even if the same user logs in again', async () => {
++    const late = deferred()
++    const resource = verifiedEntity(() => late.promise)
++    const pending = resource.fetch({ entity_name: 'file' })
++    resource.invalidate()
++    late.resolve({ name: 'file', write: 1 }); await pending
++    expect(resource.data).toBe(null)
++    expect(resource.loading).toBe(false)
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/verifiedEntity.ts b/frontend/src/apps/drive/utils/verifiedEntity.ts
+new file mode 100644
+index 000000000..d5a5a961f
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/verifiedEntity.ts
+@@ -0,0 +1,28 @@
++import { reactive } from 'vue'
++/** A refresh revokes the old UI grant immediately. Only the newest response may publish. */
++export function verifiedEntity(request: (params: any) => Promise<any>, options: any = {}) {
++  let generation = 0
++  const resource = reactive({
++    data: null as any, error: null as any, loading: false, params: {} as any,
++    invalidate() { generation++; resource.data = null; resource.error = null; resource.loading = false },
++    async fetch(params = resource.params) {
++      const current = ++generation
++      resource.params = params
++      resource.data = null
++      resource.error = null
++      resource.loading = true
++      try {
++        const response = await request(params)
++        if (current !== generation) return
++        resource.data = options.transform ? options.transform(response) : response
++        options.onSuccess?.(resource.data)
++        return resource.data
++      } catch (error) {
++        if (current === generation) resource.error = error
++      } finally {
++        if (current === generation) resource.loading = false
++      }
++    },
++  })
++  return resource
++}
 diff --git a/frontend/src/boot/session.test.ts b/frontend/src/boot/session.test.ts
 new file mode 100644
 index 000000000..346705601
@@ -3071,6 +5359,26 @@ index 000000000..346705601
 +    expect(isStaff?.value).toBe(true)
 +  })
 +})
+diff --git a/suite/drive/utils/actions.py b/suite/drive/utils/actions.py
+new file mode 100644
+index 000000000..a6ffff5fa
+--- /dev/null
++++ b/suite/drive/utils/actions.py
+@@ -0,0 +1,14 @@
++"""Optional application restrictions, applied only to already-readable rows."""
++
++import frappe
++
++
++def add_action_policies(rows):
++    if not rows:
++        return rows
++    for hook in frappe.get_hooks("drive_entity_actions_batch"):
++        policies = frappe.call(hook, entities=rows, user=frappe.session.user) or {}
++        for row in rows:
++            if row["name"] in policies:
++                row["mandant_policy"] = policies[row["name"]]
++    return rows
 diff --git a/suite/drive/utils/downloads.py b/suite/drive/utils/downloads.py
 new file mode 100644
 index 000000000..8630c4bb6
