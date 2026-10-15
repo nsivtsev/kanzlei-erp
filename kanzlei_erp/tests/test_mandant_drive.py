@@ -530,3 +530,103 @@ class TestMandantDrive(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			toggle_entity_status(ancestor, FileManager(), set())
 		self.assertTrue(path.exists())
+
+	def test_action_policy_writer_reader_and_root_matrix(self):
+		from suite.drive.api.files import create_folder
+		root = self.root()
+		folder = create_folder("_Policy folder", root.name)
+		child = self.child(root)
+		for user, writable in ((self.writer.name, True), (self.reader.name, False)):
+			frappe.set_user(user)
+			policies = self.api.entity_actions_batch([root.name, folder.name, child.name], user)
+			for name, is_folder, is_root in ((root.name, True, True), (folder.name, True, False), (child.name, False, False)):
+				policy = policies[name]
+				self.assertEqual(policy["root"], root.name)
+				self.assertEqual(policy["is_root"], is_root)
+				self.assertEqual(policy["actions"], {
+					"rename": writable and not is_root, "move": writable and not is_root,
+					"trash": writable and not is_root, "restore": False, "delete": False,
+					"share": False, "upload": writable and is_folder,
+					"create_folder": writable and is_folder, "create_link": writable and is_folder,
+					"create_native": False})
+
+	def test_action_policy_ignores_forged_fields_and_fails_closed(self):
+		from suite.drive.utils import get_user_folder
+		root = self.root()
+		ordinary = get_user_folder("Administrator")
+		forged = frappe._dict(name=ordinary.name, kanzlei_drive_customer=self.customer.name)
+		self.assertEqual(self.api.entity_actions_batch([forged], "Administrator"), {})
+		frappe.db.set_value("Customer", self.customer.name, "kanzlei_drive_folder", "missing-root")
+		policy = self.api.entity_actions_batch([root.name], self.writer.name)[root.name]
+		self.assertIsNone(policy["root"])
+		self.assertFalse(any(policy["actions"].values()))
+		for user in ("Guest", self.stranger.name):
+			self.assertEqual(self.api.entity_actions_batch([root.name], user), {})
+
+	def test_action_policy_checks_customer_once_per_batch_and_handles_trash(self):
+		root = self.root()
+		children = [self.child(root, name=f"policy-{i}.xml") for i in range(4)]
+		frappe.db.set_value("File", children[0].name, "status", "Trashed")
+		with patch("kanzlei_erp.mandant_drive._customer_access", wraps=self.api._customer_access) as access:
+			policies = self.api.entity_actions_batch([root.name] + [c.name for c in children], self.writer.name)
+			self.assertEqual(access.call_count, 1)
+		policy = policies[children[0].name]
+		self.assertTrue(policy["actions"]["restore"])
+		self.assertTrue(policy["actions"]["delete"])
+		self.assertFalse(policy["actions"]["move"])
+		self.assertFalse(policy["actions"]["rename"])
+
+	def test_action_policy_is_returned_by_detail_lists_and_search(self):
+		from suite.drive.api.permissions import get_entity_with_permissions
+		from suite.drive.api.list import files, favourites, recents, trash
+		from suite.drive.api.files import search, set_favourite, remove_or_restore, track_visit
+		root = self.root()
+		frappe.set_user(self.writer.name)
+		child = self.child(root, "PolicyAcceptanceUnique.xml")
+		frappe.set_user(self.writer.name)
+		self.assertTrue(get_entity_with_permissions(root.name)["write"])
+		self.assertFalse(get_entity_with_permissions(root.name)["mandant_policy"]["actions"]["rename"])
+		for row in files(entity_name=root.name):
+			self.assertEqual(row["mandant_policy"]["root"], root.name)
+		original_sql = frappe.db.sql
+		with patch("frappe.db.sql", side_effect=lambda query, *a, **kw: [frappe._dict(child.as_dict())] if "AGAINST" in str(query) else original_sql(query, *a, **kw)):
+			found = [row for row in search("PolicyAcceptanceUnique") if row["name"] == child.name]
+		self.assertEqual(len(found), 1)
+		self.assertTrue(found[0]["mandant_policy"]["actions"]["move"])
+		set_favourite([{"name": child.name, "is_favourite": True}])
+		track_visit(entity_name=child.name)
+		for listing in (favourites, recents):
+			row = next(row for row in listing() if row["name"] == child.name)
+			self.assertEqual(row["mandant_policy"]["root"], root.name)
+		remove_or_restore([child.name])
+		row = next(row for row in trash() if row["name"] == child.name)
+		self.assertTrue(row["mandant_policy"]["actions"]["restore"])
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.writer.name)
+		frappe.set_user(self.writer.name)
+		self.assertEqual(self.api.entity_actions_batch([root.name, child.name], self.writer.name), {})
+		with self.assertRaises(frappe.PermissionError):
+			get_entity_with_permissions(root.name)
+
+	def test_action_policy_admin_roles_do_not_bypass_customer_access(self):
+		root = self.root()
+		self.stranger.add_roles("Suite Admin", "System Manager")
+		self.assertEqual(self.api.entity_actions_batch([root.name], self.stranger.name), {})
+		frappe.db.set_value("User", self.stranger.name, "user_type", "Website User")
+		frappe.share.add("Customer", self.customer.name, self.stranger.name, read=1, write=1)
+		self.assertEqual(self.api.entity_actions_batch([root.name], self.stranger.name), {})
+
+	def test_managed_links_rename_and_move_without_touching_storage(self):
+		from suite.drive.api.files import create_link, create_folder, rename, move
+		root = self.root()
+		frappe.set_user(self.writer.name)
+		folder = create_folder("Link destination", root.name)
+		link = create_link("Original link", "https://example.invalid/original", root.name)
+		with patch("suite.drive.utils.files.FileManager.move") as transfer:
+			rename(link.name, "Renamed link")
+			move([link.name], folder.name)
+			transfer.assert_not_called()
+		link.reload()
+		self.assertEqual(link.file_url, "https://example.invalid/original")
+		self.assertEqual(link.file_name, "Renamed link")
+		self.assertEqual(link.folder, folder.name)

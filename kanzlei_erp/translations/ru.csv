@@ -496,3 +496,16 @@ No clients are available to you.,У вас нет доступных клиен�
 Loading clients…,Загрузка клиентов…
 Could not load clients. Check your access and try again.,Не удалось загрузить клиентов. Проверьте доступ и повторите попытку.
 Could not create the client folder. The list was refreshed; check its status and try again.,Не удалось создать папку клиента. Список обновлён; проверьте состояние и повторите попытку.
+Access is managed through the customer in ERP,Доступ управляется через клиента в ERP
+Open customer in ERP,Открыть клиента в ERP
+You do not have upload access to this folder.,У вас нет права загружать файлы в эту папку.
+Move items,Переместить элементы
+Move,Переместить
+Moving to:,Переместить в:
+Create folder,Создать папку
+New folder,Новая папка
+No folders found,Папки не найдены
+This folder is unavailable or you no longer have access.,Папка недоступна или доступ к ней отозван.
+Could not move these items. Check access and try again.,Не удалось переместить элементы. Проверьте доступ и повторите попытку.
+Could not create this folder. Check access and try again.,Не удалось создать папку. Проверьте доступ и повторите попытку.
+Folders and HTTP(S) links,Папки и HTTP(S)-ссылки

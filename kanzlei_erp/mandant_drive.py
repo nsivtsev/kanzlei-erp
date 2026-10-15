@@ -126,6 +126,41 @@ def entity_navigation(entity, user):
 	return {"customer": customer, "customer_name": doc.customer_name, "folder": folder, "customer_url": _customer_url(customer)}
 
 
+def entity_actions_batch(entities, user):
+	"""UI restrictions for readable, persisted Mandant files; never grants access."""
+	if not entities or not _staff(user) or not frappe.get_meta("File").has_field(FILE_CUSTOMER):
+		return {}
+	names = [entity if isinstance(entity, str) else entity.get("name") for entity in entities]
+	rows = frappe.get_all("File", filters={"name": ["in", names]},
+		fields=["name", "is_folder", "status", FILE_CUSTOMER])
+	customers = {row.get(FILE_CUSTOMER) for row in rows if row.get(FILE_CUSTOMER)}
+	access = {name: _customer_access(name, user) for name in customers}
+	readable = [name for name in customers if access[name]["read"]]
+	links = {row.name: row.get(CUSTOMER_FOLDER) for row in frappe.get_all("Customer",
+		filters={"name": ["in", readable]}, fields=["name", CUSTOMER_FOLDER])} if readable else {}
+	roots = [name for name in links.values() if name]
+	folders = {row.name: row for row in frappe.get_all("File", filters={"name": ["in", roots]},
+		fields=["name", "is_folder", "status", FILE_CUSTOMER])} if roots else {}
+	result = {}
+	for row in rows:
+		customer = row.get(FILE_CUSTOMER)
+		if not customer or not access[customer]["read"]:
+			continue
+		root = links.get(customer)
+		valid = _valid_root(folders.get(root), customer)
+		is_root = row.name == root
+		write = bool(valid and access[customer]["write"])
+		active = write and row.status == "Active"
+		trashed = write and not is_root and row.status == "Trashed"
+		result[row.name] = {"root": root if valid else None, "is_root": is_root, "actions": {
+			"rename": active and not is_root, "move": active and not is_root,
+			"trash": active and not is_root, "restore": trashed, "delete": trashed,
+			"share": False, "upload": active and bool(row.is_folder),
+			"create_folder": active and bool(row.is_folder), "create_link": active and bool(row.is_folder),
+			"create_native": False}}
+	return result
+
+
 def _require_uploaded_content(parent):
 	if parent and frappe.get_meta("File").has_field(FILE_CUSTOMER) and frappe.db.get_value("File", parent, FILE_CUSTOMER):
 		_reject_native_content()

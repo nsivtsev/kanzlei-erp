@@ -476,3 +476,16 @@ No clients are available to you.,Für Sie sind keine Mandanten verfügbar.
 Loading clients…,Mandanten werden geladen …
 Could not load clients. Check your access and try again.,Mandanten konnten nicht geladen werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.
 Could not create the client folder. The list was refreshed; check its status and try again.,Der Mandantenordner konnte nicht angelegt werden. Die Liste wurde aktualisiert; prüfen Sie den Status und versuchen Sie es erneut.
+Access is managed through the customer in ERP,Der Zugriff wird über den Mandanten im ERP verwaltet
+Open customer in ERP,Mandanten im ERP öffnen
+You do not have upload access to this folder.,Sie haben keinen Upload-Zugriff auf diesen Ordner.
+Move items,Elemente verschieben
+Move,Verschieben
+Moving to:,Verschieben nach:
+Create folder,Ordner erstellen
+New folder,Neuer Ordner
+No folders found,Keine Ordner gefunden
+This folder is unavailable or you no longer have access.,Dieser Ordner ist nicht verfügbar oder Sie haben keinen Zugriff mehr.
+Could not move these items. Check access and try again.,Die Elemente konnten nicht verschoben werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.
+Could not create this folder. Check access and try again.,Der Ordner konnte nicht erstellt werden. Prüfen Sie Ihren Zugriff und versuchen Sie es erneut.
+Folders and HTTP(S) links,Ordner und HTTP(S)-Links

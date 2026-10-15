@@ -19,6 +19,7 @@ override_whitelisted_methods = {
 extend_doctype_class = {"File": ["kanzlei_erp.suite_file.ERPAttachmentGuard"]}
 drive_entity_access = ["kanzlei_erp.mandant_drive.entity_access"]
 drive_entity_access_batch = ["kanzlei_erp.mandant_drive.entity_access_batch"]
+drive_entity_actions_batch = ["kanzlei_erp.mandant_drive.entity_actions_batch"]
 drive_entity_navigation = ["kanzlei_erp.mandant_drive.entity_navigation"]
 drive_file_permission_criterion = ["kanzlei_erp.mandant_drive.file_permission_criterion"]
 file_access_override = ["kanzlei_erp.mandant_drive.file_access_override"]

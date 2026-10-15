@@ -27,7 +27,7 @@ async function main(state) {
 			headers: { ...headers, ...(url.startsWith('/dav') ? { Authorization: 'Basic ' +
 				Buffer.from(credentials.user + ':' + credentials.password).toString('base64') } : {}), ...options.headers } });
 		client.call = async (method, args = {}) => {
-			const result = await client.request('/api/method/' + method, { method: 'POST', body: new URLSearchParams(args) });
+			const result = await client.request('/api/method/' + method, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
 			const body = await result.json();
 			assert.equal(result.status, 200, 'API failed: ' + method + ' [' + result.status + ' ' + (body.exc_type || '') + ']');
 			return body.message;
@@ -106,6 +106,48 @@ async function main(state) {
 		const newlyReadable = (await reader.call(listMethod, { search })).rows.find(row => row.customer === state.form_customer);
 		assert.equal(newlyReadable.state, 'missing'); assert.equal(newlyReadable.can_create, false);
 		accepted.push('Mandanten lists/search/pages follow current Customer rights; portal denied; grant appears; direct entity context excludes Administrator');
+		const detailMethod = 'suite.drive.api.permissions.get_entity_with_permissions';
+		const rootPolicy = await writer.call(detailMethod, { entity_name: state.root });
+		assert.equal(rootPolicy.write, 1); assert.equal(rootPolicy.upload, 1);
+		assert.equal(rootPolicy.mandant_policy.root, state.root);
+		assert.equal(rootPolicy.mandant_policy.is_root, true);
+		for (const action of ['rename', 'move', 'trash', 'restore', 'delete', 'share', 'create_native'])
+			assert.equal(rootPolicy.mandant_policy.actions[action], false, 'Root action must be hidden: ' + action);
+		for (const action of ['upload', 'create_folder', 'create_link']) assert.equal(rootPolicy.mandant_policy.actions[action], true);
+		const readerPolicy = await reader.call(detailMethod, { entity_name: state.root });
+		assert.ok(Object.values(readerPolicy.mandant_policy.actions).every(value => value === false));
+		const policyFolder = await writer.call('suite.drive.api.files.create_folder', { file_name: 'Policy acceptance', parent: state.root });
+		const nestedFolder = await writer.call('suite.drive.api.files.create_folder', { file_name: 'Destination', parent: policyFolder.name });
+		const policyLink = await writer.call('suite.drive.api.files.create_link', { file_name: 'Policy link', link: 'https://example.invalid/policy', parent: state.root });
+		for (const file of [policyFolder, policyLink]) {
+			const row = await writer.call(detailMethod, { entity_name: file.name });
+			assert.equal(row.mandant_policy.actions.rename, true); assert.equal(row.mandant_policy.actions.move, true);
+			assert.equal(row.mandant_policy.actions.share, false); assert.equal(row.mandant_policy.actions.create_native, false);
+		}
+		await writer.call('suite.drive.api.files.rename', { entity_name: policyLink.name, new_title: 'Policy renamed' });
+		await writer.call('suite.drive.api.files.move', { entity_names: [policyLink.name], new_parent: nestedFolder.name });
+		const movedLink = await writer.call(detailMethod, { entity_name: policyLink.name });
+		assert.equal(movedLink.folder, nestedFolder.name); assert.equal(movedLink.mandant_policy.root, state.root);
+		const folderRows = await writer.call('suite.drive.api.list.files', { entity_name: state.root });
+		assert.ok(folderRows.every(row => row.mandant_policy?.root === state.root));
+		const ordinaryPolicy = await writer.call(detailMethod, { entity_name: state.homes[0] });
+		assert.equal(ordinaryPolicy.mandant_policy, undefined);
+		for (const [method, args] of [
+			['suite.drive.api.files.rename', { entity_name: state.root, new_title: 'Forbidden root' }],
+			['suite.drive.api.files.move', { entity_names: [policyLink.name], new_parent: state.homes[0] }],
+			['suite.drive.api.files.move', { entity_names: [state.root], new_parent: state.homes[0] }],
+			['suite.drive.api.files.remove_or_restore', { entity_names: [state.root] }],
+			['suite.writer.api.docs.create_document', { parent: state.root }],
+			['suite.sheets.api.create_sheet', { parent: state.root }],
+			['suite.slides.doctype.presentation.presentation.create_presentation', { parent: state.root }],
+			['suite.drive.api.files.update_access', { entity_name: state.root, method: 'share', user: state.users.stranger.user, read: 1 }],
+		]) {
+			const result = await writer.request('/api/method/' + method, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+			assert.equal(result.status, 403, 'Policy bypass must fail: ' + method);
+		}
+		assert.equal((await writer.call(detailMethod, { entity_name: policyLink.name })).folder, nestedFolder.name);
+		accepted.push('BL-048 root/reader/child/link policies, ordinary Home, same-Mandant rename/move and direct-API bypass refusals');
+
 		const formSnapshot = await writer.call('frappe.client.get', { doctype: 'Customer', name: state.form_customer });
 		assert.ok(!formSnapshot.kanzlei_drive_folder);
 		const folderResults = await Promise.all([1, 2].map(() =>
@@ -186,7 +228,7 @@ async function main(state) {
 			}
 			const client = label === 'mandant' ? reader : writer;
 			const archive = await readyArchive(client, [parent, ...uploadedSamples[label]]);
-			assert.deepEqual(archive.skipped_counts, { hosted_content: label === 'ordinary' ? 1 : 0, links: label === 'ordinary' ? 1 : 0 });
+			assert.deepEqual(archive.skipped_counts, { hosted_content: label === 'ordinary' ? 1 : 0, links: 1 });
 			const result = await client.request('/api/method/suite.drive.api.files.download_archive?token=' + encodeURIComponent(archive.token));
 			assert.equal(result.status, 200);
 			const check = spawnSync(state.python, ['-c', `import base64,hashlib,io,json,sys,zipfile
@@ -214,6 +256,12 @@ print('ZIP byte checks passed')`], { encoding: 'utf8', input: JSON.stringify({ z
 		assert.deepEqual((await revoked.call(listMethod, { search: state.customer })).rows, []);
 		assert.equal((await revoked.request('/api/method/suite.drive.api.permissions.get_entity_with_permissions?entity_name=' + encodeURIComponent(state.root))).status, 403);
 		accepted.push('Mandanten removes revoked client and denies its old direct folder URL');
+		for (const method of ['suite.drive.api.files.rename', 'suite.drive.api.files.move']) {
+			const args = method.endsWith('rename') ? { entity_name: state.original.name, new_title: 'revoked.xml' } : { entity_names: [state.original.name], new_parent: policyFolder.name };
+			assert.equal((await revoked.request('/api/method/' + method, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).status, 403);
+		}
+		assert.ok(!(await revoked.call('suite.drive.api.list.files', { entity_name: state.homes[3] })).some(row => row.mandant_policy));
+
 		assert.equal((await revoked.request('/api/method/suite.drive.api.files.download_archive?token=' + encodeURIComponent(revokedArchive.token))).status, 403);
 		const rejectedZip = await stranger.request('/api/method/suite.drive.api.files.download_folder', { method: 'POST', body: new URLSearchParams({ entities: JSON.stringify([state.root]) }) });
 		assert.equal(rejectedZip.status, 403);
