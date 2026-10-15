@@ -11,6 +11,21 @@ import frappe
 
 
 class TestS3Consumers(TestCase):
+	def test_upload_staging_creates_nested_s3_root(self):
+		from suite.drive.api import files
+
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve() / "private" / "files"
+			with (
+				patch.object(frappe, "get_site_path", return_value=str(root)),
+				patch.object(
+					frappe, "get_single", return_value=frappe._dict(root_folder="sites/example.localhost/drive")
+				),
+			):
+				path = files.get_upload_path("upload.txt")
+			self.assertEqual(path, root / "sites/example.localhost/drive/.uploads/upload.txt")
+			self.assertTrue(path.parent.is_dir())
+
 	def test_archive_uses_managed_namespace(self):
 		from suite.drive.api import files
 
