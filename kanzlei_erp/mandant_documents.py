@@ -837,13 +837,14 @@ def download_document(customer, file_id, disposition="attachment"):
 		frappe.throw(frappe._("Invalid download disposition"), frappe.ValidationError)
 	_, files = _authorized_files(customer, [file_id])
 	file = files[file_id]
-	path = _safe_local_path(file)
+	from kanzlei_erp.object_storage import open_file
 	extension = PurePosixPath((file.file_name or "").replace("\\", "/")).suffix.lstrip(".").casefold()
 	content_type = _INLINE_MIME_TYPES.get(extension) or mimetypes.guess_type(file.file_name or "")[0] or "application/octet-stream"
 	if disposition == "inline" and extension not in _INLINE_MIME_TYPES:
 		disposition = "attachment"
 	frappe.local.response.filename = _safe_archive_names([file.file_name or "document"])[0]
-	frappe.local.response.filecontent = path.read_bytes()
+	with open_file(file) as source:
+		frappe.local.response.filecontent = source.read()
 	frappe.local.response.content_type = content_type
 	frappe.local.response.display_content_as = disposition
 	frappe.local.response.type = "download"
@@ -872,23 +873,23 @@ def download_documents_zip(customer, file_ids):
 		frappe.throw(frappe._("Please log in to download client documents"), frappe.PermissionError)
 	file_ids = _normalize_file_ids(file_ids)
 	_, authorized_files = _authorized_files(customer, file_ids)
+	from kanzlei_erp.object_storage import open_file
 	files = []
 	total_size = 0
 	for file_id in file_ids:
 		file = authorized_files[file_id]
-		path = _safe_local_path(file)
-		size = path.stat().st_size
+		size = int(file.file_size or 0)
 		total_size += size
 		if total_size > DOCUMENT_MAX_ZIP_BYTES:
 			frappe.throw(frappe._("The selected files exceed the 100 MiB ZIP limit"), frappe.ValidationError)
-		files.append((file, path, size))
-	names = _safe_archive_names([file.file_name or "document" for file, _, _ in files])
+		files.append((file, size))
+	names = _safe_archive_names([file.file_name or "document" for file, _ in files])
 	spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
 	try:
 		with zipfile.ZipFile(spool, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
 			copied_bytes = 0
-			for (_, path, _), archive_name in zip(files, names, strict=True):
-				with path.open("rb") as source, archive.open(archive_name, "w") as target:
+			for (file, _), archive_name in zip(files, names, strict=True):
+				with open_file(file) as source, archive.open(archive_name, "w") as target:
 					while chunk := source.read(1024 * 1024):
 						copied_bytes += len(chunk)
 						if copied_bytes > DOCUMENT_MAX_ZIP_BYTES:

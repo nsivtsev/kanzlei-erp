@@ -6,6 +6,7 @@
 !kanzlei_erp/**
 !deploy/
 !deploy/Dockerfile
+!deploy/route-files.py
 !deploy/suite.env
 !deploy/suite-mandant-access.patch
 !deploy/frappe-mandant-access.patch
@@ -14,6 +15,8 @@
 !deploy/suite-mandant-access-v3.patch
 !deploy/suite-mandant-access-v4.patch
 !deploy/suite-mandant-access-v5.patch
+!deploy/suite-mandant-access-v6.patch
+!deploy/frappe-mandant-access-v6.patch
 !deploy/frappe-mandant-access-v1.patch
 !scripts/
 !scripts/fetch-suite.sh

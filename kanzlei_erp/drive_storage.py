@@ -31,6 +31,10 @@ def identity(url, settings=None):
 	value = str(url or "")
 	if not value:
 		return None
+	from kanzlei_erp.object_storage import get_binding
+
+	if binding := get_binding(value):
+		return ("s3", binding.object_key)
 	if value.startswith(S3_URL_PREFIX):
 		key = storage_key(value)
 		if not key.startswith("private/files/"):
@@ -88,8 +92,14 @@ def _index(rows=None):
 	for row in rows:
 		trash, thumbnail = _sidecar_paths(row, manager)
 		physical = trash if row.status == "Trashed" and not manager.flat else row.file_url
+		from kanzlei_erp.object_storage import get_binding
+		derived = []
+		if frappe.db.table_exists("S3 File Object"):
+			derived = [("s3", key) for key in frappe.get_all("S3 File Object", filters={"source_file": row.name}, pluck="object_key")]
+		if binding := get_binding(frappe.db.get_value("File", row.name, "thumbnail_url")):
+			derived.append(("s3", binding.object_key))
 		objects.append((row, identity(physical, manager.settings),
-			[identity(trash, manager.settings), identity(thumbnail, manager.settings)]))
+			[identity(trash, manager.settings), identity(thumbnail, manager.settings), *derived]))
 	index = (manager, objects)
 	if cache:
 		frappe.local.kanzlei_storage_index = index
@@ -148,6 +158,7 @@ def validate_file_binding(doc, previous=None):
 	if is_alias(doc):
 		_deny()
 	previous = previous or (doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None)
+	validate_thumbnail_binding(doc, previous)
 	if previous and previous.file_url and identity(previous.file_url) != identity(doc.file_url):
 		if not any(name == doc.name and identity(url) == identity(doc.file_url) for name, url in _bindings.get()):
 			_deny()
@@ -169,9 +180,29 @@ def validate_file_binding(doc, previous=None):
 			_deny()
 
 
+def validate_thumbnail_binding(doc, previous=None):
+	from kanzlei_erp.object_storage import get_binding, lock_binding
+
+	url = doc.get("thumbnail_url")
+	if not url or (previous and previous.thumbnail_url == url):
+		return
+	lock_binding(url)
+	if not (binding := get_binding(url)):
+		return
+	if conflicts(doc, target=url):
+		_deny()
+	owners = frappe.get_all("File", filters={"thumbnail_url": url}, pluck="name")
+	if binding.source_file:
+		owners.append(binding.source_file)
+	if not any(name == doc.name or frappe.has_permission("File", "read", doc=name) for name in owners):
+		_deny()
+
+
 def validate_binding_event(doc, method=None):
 	# before_validate runs even when an incoming Document requests ignore_validate.
 	invalidate()
+	from kanzlei_erp.object_storage import lock_binding
+	lock_binding(doc.file_url)
 	validate_file_binding(doc)
 
 

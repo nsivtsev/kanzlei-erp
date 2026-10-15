@@ -46,6 +46,41 @@ index 1df576f..90cc0dc 100755
  def _scoped_attachment_condition(doctype: str, user: str, exists_condition: str) -> str:
  	"""Build `(attached_to_doctype = X AND (EXISTS(...) OR individually shared))`."""
  	table = get_table_name(doctype, wrap_in_backticks=True)
+diff --git a/frappe/email/email_body.py b/frappe/email/email_body.py
+index 15eae0e..7669129 100755
+--- a/frappe/email/email_body.py
++++ b/frappe/email/email_body.py
+@@ -656,6 +656,16 @@ def get_filecontent_from_path(path):
+ 	if os.path.commonpath((base_path, full_path)) != base_path:
+ 		return None
+ 
++	if path.startswith(("files/", "private/files/")):
++		if name := frappe.db.get_value("File", {"file_url": "/" + path}, "name"):
++			# Preserve the worker's existing File access semantics while allowing
++			# remote storage. Explicitly request bytes for MIME image payloads.
++			return frappe.get_doc("File", name).get_content(encodings=[])
++		for handler in frappe.get_hooks("file_content_from_url"):
++			content = frappe.call(handler, url="/" + path)
++			if content is not None:
++				return content
++
+ 	if os.path.exists(full_path):
+ 		with open(full_path, "rb") as f:
+ 			filecontent = f.read()
+diff --git a/frappe/middlewares.py b/frappe/middlewares.py
+index 76feb5f..011f201 100644
+--- a/frappe/middlewares.py
++++ b/frappe/middlewares.py
+@@ -14,6 +14,9 @@ from frappe.utils.response import FORCE_DOWNLOAD_EXTENSIONS
+ class StaticDataMiddleware(SharedDataMiddleware):
+ 	def __call__(self, environ, start_response):
+ 		self.environ = environ
++		# File URLs must pass through backend storage/permission routing.
++		if environ.get("PATH_INFO", "").startswith("/files/"):
++			return self.app(environ, start_response)
+ 
+ 		def patch_start_response(status, headers, exc_info=None):
+ 			if (
 diff --git a/frappe/realtime.py b/frappe/realtime.py
 index 7e8e31f..a250f1d 100644
 --- a/frappe/realtime.py

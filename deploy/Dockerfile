@@ -2,6 +2,8 @@
 FROM frappe/erpnext:v16.36.1@sha256:13d6d2889b8690b2d6c69cb562d63bd2990f42df8cff92db840043ae69034fef
 
 USER root
+COPY deploy/route-files.py /tmp/route-files.py
+RUN python3 /tmp/route-files.py && rm /tmp/route-files.py
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg git build-essential pkg-config \
     && rm -rf /var/lib/apt/lists/*
 USER frappe

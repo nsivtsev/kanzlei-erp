@@ -1,7 +1,7 @@
 """Regression tests use real storage and ordinary users, including old bad rows."""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
@@ -240,15 +240,16 @@ class TestDriveStorageSecurity(FrappeTestCase):
 			alias.save()
 
 	def test_s3_wrapper_preserves_leading_and_trailing_slashes(self):
-		from kanzlei_erp.drive_storage import identity
 		from suite.drive.utils.files import get_s3_url
+
+		from kanzlei_erp.drive_storage import identity
 		self.assertEqual(identity(get_s3_url("/bucket/file")), ("s3", "/bucket/file"))
 		self.assertNotEqual(identity(get_s3_url("/bucket/file/")), identity(get_s3_url("/bucket/file")))
 
 	def test_copied_subfolder_inherits_mandant_and_has_distinct_storage(self):
 		from suite.drive.api.files import create_folder
-		from suite.drive.webdav.copy import _Copier
 		from suite.drive.utils.files import FileManager
+		from suite.drive.webdav.copy import _Copier
 		root = self.root()
 		frappe.set_user(self.writer.name)
 		source = create_folder("Source", root.name)
@@ -270,7 +271,9 @@ class TestDriveStorageSecurity(FrappeTestCase):
 
 	def test_s3_alias_is_denied_before_any_backend_io(self):
 		from unittest.mock import MagicMock
+
 		from suite.drive.utils.files import FileManager, get_s3_url
+
 		from kanzlei_erp.drive_storage import invalidate
 		file = self.child(self.root())
 		alias = self.old_alias(file)
@@ -288,9 +291,13 @@ class TestDriveStorageSecurity(FrappeTestCase):
 
 	def test_s3_upload_uses_decoded_object_key(self):
 		from unittest.mock import MagicMock
+
 		from suite.drive.utils.files import FileManager, get_s3_url
+
+		from kanzlei_erp.object_storage import prefix
+		key = prefix() + "/drive/object key.xml"
 		file = self.child(self.root())
-		file.db_set("file_url", get_s3_url("/protected/object key.xml"))
+		file.db_set("file_url", get_s3_url(key))
 		manager = FileManager()
 		manager.s3_enabled = True
 		manager.bucket = "test-bucket"
@@ -298,4 +305,4 @@ class TestDriveStorageSecurity(FrappeTestCase):
 		frappe.set_user(self.writer.name)
 		with patch("suite.drive.utils.files.os.remove"):
 			manager.upload_file("/staged.xml", file, False)
-		manager.conn.upload_file.assert_called_once_with("/staged.xml", "test-bucket", "/protected/object key.xml")
+		manager.conn.upload_file.assert_called_once_with("/staged.xml", "test-bucket", key)

@@ -1,12 +1,13 @@
 """Prevent Drive from moving ERP attachment bytes before document validation."""
 
-import frappe
 from types import SimpleNamespace
+
+import frappe
 
 
 def require_drive_material(doc):
-	from kanzlei_erp.mandant_drive import protect_root
 	from kanzlei_erp.drive_storage import require_storage_access
+	from kanzlei_erp.mandant_drive import protect_root
 
 	require_storage_access(doc, "write")
 	protect_root(doc)
@@ -42,7 +43,10 @@ class ERPAttachmentGuard:
 
 		invalidate()
 		try:
-			return super().db_set(*args, **kwargs)
+			result = super().db_set(*args, **kwargs)
+			from kanzlei_erp.object_storage import mark_mutation
+			mark_mutation()
+			return result
 		finally:
 			invalidate()
 
@@ -55,9 +59,11 @@ class ERPAttachmentGuard:
 
 	def before_insert(self):
 		from kanzlei_erp.drive_storage import grant_creation, invalidate, validate_file_binding
+		from kanzlei_erp.object_storage import lock_binding
 
 		if "suite" not in frappe.get_installed_apps():
 			return super().before_insert()
+		lock_binding(self.file_url)
 		invalidate()
 		validate_file_binding(self)
 		result = super().before_insert()
@@ -67,8 +73,12 @@ class ERPAttachmentGuard:
 
 	def _delete_file_on_disk(self):
 		from kanzlei_erp.drive_storage import exact_io, require_storage_access
+		from kanzlei_erp.object_storage import get_binding, schedule_delete
 
 		require_storage_access(self, "write")
+		if get_binding(self.file_url):
+			schedule_delete(self)
+			return
 		with exact_io(self):
 			return super()._delete_file_on_disk()
 
@@ -81,15 +91,69 @@ class ERPAttachmentGuard:
 
 	def get_content(self, *args, **kwargs):
 		from kanzlei_erp.drive_storage import require_storage_access
+		from kanzlei_erp.object_storage import open_file, stored
 
 		require_storage_access(self)
+		if not self.get("content") and stored(self):
+			with open_file(self) as source:
+				data = source.read()
+			encodings = kwargs.get("encodings", args[0] if args else None)
+			from frappe.core.doctype.file.file import FILE_ENCODING_OPTIONS, OLE_FILE_SIGNATURE
+			if not data.startswith(OLE_FILE_SIGNATURE):
+				for encoding in FILE_ENCODING_OPTIONS if encodings is None else encodings:
+					try:
+						self._content = data.decode(encoding)
+						return self._content
+					except UnicodeDecodeError:
+						continue
+			self._content = data
+			return self._content
 		return super().get_content(*args, **kwargs)
 
 	def get_full_path(self):
 		from kanzlei_erp.drive_storage import require_storage_access
+		from kanzlei_erp.object_storage import materialize, stored
 
 		require_storage_access(self)
+		if stored(self):
+			return materialize(self)
 		return super().get_full_path()
+
+	def exists_on_disk(self):
+		from kanzlei_erp.object_storage import client, file_key, settings, stored
+
+		if stored(self):
+			from kanzlei_erp.drive_storage import require_storage_access
+			require_storage_access(self)
+			client().head_object(Bucket=settings().bucket, Key=file_key(self))
+			return True
+		return super().exists_on_disk()
+
+	def make_thumbnail(self, set_as_thumbnail=True, width=300, height=300, suffix="small", crop=False):
+		from kanzlei_erp.object_storage import make_thumbnail, stored
+
+		if stored(self):
+			return make_thumbnail(self, width=width, height=height, suffix=suffix, set_as_thumbnail=set_as_thumbnail, crop=crop)
+		return super().make_thumbnail(set_as_thumbnail, width, height, suffix, crop)
+
+	def validate_file_path(self):
+		from kanzlei_erp.object_storage import stored
+
+		if stored(self):
+			from kanzlei_erp.drive_storage import require_storage_access
+			require_storage_access(self)
+			return
+		return super().validate_file_path()
+
+	def handle_is_private_changed(self):
+		from kanzlei_erp.object_storage import bind, get_binding
+
+		if get_binding(self.file_url):
+			before = self.get_doc_before_save()
+			if before and before.is_private != self.is_private:
+				frappe.throw("Changing the privacy of an S3 attachment requires creating a new attachment.", frappe.ValidationError)
+			return
+		return super().handle_is_private_changed()
 
 	def on_rollback(self):
 		from kanzlei_erp.drive_storage import is_alias
@@ -105,6 +169,12 @@ class ERPAttachmentGuard:
 		captured = frappe._dict(self.as_dict())
 		with deleted_storage(captured):
 			require_storage_access(self, "write")
+			if self.manager.s3_enabled:
+				from kanzlei_erp.object_storage import file_key, schedule_derivatives, schedule_key_deletion
+				schedule_derivatives(self)
+				schedule_key_deletion(file_key(self))
+				schedule_key_deletion(str(self.manager.get_thumbnail_path(self.name)))
+				return
 		def cleanup():
 			with deleted_storage(captured):
 				if blob_is_trashed:
@@ -130,8 +200,9 @@ class ERPAttachmentGuard:
 
 	@frappe.whitelist()
 	def rename(self, new_file_name):
-		from kanzlei_erp.mandant_drive import storage_mutation
 		from suite.drive.utils.files import FileManager
+
+		from kanzlei_erp.mandant_drive import storage_mutation
 
 		proposed = SimpleNamespace(**self.as_dict())
 		proposed.file_name = new_file_name
@@ -144,8 +215,8 @@ class ERPAttachmentGuard:
 
 		require_drive_material(self)
 		validate_move(self, new_parent)
-		from suite.drive.utils.files import FileManager
 		from suite.drive.utils import get_new_file_name, get_user_folder
+		from suite.drive.utils.files import FileManager
 		new_parent = new_parent or get_user_folder().name
 		proposed = SimpleNamespace(**self.as_dict())
 		proposed.folder = new_parent
