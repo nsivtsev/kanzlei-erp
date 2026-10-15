@@ -2649,7 +2649,7 @@ index b00b05417..e835411bf 100644
 +        self.assertIsNone(unwrap(account.get_logged_in_user)())
 +        self.frappe.get_doc.assert_not_called()
 diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
-index 86a738764..222114a93 100644
+index 86a738764..1d3c278eb 100644
 --- a/suite/drive/api/files.py
 +++ b/suite/drive/api/files.py
 @@ -5,6 +5,7 @@ import re
@@ -3134,6 +3134,15 @@ index 86a738764..222114a93 100644
  
  
  @frappe.whitelist(allow_guest=True)
+@@ -1023,7 +1045,7 @@ def track_visit(
+ def get_upload_path(file_name):
+     root_folder = frappe.get_single("Drive Disk Settings").root_folder or ""
+     uploads_path = Path(frappe.get_site_path("private/files"), root_folder, ".uploads")
+-    uploads_path.mkdir(exist_ok=True)
++    uploads_path.mkdir(parents=True, exist_ok=True)
+     uploads_path = uploads_path.resolve()
+     upload_path = (uploads_path / file_name).resolve()
+     if not upload_path.is_relative_to(uploads_path):
 diff --git a/suite/drive/api/list.py b/suite/drive/api/list.py
 index 9a522e7c0..fa05c1b37 100644
 --- a/suite/drive/api/list.py
