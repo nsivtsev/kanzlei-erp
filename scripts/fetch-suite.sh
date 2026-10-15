@@ -49,7 +49,7 @@ for app in "${apps[@]}"; do
   else
     needs_apply+=(1)
     if ! git -C "apps/$app" apply --check "$patch_file" 2>/dev/null; then
-      for version in v3 v2 v1; do
+      for version in v4 v3 v2 v1; do
         candidate="$patch_dir/$app-mandant-access-$version.patch"
         if [[ -f $candidate ]] && git -C "apps/$app" apply --reverse --check "$candidate" 2>/dev/null; then
           previous=$candidate
@@ -72,7 +72,7 @@ for (( i=0; i<${#apps[@]}; i++ )); do
   patch_file="$patch_dir/$app-mandant-access.patch"
   previous=${predecessors[$i]}
   if [[ -n $previous ]]; then
-    # Remember the exact version removed, so rollback restores v1, v2 or v3.
+    # Remember the exact version removed, so rollback restores the exact v1–v4 predecessor.
     git -C "apps/$app" apply --reverse "$previous"
     removed_previous+=("$app")
     removed_patch_files+=("$previous")

@@ -11,6 +11,8 @@ class PythonCompatibilityTests(unittest.TestCase):
 		sources = [
 			*(ROOT / "deploy").rglob("*.py"),
 			ROOT / "scripts/release-image.py",
+			*(ROOT / "scripts").glob("ci_*.py"),
+			ROOT / "scripts/deploy_preflight.py",
 			*(ROOT / "tests/deploy").rglob("*.py"),
 		]
 		for source in sorted(sources):

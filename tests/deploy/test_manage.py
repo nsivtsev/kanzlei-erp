@@ -96,6 +96,23 @@ class DeploymentTests(unittest.TestCase):
 		self.assertFalse((self.root / "shared/pending.json").exists())
 		self.assertTrue(any("up" in call and "scheduler" in call for call in commands.calls))
 
+	def test_duplicate_successful_deploy_checks_health_without_another_backup_or_migration(self):
+		self.deployer().deploy()
+		commands = FakeCommands()
+		observed = []
+		self.deployer(commands, smoke=lambda compose: observed.append(compose.image)).deploy()
+		self.assertEqual(observed, [self.new_image])
+		self.assertFalse(any("backup" in call or "migrate" in call or "pull" in call or "up" in call
+			for call in commands.calls))
+		self.assertEqual(len(list((self.root / "backups").iterdir())), 1)
+
+	def test_duplicate_deploy_with_unhealthy_services_fails_without_changing_database(self):
+		self.deployer().deploy()
+		commands = FakeCommands("ps")
+		with self.assertRaisesRegex(RuntimeError, "ps"):
+			self.deployer(commands).deploy()
+		self.assertFalse(any("backup" in call or "migrate" in call for call in commands.calls))
+
 	def test_existing_site_installs_missing_apps_after_backup_before_migration(self):
 		commands = FakeCommands()
 		self.deployer(commands).deploy()

@@ -2,13 +2,19 @@
 set -euo pipefail
 set +x
 umask 077
-if [[ $# -ne 1 ]]; then
-  echo "Usage: bash scripts/ci-image.sh LOCAL_IMAGE_TAG" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: bash scripts/ci-image.sh LOCAL_IMAGE_TAG [all|application|upgrade]" >&2
   exit 1
 fi
 image=$1
+scenario=${2:-all}
+case "$scenario" in
+  all) exec python3 "$(dirname "$0")/ci_scenarios.py" "$image" ;;
+  application|upgrade) ;;
+  *) echo "Unknown CI scenario: $scenario" >&2; exit 1 ;;
+esac
 task_root=$(mktemp -d)
-project="kanzlei-ci-$(date +%s)-$RANDOM"
+project="kanzlei-ci-$scenario-$(date +%s)-$RANDOM"
 frontend_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 mkdir -p "$task_root/shared"
 export DB_PASSWORD ADMIN_PASSWORD
@@ -38,9 +44,35 @@ cleanup() {
   exit "$result"
 }
 trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 "${compose[@]}" config --quiet
 "${compose[@]}" up -d --wait --wait-timeout 180 db redis-cache redis-queue
 "${compose[@]}" run --rm -T configurator
+if [[ $scenario == upgrade ]]; then
+  # Variables expand inside this scenario's isolated container.
+  # shellcheck disable=SC2016
+  "${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -e DB_PASSWORD -e ADMIN_PASSWORD backend bash -euc '
+bench new-site suite-upgrade.localhost --db-root-password "$DB_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=%
+bench --site suite-upgrade.localhost install-app erpnext
+bench --site suite-upgrade.localhost install-app kanzlei_erp
+env/bin/python /tmp/ci-suite.py legacy-seed --site suite-upgrade.localhost
+bench --site suite-upgrade.localhost backup --with-files --compress
+bench --site suite-upgrade.localhost install-app suite
+bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
+bench --site suite-upgrade.localhost migrate
+bench --site suite-upgrade.localhost migrate
+env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
+bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 1
+bench --site suite-upgrade.localhost execute "__import__(\"kanzlei_erp.suite_setup\", fromlist=[\"prepare_suite_install\"]).prepare_suite_install(\"suite\")"
+bench --site suite-upgrade.localhost install-app suite --force
+bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 0
+bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
+env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
+'
+  echo "Suite upgrade and interrupted installation verification passed."
+  exit 0
+fi
 # Variables in this script expand inside the disposable container.
 # shellcheck disable=SC2016
 "${compose[@]}" run --rm -T --no-deps -v "$PWD/scripts/ci-site.py:/tmp/ci-site.py:ro" -v "$PWD/scripts/ci-suite.py:/tmp/ci-suite.py:ro" -v "$PWD/deploy/verify_drive.py:/tmp/verify_drive.py:ro" -e SITE_NAME=ci.localhost -e DB_PASSWORD -e ADMIN_PASSWORD backend bash -euc '
@@ -64,22 +96,7 @@ env/bin/python /tmp/ci-site.py
 bench --site ci.localhost run-tests --app kanzlei_erp --junit-xml-output /home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml
 env/bin/python -c '\''import re, xml.etree.ElementTree as E; data=open("/home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml").read(); root=E.fromstring("<reports>"+re.sub(r"<\?xml[^>]*\?>", "", data)+"</reports>"); cases=list(root.iter("testcase")); assert any(case.find("skipped") is None for case in cases), "No application tests executed"; assert not list(root.iter("failure")) and not list(root.iter("error")), "Application tests failed"; print(f"Verified {len(cases)} application test results")'\''
 bench --site ci.localhost set-config allow_tests false
-bench new-site suite-upgrade.localhost --db-root-password "$DB_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=%
-bench --site suite-upgrade.localhost install-app erpnext
-bench --site suite-upgrade.localhost install-app kanzlei_erp
-env/bin/python /tmp/ci-suite.py legacy-seed --site suite-upgrade.localhost
-bench --site suite-upgrade.localhost backup --with-files --compress
-bench --site suite-upgrade.localhost install-app suite
-bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
-bench --site suite-upgrade.localhost migrate
-bench --site suite-upgrade.localhost migrate
-env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
-bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 1
-bench --site suite-upgrade.localhost execute "__import__(\"kanzlei_erp.suite_setup\", fromlist=[\"prepare_suite_install\"]).prepare_suite_install(\"suite\")"
-bench --site suite-upgrade.localhost install-app suite --force
-bench --site suite-upgrade.localhost set-config kanzlei_suite_install_pending 0
-bench --site suite-upgrade.localhost execute kanzlei_erp.suite_setup.configure
-env/bin/python /tmp/ci-suite.py legacy-verify --site suite-upgrade.localhost
+
 '
 "${compose[@]}" up -d backend frontend websocket queue-short queue-long scheduler
 python3 - "$task_root" "$image" <<'PY'

@@ -81,6 +81,13 @@ services:
   frontend:
     <<: *app
     command: [nginx-entrypoint.sh]
+    # Nginx resolves upstream names when it starts. After a stop/restore Docker
+    # may assign new IPs, so both upstream endpoints must be registered first.
+    depends_on:
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
     environment:
       BACKEND: backend:8000
       SOCKETIO: websocket:9000

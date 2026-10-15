@@ -1,0 +1,2708 @@
+diff --git a/frontend/src/apps/drive/components/DriveToolBar.vue b/frontend/src/apps/drive/components/DriveToolBar.vue
+index 1cb541b4a..1a264f733 100644
+--- a/frontend/src/apps/drive/components/DriveToolBar.vue
++++ b/frontend/src/apps/drive/components/DriveToolBar.vue
+@@ -77,8 +77,9 @@
+           .filter((i) => i.important && (selections.length === 1 || i.multi))
+           .filter(
+             (i) =>
+-              !i.isEnabled ||
+-              selections.every((e) => i.isEnabled(e, selections.length !== 1))
++              i.isEnabledForSelection
++                ? i.isEnabledForSelection(selections)
++                : !i.isEnabled || selections.every((e) => i.isEnabled(e, selections.length !== 1))
+           )" :key="item.label">
+           <Button variant="outline" :tooltip="item.label" @click.once="item.action(selections)">
+             <template #icon>
+diff --git a/frontend/src/apps/drive/components/FileRender.vue b/frontend/src/apps/drive/components/FileRender.vue
+index c6572bdbc..c7a8a2e8a 100644
+--- a/frontend/src/apps/drive/components/FileRender.vue
++++ b/frontend/src/apps/drive/components/FileRender.vue
+@@ -1,6 +1,15 @@
+ <template>
+   <div
+-    v-if="error"
++    v-if="officeFile"
++    class="max-w-[450px] h-fit self-center p-10 border border-outline-gray-2 bg-surface-base rounded-4 text-center shadow-xl flex flex-col items-center gap-4"
++  >
++    <span class="text-xl font-medium text-ink-gray-9 break-all">{{ previewEntity.file_name }}</span>
++    <span class="text-base text-ink-gray-7">{{ previewEntity.file_type }} · {{ formatSize(previewEntity.file_size || 0) }}</span>
++    <span class="text-base text-ink-gray-7">Preview is not available for this file type. Download the file to open it.</span>
++    <Button v-if="previewEntity.can_download" class="w-full" variant="solid" @click="download">Download</Button>
++  </div>
++  <div
++    v-else-if="error"
+     class="max-w-[450px] h-fit self-center p-10 border border-outline-gray-2 bg-surface-base rounded-4 text-2xl-medium text-center shadow-xl flex flex-col justify-center items-center gap-4"
+   >
+     <LucideAlertCircle class="size-8 text-ink-gray-8" />
+@@ -8,7 +17,7 @@
+     <span class="text-base text-center text-ink-gray-7">
+       {{ error }}
+     </span>
+-    <Button class="w-full" variant="solid" @click="download"> Download </Button>
++    <Button v-if="previewEntity.can_download" class="w-full" variant="solid" @click="download"> Download </Button>
+   </div>
+   <component :is="previewComponent" v-else :preview-entity="previewEntity" />
+ </template>
+@@ -16,13 +25,13 @@
+ import { Button } from 'frappe-ui'
+ import { computed, defineAsyncComponent } from 'vue'
+ 
+-const MSOfficePreview = defineAsyncComponent(() => import('@/apps/drive/components/FileTypePreview/MSOfficePreview.vue'))
+ const ImagePreview = defineAsyncComponent(() => import('@/apps/drive/components/FileTypePreview/ImagePreview.vue'))
+ const PDFPreview = defineAsyncComponent(() => import('./FileTypePreview/PDFPreview.vue'))
+ const VideoPreview = defineAsyncComponent(() => import('./FileTypePreview/VideoPreview.vue'))
+ const TextPreview = defineAsyncComponent(() => import('./FileTypePreview/TextPreview.vue'))
+ const AudioPreview = defineAsyncComponent(() => import('@/apps/drive/components/FileTypePreview/AudioPreview.vue'))
+ import LucideAlertCircle from '~icons/lucide/alert-circle'
++import { formatSize } from '@/apps/drive/utils/format'
+ import { diskSettings } from '@/apps/drive/resources/permissions'
+ 
+ const props = defineProps({
+@@ -40,7 +49,7 @@ const props = defineProps({
+ if (!diskSettings.data) diskSettings.fetch()
+ const error = computed(() => {
+   const limit = diskSettings.data?.preview_size || 100
+-  if (!Object.keys(RENDERS).includes(props.previewEntity.file_type))
++  if (!Object.keys(RENDERS).includes(getType(props.previewEntity)))
+     return 'Previews are not supported for this file type. Would you like to download it instead?'
+   else if (props.previewEntity.file_size > limit * 1024 * 1024)
+     return 'This is too large to preview - would you like to download instead?'
+@@ -48,7 +57,8 @@ const error = computed(() => {
+ })
+ 
+ const download = () => {
+-  window.location.href = `/api/method/suite.drive.api.files.get_file_content?entity_name=${props.previewEntity.name}&trigger_download=1`
++  if (!props.previewEntity.can_download) return
++  window.location.href = `/api/method/suite.drive.api.files.get_file_content?entity_name=${encodeURIComponent(props.previewEntity.name)}&trigger_download=1`
+ }
+ 
+ const RENDERS = {
+@@ -56,9 +66,6 @@ const RENDERS = {
+   Image: ImagePreview,
+   Video: VideoPreview,
+   Audio: AudioPreview,
+-  Document: MSOfficePreview,
+-  Spreadsheet: MSOfficePreview,
+-  Presentation: MSOfficePreview,
+   Text: TextPreview,
+   Code: TextPreview,
+ }
+@@ -70,5 +77,6 @@ const EXCEPTIONS = {
+ const getType = (k) => {
+   return EXCEPTIONS[k.mime_type] || k.file_type
+ }
++const officeFile = computed(() => ['Document', 'Spreadsheet', 'Presentation'].includes(getType(props.previewEntity)))
+ const previewComponent = computed(() => RENDERS[getType(props.previewEntity)])
+ </script>
+diff --git a/frontend/src/apps/drive/components/FileTypePreview/MSOfficePreview.vue b/frontend/src/apps/drive/components/FileTypePreview/MSOfficePreview.vue
+deleted file mode 100644
+index 43b8fc89c..000000000
+--- a/frontend/src/apps/drive/components/FileTypePreview/MSOfficePreview.vue
++++ /dev/null
+@@ -1,67 +0,0 @@
+-<template>
+-  <iframe
+-    v-if="warned && jwt_token"
+-    :src="'https://view.officeapps.live.com/op/embed.aspx?src=' + srcUrl"
+-    class="w-4/5 mx-auto h-full"
+-    frameborder="0"
+-  >
+-    This is an embedded Microsoft Office document, powered by Office Online>.</iframe
+-  >
+-  <div
+-    v-else
+-    class="max-w-[450px] h-fit self-center p-10 bg-surface-base rounded-4 text-2xl-medium text-center shadow-xl flex flex-col justify-center items-center gap-4"
+-  >
+-    <div v-if="error" class="text-p-base">
+-      <LucideSettings class="size-8 mb-6 mx-auto" />
+-      Please ask your site's administrator to set the access key in the
+-      <a href="/app/drive-disk-settings" class="underline">Settings</a>.
+-    </div>
+-    <template v-else>
+-      <LucideAlertCircle class="size-10" />
+-      <span class="text-ink-gray-8">Are you sure you want to preview?</span>
+-      <span class="text-p-base text-center text-ink-gray-7">
+-        This preview is generated by an external service (<b>Microsoft</b>), not by Drive. For extra
+-        privacy, we'd suggest downloading.
+-      </span>
+-      <div class="flex flex-col gap-2 w-full">
+-        <Button class="w-full" variant="subtle" :loading="jwt_token === ''" @click="warned = true">
+-          View anyway
+-        </Button>
+-        <Button class="w-full" variant="solid" @click="download"> Download </Button>
+-      </div>
+-    </template>
+-  </div>
+-</template>
+-<script setup>
+-import { Button } from 'frappe-ui'
+-import { computed, ref, watch } from 'vue'
+-const props = defineProps({
+-  previewEntity: Object,
+-})
+-
+-const warned = ref(false)
+-watch(warned, async () => {
+-  jwt_token.value = ''
+-  const res = await fetch(
+-    '/api/method/suite.drive.api.files.create_auth_token?entity_name=' + props.previewEntity.name
+-  )
+-  const { message } = JSON.parse(await res.text())
+-  if (message) {
+-    jwt_token.value = message
+-  } else {
+-    error.value = 'Please set up your Drive Settings.'
+-  }
+-})
+-
+-const jwt_token = ref(null)
+-const error = ref(null)
+-const srcUrl = computed(() =>
+-  encodeURIComponent(
+-    new URL(
+-      `/api/method/suite.drive.api.files.get_file_content?token=${jwt_token.value}&entity_name=${props.previewEntity.name}&trigger_download=1`,
+-      window.location.origin
+-    ).href
+-  )
+-)
+-const download = () => (window.location.ref = srcUrl.value)
+-</script>
+diff --git a/frontend/src/apps/drive/components/GenericPage.test.ts b/frontend/src/apps/drive/components/GenericPage.test.ts
+index e1bafb2f2..40bdb45b2 100644
+--- a/frontend/src/apps/drive/components/GenericPage.test.ts
++++ b/frontend/src/apps/drive/components/GenericPage.test.ts
+@@ -30,7 +30,11 @@ vi.mock('./ListView.vue', () => ({
+ 
+ const stub = vi.hoisted(() => ({ template: '<div />' }))
+ vi.mock('./GridView.vue', () => ({ default: defineComponent(stub) }))
+-vi.mock('./DriveToolBar.vue', () => ({ default: defineComponent(stub) }))
++const toolbar = vi.hoisted(() => ({ actions: [] as any[] }))
++vi.mock('./DriveToolBar.vue', () => ({ default: defineComponent({
++  props: ['actionItems'],
++  setup: (props) => () => { toolbar.actions = props.actionItems; return h('div') },
++}) }))
+ vi.mock('./Navbar.vue', () => ({ default: defineComponent(stub) }))
+ vi.mock('./NoFilesSection.vue', () => ({ default: defineComponent(stub) }))
+ vi.mock('./UploadTracker.vue', () => ({ default: defineComponent(stub) }))
+@@ -123,9 +127,10 @@ function mountPage(grouper: (rows: unknown[]) => unknown) {
+   )
+   app.config.errorHandler = (err) => errors.push(String(err))
+   app.config.warnHandler = (msg) => errors.push(msg)
+-  app.provide('socket', { on: vi.fn() })
++  const handlers: Record<string, (payload: unknown) => void> = {}
++  app.provide('socket', { on: vi.fn((event, handler) => { handlers[event] = handler }), off: vi.fn() })
+   app.mount(document.createElement('div'))
+-  return { app, errors }
++  return { app, errors, handlers, getEntities }
+ }
+ 
+ // Recents' groupByTime — the shape that matters is a fresh object per call.
+@@ -212,7 +217,7 @@ function mountPaginated(firstPage: {
+         }),
+     })
+   )
+-  app.provide('socket', { on: vi.fn() })
++  app.provide('socket', { on: vi.fn(), off: vi.fn() })
+   app.mount(document.createElement('div'))
+   return { app, getEntities }
+ }
+@@ -424,3 +429,56 @@ describe('GenericPage pagination', () => {
+     app.unmount()
+   })
+ })
++
++
++describe('GenericPage realtime invalidation', () => {
++  it('fetches authoritative rows and ignores a late response after unmount', async () => {
++    vi.useFakeTimers()
++    let finish: (value: unknown) => void
++    frappeUI.request.mockImplementation(() => new Promise(resolve => { finish = resolve }))
++    const { app, handlers, getEntities } = mountPage(freshObjectGrouper)
++    handlers['drive-folder-changed']({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(frappeUI.request).toHaveBeenCalled()
++    app.unmount()
++    finish!({ message: [{ name: 'secret', file_name: 'private' }] })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(getEntities.setData).not.toHaveBeenCalled()
++    vi.useRealTimers()
++  })
++  it('clears rows when authoritative reload denies access', async () => {
++    vi.useFakeTimers()
++    frappeUI.request.mockRejectedValue({ status: 403 })
++    const { app, handlers, getEntities } = mountPage(freshObjectGrouper)
++    handlers['drive-folder-changed']({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(getEntities.setData).toHaveBeenCalledWith([])
++    app.unmount()
++    vi.useRealTimers()
++  })
++})
++
++
++describe('download menu capability', () => {
++  beforeEach(() => { window.__ = (message: string) => message })
++  it('offers uploaded Office downloads and folder ZIPs using server capability', async () => {
++    const { app } = mountPage(freshObjectGrouper)
++    await nextTick()
++    const action = toolbar.actions.find((item) => item.label === 'Download')
++    expect(action.isEnabled({ file_type: 'Document', can_download: true })).toBe(true)
++    expect(action.isEnabled({ file_type: 'Presentation', can_download: true })).toBe(true)
++    expect(action.isEnabled({ file_type: 'PDF', can_download: false })).toBe(false)
++    expect(action.isEnabled({ is_folder: true, can_download: false })).toBe(true)
++    app.unmount()
++  })
++  it('permits mixed selections while rejecting selections with no downloadable content', async () => {
++    const { app } = mountPage(freshObjectGrouper)
++    await nextTick()
++    const action = toolbar.actions.find((item) => item.label === 'Download')
++    expect(action.isEnabledForSelection([
++      { can_download: true }, { content_doctype: 'Writer Document', can_download: false },
++    ])).toBe(true)
++    expect(action.isEnabledForSelection([{ can_download: false }, { can_download: false }])).toBe(false)
++    app.unmount()
++  })
++})
+diff --git a/frontend/src/apps/drive/components/GenericPage.vue b/frontend/src/apps/drive/components/GenericPage.vue
+index 2e5a47951..8c77db376 100644
+--- a/frontend/src/apps/drive/components/GenericPage.vue
++++ b/frontend/src/apps/drive/components/GenericPage.vue
+@@ -59,6 +59,7 @@ import {
+ } from '@/apps/drive/resources/files'
+ import { confirmRestore, confirmRemove, confirmDeleteForever } from '@/apps/drive/utils/confirmActions'
+ import { entitiesDownload } from '@/apps/drive/utils/download'
++import { canDownloadEntity, canDownloadSelection } from '@/apps/drive/utils/downloadEligibility'
+ import { ref, computed, watch, watchEffect, provide, inject, onBeforeUnmount, nextTick } from 'vue'
+ import { useRoute } from 'vue-router'
+ import { useEventListener } from '@vueuse/core'
+@@ -83,6 +84,7 @@ import { move } from '@/apps/drive/resources/files'
+ import DriveListSkeleton from '@/apps/drive/components/DriveListSkeleton.vue'
+ import { settings } from '@/apps/drive/resources/permissions'
+ import emitter from '@/apps/drive/emitter'
++import { subscribeFolderChanges } from '@/apps/drive/utils/realtimeRefresh'
+ import { useEmitter } from '@/apps/drive/utils/useEmitter'
+ import { getFileLink } from '@/apps/drive/ui/drive/js/utils'
+ 
+@@ -566,12 +568,8 @@ const actionItems = computed(() => {
+       {
+         label: __('Download'),
+         icon: LucideDownload,
+-        // Downloading is read-only, so it is safe for every real file regardless
+-        // of kind (parity with the file-preview navbar). Only virtual grouping
+-        // nodes and non-downloadable types are excluded.
+-        isEnabled: (e) =>
+-          !isVirtual(e) &&
+-          !['Link', 'Presentation', 'Document'].includes(e.file_type),
++        isEnabled: canDownloadEntity,
++        isEnabledForSelection: canDownloadSelection,
+         action: (entities) => entitiesDownload(entities),
+         multi: true,
+         important: true,
+@@ -674,32 +672,42 @@ const actionItems = computed(() => {
+ })
+ 
+ const socket = inject('socket')
+-socket.on('list-add', ({ file }) => {
+-  if (
+-    file.folder === props.getEntities.params.entity_name &&
+-    !props.getEntities.data.find((k) => k.name === file.name)
+-  ) {
+-    props.getEntities.data.push(...prettyData([file]))
+-    props.getEntities.setData(props.getEntities.data)
+-  }
+-})
+-socket.on('list-update', ({ file }) => {
+-  if (file.folder !== props.getEntities.params.entity_name) return
+-  const index = props.getEntities.data.findIndex((k) => k.name == file.name)
+-  if (index !== -1)
+-    props.getEntities.data.splice(index, 1, ...prettyData([file]))
+-  props.getEntities.setData(props.getEntities.data)
+-})
+-socket.on('list-remove', ({ parent, entity_name }) => {
+-  if (parent !== props.getEntities.params.entity_name) return
+-  const index = props.getEntities.data.findIndex((k) => k.name == entity_name)
+-  if (index !== -1) props.getEntities.data.splice(index, 1)
+-  props.getEntities.setData(props.getEntities.data)
+-})
+-socket.on('client-rename', ({ entity_name, title }) => {
+-  const file = props.getEntities.data.find((k) => k.name === entity_name)
+-  file.file_name = title
+-})
++let realtimeStopped = false
++const stopRealtime = subscribeFolderChanges(socket,
++  folder => !props.getEntities.params?.entity_name || folder === props.getEntities.params.entity_name,
++  async () => {
++    const res = props.getEntities
++    const epoch = ++queryEpoch
++    const params = { ...res.params, ...queryParams() }
++    if (res.paginated) Object.assign(params, { start: 0, limit: PAGE_SIZE, paginated: 1 })
++    loadingMore.value = false
++    try {
++      const response = await frappeRequest({
++        url: res.url.startsWith('/') ? res.url : `/api/method/${res.url}`,
++        method: 'GET', params, credentials: 'include',
++      })
++      if (realtimeStopped || epoch !== queryEpoch || res !== props.getEntities) return
++      const payload = response?.message ?? response
++      res.setData(formatRows(res.paginated ? payload?.rows ?? [] : payload ?? []))
++      res.error = null
++      pageStart.value = payload?.next_start ?? 0
++      hasNextPage.value = !!payload?.has_next
++      refreshExpanded(sortOrder.value)
++    } catch (error) {
++      if (realtimeStopped || epoch !== queryEpoch || res !== props.getEntities) return
++      res.error = error
++      const denied = error?.status === 403 || error?.httpStatus === 403 ||
++        String(error?.exc_type ?? error?.message ?? '').includes('PermissionError')
++      if (denied) {
++        res.setData([])
++        selections.value = new Set()
++        activeEntity.value = null
++        hasNextPage.value = false
++      }
++    }
++  })
++onBeforeUnmount(() => { realtimeStopped = true; stopRealtime() })
++
+ </script>
+ <style>
+ .file-drag #drop-area {
+diff --git a/frontend/src/apps/drive/components/Navbar.vue b/frontend/src/apps/drive/components/Navbar.vue
+index ad41a07b8..d22f395b5 100644
+--- a/frontend/src/apps/drive/components/Navbar.vue
++++ b/frontend/src/apps/drive/components/Navbar.vue
+@@ -67,6 +67,7 @@ import emitter from '@/apps/drive/emitter'
+ import { useEmitter } from '@/apps/drive/utils/useEmitter'
+ import { ref, computed, inject, h } from 'vue'
+ import { entitiesDownload } from '@/apps/drive/utils/download'
++import { canDownloadEntity } from '@/apps/drive/utils/downloadEligibility'
+ import { getRecents, getTrash, getFavourites, toggleFav, rootInfo } from '@/apps/drive/resources/files'
+ import { apps } from '@/apps/drive/resources/permissions'
+ import { useRoute } from 'vue-router'
+@@ -75,7 +76,6 @@ import {
+   dynamicList,
+   isManaged,
+   isAttachmentRef,
+-  isVirtual,
+   openEntity,
+ } from '@/apps/drive/utils/files'
+ import { getFileLink } from '@/apps/drive/ui/drive/js/utils'
+@@ -224,9 +224,7 @@ const defaultActions = computed(() => {
+         {
+           label: __('Download'),
+           icon: LucideDownload,
+-          isEnabled: () =>
+-            !isVirtual(rootEntity.value) &&
+-            !['Link', 'Presentation', 'Document'].includes(rootEntity.value.file_type),
++          isEnabled: () => canDownloadEntity(rootEntity.value),
+           onClick: () => entitiesDownload([rootEntity.value]),
+         },
+         {
+diff --git a/frontend/src/apps/drive/components/Sidebar.vue b/frontend/src/apps/drive/components/Sidebar.vue
+index b8978a02e..953912d0f 100644
+--- a/frontend/src/apps/drive/components/Sidebar.vue
++++ b/frontend/src/apps/drive/components/Sidebar.vue
+@@ -23,7 +23,7 @@ import { rootInfo } from '@/apps/drive/resources/files'
+ import { dynamicList, isApple } from '@/apps/drive/utils/files'
+ 
+ import { useCurrentUser, useSessionStore } from '@/boot/session'
+-const { fullName: currentUserFullName } = useCurrentUser()
++const { fullName: currentUserFullName, isStaff } = useCurrentUser()
+ import { getRootSection } from '@/apps/drive/data/breadcrumbs'
+ import { sidebarCollapsed } from '@/apps/drive/data/prefs'
+ import LucideClock from '~icons/lucide/clock'
+@@ -138,7 +138,13 @@ const sidebarItems = computed(() => {
+     route.name === routeName || first.name === routeName
+   return dynamicList([
+     {
+-      items: [
++      items: dynamicList([
++        {
++          label: __('Back to Kanzlei'),
++          icon: LucideBuilding2,
++          cond: isStaff.value,
++          onClick: () => window.location.assign('/desk/kanzlei-overview'),
++        },
+         {
+           label: __('Search'),
+           icon: LucideSearch,
+@@ -152,7 +158,7 @@ const sidebarItems = computed(() => {
+           isActive: active('drive-Inbox'),
+           suffix: notifCount.data ? String(notifCount.data) : undefined,
+         },
+-      ],
++      ]),
+     },
+     {
+       items: [
+diff --git a/frontend/src/apps/drive/runtime.ts b/frontend/src/apps/drive/runtime.ts
+index 09f3a1edf..0f2a22368 100644
+--- a/frontend/src/apps/drive/runtime.ts
++++ b/frontend/src/apps/drive/runtime.ts
+@@ -4,15 +4,18 @@ import { createResource } from 'frappe-ui'
+ import { setActiveEntity } from '@/apps/drive/data/selection'
+ import { setupTheme } from '@/utils/setupTheme'
+ 
+-export function bootstrap() {
++export async function bootstrap() {
+   setupTheme()
+ 
+   if (!window.translatedMessages) {
+-    createResource({
++    await createResource({
+       url: 'suite.drive.api.product.get_translations',
+       cache: 'translations',
+       transform: (data: unknown) => (window.translatedMessages = data),
+-    }).fetch()
++    }).fetch().catch((error) => {
++      // Translation failures must keep Drive available with source labels.
++      console.warn('Unable to load Drive translations', error)
++    })
+   }
+ }
+ 
+diff --git a/frontend/src/apps/drive/ui/drive/js/utils.js b/frontend/src/apps/drive/ui/drive/js/utils.js
+index 28c53d540..f74ceb87c 100644
+--- a/frontend/src/apps/drive/ui/drive/js/utils.js
++++ b/frontend/src/apps/drive/ui/drive/js/utils.js
+@@ -1,5 +1,5 @@
+ import { toast } from 'frappe-ui'
+-import slugify from 'slugify'
++import { entityLink, entityRoute } from '@/apps/drive/utils/navigation'
+ import { useTimeAgo } from '@vueuse/core'
+ 
+ import router from '@/apps/drive/router'
+@@ -17,17 +17,7 @@ export function dynamicList(k) {
+ }
+ 
+ export function getFileLink(entity, copy = true) {
+-  let link
+-  if (entity.file_type === 'Link') link = entity.file_url
+-  else if (entity.content_doctype === 'Presentation') {
+-    link = `${window.location.origin}/slides/presentation/${entity.content_docname}`
+-  } else if (entity.content_doctype === 'Sheet') {
+-    link = `${window.location.origin}/sheets/${entity.content_docname || entity.name}`
+-  } else if (entity.file_type === 'Document' || entity.file_type === 'Markdown') {
+-    link = `${window.location.origin}/writer/w/${entity.name}`
+-  } else {
+-    link = `${window.location.origin}/drive/${getLinkStem(entity)}`
+-  }
++  const link = entityLink(entity, window.location.origin)
+   if (!copy) return link
+   try {
+     copyToClipboard(link).then(() => toast.success('Copied to your clipboard.'))
+@@ -36,26 +26,6 @@ export function getFileLink(entity, copy = true) {
+   }
+ }
+ 
+-// Utils to the utils
+-function getLinkStem(entity) {
+-  return `${
+-    {
+-      true: 'f',
+-      [new Boolean(entity.is_folder)]: 'd',
+-      [new Boolean(entity.file_type === 'Document' || entity.file_type === 'Markdown')]:
+-        'w',
+-    }[true]
+-  }/${entity.name}/${slugger(entity.file_name)}`
+-}
+-
+-function slugger(file_name) {
+-  return slugify(file_name.split('.').join(' '), {
+-    lower: true,
+-    trim: true,
+-    remove: /[^\w\s']/,
+-  })
+-}
+-
+ export const copyToClipboard = (str) => {
+   if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+     return navigator.clipboard.writeText(str)
+@@ -116,20 +86,12 @@ export const formatDate = (date) => {
+ export const openEntity = (entity, new_tab = false) => {
+   if (new_tab) return window.open(getFileLink(entity, false), '_blank')
+ 
+-  if (entity.name === '') {
+-    router.push({ name: 'drive-Home' })
+-  } else if (entity.is_folder) {
+-    router.push({ name: 'drive-Folder', params: { entityName: entity.name } })
+-  } else if (entity.file_type === 'Link') {
++  if (entity.file_type === 'Link' && !entity.is_folder) {
+     const origin = new URL(entity.file_url).origin
+     if (confirm(`This will open an external link to ${origin} - are you sure you want to open?`)) {
+       window.open(entity.file_url, '_blank')
+     }
+-  } else if (entity.file_type === 'Presentation') {
+-    router.push({ name: 'slides-editor', params: { presentationId: entity.name } })
+-  } else if (entity.file_type === 'Document' || entity.file_type === 'Markdown') {
+-    router.push({ name: 'writer-document', params: { id: entity.name } })
+-  } else {
+-    router.push({ name: 'drive-File', params: { entityName: entity.name } })
++    return
+   }
++  router.push(entityRoute(entity))
+ }
+diff --git a/frontend/src/apps/drive/utils/download.js b/frontend/src/apps/drive/utils/download.js
+index efd84845f..7d2071f7e 100644
+--- a/frontend/src/apps/drive/utils/download.js
++++ b/frontend/src/apps/drive/utils/download.js
+@@ -6,16 +6,21 @@
+ import { call } from 'frappe-ui'
+ import { toast } from '@/apps/drive/utils/toasts.js'
+ import { getSocket } from '@/apps/drive/socket'
++import { canDownloadSelection } from './downloadEligibility'
+ 
+ export function entitiesDownload(entities, transfer = false) {
++  if (!canDownloadSelection(entities)) {
++    toast({ type: 'error', title: 'This selection has no downloadable files.' })
++    return
++  }
+   if (entities.length === 1 && !entities[0].is_folder) {
+     window.location.href = `/api/method/suite.drive.api.files.get_file_content?entity_name=${
+-      entities[0].name
++      encodeURIComponent(entities[0].name)
+     }&trigger_download=1${transfer ? '&transfer=1' : ''}`
+     return
+   }
+ 
+-  prepareArchive(entities)
++  return prepareArchive(entities)
+ }
+ 
+ async function prepareArchive(entities) {
+@@ -24,12 +29,13 @@ async function prepareArchive(entities) {
+   try {
+     ;({ token } = await call('suite.drive.api.files.download_folder', { entities: names }))
+   } catch (error) {
+-    toast.error(error?.message || 'Download failed')
++    toast({ type: 'error', title: error?.message || 'Download failed' })
+     return
+   }
+ 
++  let result
+   try {
+-    await toast
++    result = await toast
+       .promise(waitForArchive(token), {
+         loading: 'Preparing download…',
+         success: 'Download prepared',
+@@ -40,6 +46,12 @@ async function prepareArchive(entities) {
+     return // toast.promise already rendered the error toast in place
+   }
+ 
++  const { hosted_content = 0, links = 0 } = result.skipped_counts || {}
++  const skipped = []
++  if (hosted_content) skipped.push(`${hosted_content} hosted document${hosted_content === 1 ? '' : 's'}`)
++  if (links) skipped.push(`${links} link${links === 1 ? '' : 's'}`)
++  if (skipped.length) toast({ type: 'warning', title: `ZIP skipped ${skipped.join(' and ')}.` })
++
+   window.location.href = `/api/method/suite.drive.api.files.download_archive?token=${encodeURIComponent(
+     token
+   )}`
+@@ -63,21 +75,23 @@ function waitForArchive(token, { timeout = 70 * 60 * 1000 } = {}) {
+ 
+     const settle = (data) => {
+       if (data.status === 'ready') finish(resolve, data)
+-      else finish(reject, new Error(data.error || 'Could not prepare this download'))
++      else if (data.status === 'failed') finish(reject, new Error(data.error || 'Could not prepare this download'))
+     }
+ 
++    const readStatus = () => {
++      // A socket signal never grants a download or supplies skipped metadata.
++      // Recheck current permission before accepting ready/failed or counts.
++      return call('suite.drive.api.files.download_status', { token })
++        .then(settle)
++        .catch((error) => finish(reject, error))
++    }
+     const onStatus = (data) => {
+-      if (data.token === token) settle(data)
++      if (data.token === token && ['ready', 'failed'].includes(data.status)) readStatus()
+     }
+     socket?.on('drive-download-status', onStatus)
+ 
+-    // covers the build finishing between the enqueue call and this listener
+-    // attaching, and the (rare) case the socket drops the event entirely
+-    call('suite.drive.api.files.download_status', { token })
+-      .then((res) => {
+-        if (res.status === 'ready' || res.status === 'failed') settle(res)
+-      })
+-      .catch(() => {}) // the socket path still covers a transient failure here
++    // Covers a build finishing before the listener attaches.
++    readStatus()
+ 
+     timer = setTimeout(() => finish(reject, new Error('Timed out preparing download')), timeout)
+   })
+diff --git a/frontend/src/apps/drive/utils/files.js b/frontend/src/apps/drive/utils/files.js
+index 7f6ae7128..b43c6cca1 100644
+--- a/frontend/src/apps/drive/utils/files.js
++++ b/frontend/src/apps/drive/utils/files.js
+@@ -1,4 +1,6 @@
+ import router from '@/apps/drive/router'
++import { entityRoute, folderRoute } from './navigation'
++export { folderRoute } from './navigation'
+ 
+ import '@/apps/drive/data/breadcrumbs'
+ import { currentFolder } from '@/apps/drive/data/currentFolder'
+@@ -103,23 +105,6 @@ export function isVirtual(entity) {
+   return entity?.kind === 'virtual'
+ }
+ 
+-// Where a folder row points. Virtual grouping nodes aren't Files - they're
+-// attachment buckets, and their `name` is a doctype or a docname, so routing
+-// them like a folder lands on an entity that doesn't exist. A node with an
+-// attached_to_name drills into a single document; otherwise into a doctype.
+-export const folderRoute = (entity) =>
+-  isVirtual(entity)
+-    ? {
+-        name: 'drive-Attachments',
+-        params: entity.attached_to_name
+-          ? {
+-              doctype: entity.attached_to_doctype,
+-              docname: entity.attached_to_name,
+-            }
+-          : { doctype: entity.attached_to_doctype },
+-      }
+-    : { name: 'drive-Folder', params: { entityName: entity.name } }
+-
+ export const openEntity = (entity, new_tab = false) => {
+   if (isVirtual(entity)) return router.push(folderRoute(entity))
+ 
+@@ -136,43 +121,16 @@ export const openEntity = (entity, new_tab = false) => {
+   if (new_tab) {
+     return window.open(getFileLink(entity, false), '_blank')
+   }
+-  // hm?
+-  if (entity.name === '') {
+-    router.push({ name: 'drive-Home' })
+-  } else if (entity.is_folder) {
+-    router.push({
+-      name: 'drive-Folder',
+-      params: { entityName: entity.name },
+-    })
+-  } else if (entity.file_type === 'Link') {
++  if (entity.file_type === 'Link' && !entity.is_folder) {
+     const origin = new URL(entity.file_url).origin
+     if (
+       confirm(
+         `This will open an external link to ${origin} - are you sure you want to open?`
+       )
+-    )
+-      window.open(entity.file_url, '_blank')
+-  } else if (isPresentation(entity)) {
+-    router.push({
+-      name: 'slides-editor',
+-      params: { presentationId: entity.content_docname },
+-    })
+-  } else if (
+-    entity.file_type === 'Document' ||
+-    entity.file_type === 'Markdown'
+-  ) {
+-    router.push({ name: 'writer-document', params: { id: entity.name } })
+-  } else if (isSheet(entity)) {
+-    router.push({
+-      name: 'sheets-editor',
+-      params: { id: entity.content_docname || entity.name },
+-    })
+-  } else {
+-    router.push({
+-      name: 'drive-File',
+-      params: { entityName: entity.name },
+-    })
++    ) window.open(entity.file_url, '_blank')
++    return
+   }
++  router.push(entityRoute(entity))
+ }
+ 
+ function trimCommonPrefix(a, b) {
+diff --git a/frontend/src/apps/drive/utils/openEntity.test.ts b/frontend/src/apps/drive/utils/openEntity.test.ts
+index 6d365b821..0cfe4e981 100644
+--- a/frontend/src/apps/drive/utils/openEntity.test.ts
++++ b/frontend/src/apps/drive/utils/openEntity.test.ts
+@@ -101,6 +101,15 @@ describe('openEntity', () => {
+     })
+   })
+ 
++  it.each(['Document', 'Spreadsheet', 'Presentation', 'Markdown'])(
++    'opens uploaded %s in the File page', (file_type) => {
++      openEntity(entity({ file_type, can_download: true }))
++      expect(mocks.routerPush).toHaveBeenCalledWith({
++        name: 'drive-File', params: { entityName: 'file-1' },
++      })
++    }
++  )
++
+   it('opens a writer document', () => {
+     openEntity(
+       entity({
+diff --git a/frontend/src/apps/drive/utils/toasts.js b/frontend/src/apps/drive/utils/toasts.js
+index 3d76c1db4..31b581f23 100644
+--- a/frontend/src/apps/drive/utils/toasts.js
++++ b/frontend/src/apps/drive/utils/toasts.js
+@@ -4,12 +4,11 @@ import { h } from 'vue'
+ const toast = (obj) => {
+   if (typeof obj === 'string') return fToast.success(obj)
+   const { title, buttons, icon, duration, type } = obj
+-  fToast.create({
+-    message: title,
++  const notify = fToast[type] || fToast.message
++  return notify(title, {
+     action: buttons?.[0],
+     icon: icon && h(icon, { class: 'text-ink-base' }),
+-    duration: duration || 5,
+-    type,
++    duration: (duration ?? 5) * 1000,
+   })
+ }
+ // passthrough: sonner's loading→success/error toast, updated in place by id
+diff --git a/frontend/src/boot/session.ts b/frontend/src/boot/session.ts
+index 974a08e14..20b399fc9 100644
+--- a/frontend/src/boot/session.ts
++++ b/frontend/src/boot/session.ts
+@@ -106,6 +106,18 @@ export function useCurrentUser() {
+         ? ((userResource.data.roles as string[]) ?? []).includes('System Manager')
+         : systemUser.value,
+     ),
++    // Staff navigation uses the saved profile type, independent of Apps/admin roles.
++    isStaff: computed(() =>
++      Boolean(
++        store.isLoggedIn &&
++          userResource.fetched &&
++          !userResource.loading &&
++          !userResource.error &&
++          userResource.data?.name === store.user &&
++          userResource.data.name !== 'Guest' &&
++          userResource.data.user_type === 'System User',
++      ),
++    ),
+     isSystemManager: computed(() =>
+       ((userResource.data?.roles as string[] | undefined) ?? []).includes('System Manager'),
+     ),
+diff --git a/frontend/vitest.config.ts b/frontend/vitest.config.ts
+index ddf44aef9..99585ae11 100644
+--- a/frontend/vitest.config.ts
++++ b/frontend/vitest.config.ts
+@@ -11,6 +11,21 @@ export default defineConfig({
+ 			// More specific first: a bare "frappe-ui" alias also matches "frappe-ui/…" imports.
+ 			"frappe-ui/experimental": path.resolve(__dirname, "src/test/frappe-ui-experimental-stub.ts"),
+ 			"frappe-ui": path.resolve(__dirname, "recorder/frappeUi.ts"),
++			"~icons/lucide/alert-circle": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/more-horizontal": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/home": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/users": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/building-2": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/plus": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/link": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/file-up": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/folder-up": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/file-plus-2": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/gallery-vertical-end": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/sheet": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/folder-plus": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/globe-2": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/x": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/scan": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/chevron-down": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/clock": path.resolve(__dirname, "src/test/icon-stub.ts"),
+@@ -27,6 +42,17 @@ export default defineConfig({
+ 			"~icons/lucide/corner-left-up": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/monitor-cog": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/star": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/inbox": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/search": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/book": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/badge-help": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/sun-moon": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/sun": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/moon": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/monitor": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/check": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/paperclip": path.resolve(__dirname, "src/test/icon-stub.ts"),
++			"~icons/lucide/file-text": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 			"~icons/lucide/trash": path.resolve(__dirname, "src/test/icon-stub.ts"),
+ 		},
+ 	},
+diff --git a/suite/api/account.py b/suite/api/account.py
+index 4d4d855e6..6e770fce7 100644
+--- a/suite/api/account.py
++++ b/suite/api/account.py
+@@ -185,6 +185,7 @@ def get_logged_in_user() -> dict | None:
+         "name": user_doc.name,
+         "email": user_doc.email,
+         "full_name": user_doc.full_name,
++        "user_type": user_doc.user_type,
+         "avatar": user_doc.user_image,
+         "roles": [role.role for role in user_doc.roles],
+         "is_jmap_configured": can_use_mail(user),
+diff --git a/suite/api/test_account.py b/suite/api/test_account.py
+index b00b05417..e835411bf 100644
+--- a/suite/api/test_account.py
++++ b/suite/api/test_account.py
+@@ -1,4 +1,5 @@
+ import unittest
++from inspect import unwrap
+ from unittest import mock
+ from uuid import uuid4
+ 
+@@ -38,7 +39,7 @@ class MarkOnboarded(AccountTestBase):
+     def setUp(self):
+         super().setUp()
+         self.engine = self.enterContext(
+-            mock.patch("frappe.desk.page.setup_wizard.setup_wizard.complete_app_setup")
++            mock.patch("frappe.desk.page.setup_wizard.setup_wizard.complete_app_setup", create=True)
+         )
+         self.suite_wizard = self.enterContext(
+             mock.patch("suite.api.account.uses_suite_setup_wizard", return_value=True)
+@@ -139,3 +140,25 @@ class GetUsersOnSite(IntegrationTestCase):
+         self.assertEqual(member.user_type, "Website User")
+ 
+         self.assertIn(member.name, [user["name"] for user in account.get_users()])
++
++
++class GetLoggedInUser(AccountTestBase):
++    def test_reports_saved_user_type_without_inferring_it_from_roles(self):
++        self.enterContext(mock.patch("suite.api.account.can_use_mail", return_value=False))
++        for user_type, roles in (("System User", ["Employee"]), ("Website User", [])):
++            with self.subTest(user_type=user_type):
++                user = frappe._dict(
++                    name="alice@example.com", email="alice@example.com", full_name="Alice",
++                    user_image=None, user_type=user_type,
++                    roles=[frappe._dict(role=role) for role in roles],
++                )
++                self.frappe.get_doc.return_value = user
++                profile = unwrap(account.get_logged_in_user)()
++                self.assertEqual(profile["user_type"], user_type)
++                self.assertEqual(profile["roles"], roles)
++                self.frappe.get_doc.assert_called_with("User", "alice@example.com")
++
++    def test_guest_has_no_logged_in_profile(self):
++        self.frappe.session.user = "Guest"
++        self.assertIsNone(unwrap(account.get_logged_in_user)())
++        self.frappe.get_doc.assert_not_called()
+diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
+index 86a738764..e355b3877 100644
+--- a/suite/drive/api/files.py
++++ b/suite/drive/api/files.py
+@@ -5,6 +5,7 @@ import re
+ import secrets
+ import tempfile
+ import zipfile
++from contextlib import ExitStack
+ from io import BytesIO
+ from pathlib import Path
+ from urllib.parse import quote
+@@ -42,9 +43,11 @@ from suite.drive.utils.files import (
+ )
+ from suite.drive.utils.users import mark_as_viewed
+ 
+-from .permissions import user_has_permission
++from .permissions import get_app_access, user_has_permission
+ 
+-FORBIDDEN_DOWNLOAD_TYPES = ["Folder", "Link", "Document", "Presentation"]
++from suite.drive.utils.downloads import (
++    MANIFEST_VERSION, can_download, collect_downloads, visible_skipped_counts,
++)
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+@@ -116,7 +119,7 @@ def upload_file(
+         file_name,
+         parent,
+         file_type,
+-        lambda file: "/" + str(manager.get_disk_path(file, embed)),
++        lambda file: get_s3_url(str(manager.get_disk_path(file, embed))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file, embed)),
+         mime_type,
+         file_size,
+         int(file_modified) / 1000 if file_modified else None,
+@@ -126,8 +129,10 @@ def upload_file(
+     manager.upload_file(temp_path, drive_file, not embed)
+     # Change path to be s3 compatible
+     if manager.s3_enabled:
+-        drive_file.file_url = get_s3_url(get_s3_key(drive_file.file_url))
+-        drive_file.save()
++        new_url = get_s3_url(storage_key(drive_file.file_url))
++        with manager.storage_binding(drive_file, new_url):
++            drive_file.file_url = new_url
++            drive_file.save()
+ 
+     try:
+         update_file_size(parent, file_size)
+@@ -135,7 +140,12 @@ def upload_file(
+         # Find a cleaner way to handle folder sizes as multiple simultaneous uploads will break this
+         pass
+ 
+-    frappe.publish_realtime("list-add", {"file": prettify_file(drive_file.as_dict())})
++    hooks = frappe.get_hooks("drive_file_changed")
++    if hooks:
++        for hook in hooks:
++            frappe.call(hook, doc=drive_file)
++    else:
++        frappe.publish_realtime("list-add", {"file": prettify_file(drive_file.as_dict())}, after_commit=True)
+ 
+     return drive_file
+ 
+@@ -182,21 +192,7 @@ def create_folder(file_name: str, parent: str | None = None):
+     validate_filename(file_name, parent, "Folder", error=f"Folder '{file_name}' already exists.")
+ 
+     manager = FileManager()
+-    path = manager.create_folder(
+-        frappe._dict(
+-            {
+-                "file_name": file_name,
+-                "parent_path": Path(storage_key(parent_doc.file_url or "")),
+-            }
+-        )
+-    )
+-
+-    return create_drive_file(
+-        file_name,
+-        parent,
+-        "Folder",
+-        path,
+-    )
++    return create_drive_file(file_name, parent, "Folder", manager.create_folder)
+ 
+ 
+ def ensure_path(fullpath, parent=None):
+@@ -282,9 +278,12 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+     if token:
+         # Single-use capability minted by create_auth_token, for cookieless
+         # fetches (e.g. the Office Online preview).
+-        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry"], as_dict=True)
++        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry", "user"], as_dict=True)
+         if not auth or auth.file != entity_name or frappe.utils.now_datetime() > auth.expiry:
+             raise frappe.PermissionError("You do not have permission to view this file")
++        app_access = get_app_access(entity_name, auth.user)
++        if app_access is not None and not app_access.get("read"):
++            raise frappe.PermissionError("You do not have permission to view this file")
+         frappe.delete_doc("Drive Token", token, ignore_permissions=True, force=True)
+     elif not user_has_permission(entity_name, "read"):
+         raise frappe.PermissionError("You do not have permission to view this file")
+@@ -300,23 +299,27 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+             "file_url",
+             "is_private",
+             "mime_type",
++            "is_folder",
++            "content_doctype",
++            "content_docname",
+         ],
+         as_dict=1,
+     )
+ 
+-    if not file or file.file_type in FORBIDDEN_DOWNLOAD_TYPES or file.status != STATUS_ACTIVE:
++    if not file or not can_download(file) or file.status != STATUS_ACTIVE:
+         frappe.throw("Not found", frappe.DoesNotExistError)
+ 
+-    if file.file_type == "Document":
+-        frappe.local.response["type"] = "redirect"
+-        frappe.local.response["location"] = "/drive/w/" + file.name
+-        return
+     if not file.is_private:
+         # Public files (adopted framework uploads) are served straight off /files.
+         frappe.local.response["type"] = "redirect"
+         frappe.local.response["location"] = file.file_url
+         return
+ 
++    if token:
++        with ExitStack() as authority:
++            for hook in frappe.get_hooks("drive_authorized_read"):
++                authority.enter_context(frappe.call(hook, file=entity_name, user=auth.user))
++            return get_file_internal(file, trigger_download)
+     return get_file_internal(file, trigger_download)
+ 
+ 
+@@ -360,6 +363,7 @@ def get_file_internal(file, trigger_download=0):
+         return stream_file_content(file.name)
+ 
+     manager = FileManager()
++    manager.require_storage_access(file)
+     if trigger_download:
+         return _serve_resumable(manager, storage_key(file.file_url), file.file_name, file.get("mime_type"))
+     return send_file(
+@@ -427,50 +431,12 @@ def stream_file_content(entity_name: str):
+ 
+ 
+ def _iter_folder_files(entity_name, prefix=""):
+-    """Recursively yield (arcname, file) for downloadable files in a folder.
+-
+-    Read is checked per child, not once at the top: access does not simply cascade
+-    — a deny row anywhere below cuts it, and the Drive root is readable by every
+-    logged-in user, so a single top-level check would hand out the whole tree.
+-
+-    Writer documents and links have no underlying blob, so they're skipped.
+-    """
+-    children = frappe.get_all(
+-        "File",
+-        filters={"folder": entity_name, "status": STATUS_ACTIVE},
+-        fields=["name", "file_name", "is_folder", "file_type", "file_url"],
+-    )
+-    for child in children:
+-        if not user_has_permission(child.name, "read"):
+-            continue
+-        arcname = f"{prefix}{child.file_name}"
+-        if child.is_folder:
+-            yield from _iter_folder_files(child.name, prefix=f"{arcname}/")
+-        elif child.file_type not in FORBIDDEN_DOWNLOAD_TYPES and child.file_url:
+-            yield arcname, child
++    for arc, file in collect_downloads([entity_name]).files:
++        yield prefix + arc, file
+ 
+ 
+ def _collect_download_files(entity_names):
+-    """Expand the selected top-level entities into (arcname, file) pairs.
+-
+-    Read is checked here and again per descendant in `_iter_folder_files`; a single
+-    folder nests its contents under its own file name.
+-    """
+-    for name in entity_names:
+-        if not user_has_permission(name, "read"):
+-            raise frappe.PermissionError("You do not have permission to download this file")
+-        entity = frappe.get_value(
+-            "File",
+-            name,
+-            ["name", "file_name", "is_folder", "file_type", "file_url", "status"],
+-            as_dict=True,
+-        )
+-        if not entity or entity.status != STATUS_ACTIVE:
+-            continue
+-        if entity.is_folder:
+-            yield from _iter_folder_files(entity.name, prefix=f"{entity.file_name}/")
+-        elif entity.file_type not in FORBIDDEN_DOWNLOAD_TYPES and entity.file_url:
+-            yield entity.file_name, entity
++    yield from collect_downloads(entity_names).files
+ 
+ 
+ DOWNLOAD_TTL = 60 * 60  # finished archives live for an hour
+@@ -515,14 +481,22 @@ def _write_archive(token, files):
+     else:
+         target = manager.site_folder / key
+         target.parent.mkdir(parents=True, exist_ok=True)
+-        with open(target, "wb") as fh:
+-            _build_zip(manager, files, fh)
+-        return key, os.path.getsize(target)
++        try:
++            with open(target, "wb") as fh:
++                _build_zip(manager, files, fh)
++            return key, os.path.getsize(target)
++        except Exception:
++            target.unlink(missing_ok=True)
++            raise
+ 
+ 
+ def _publish_download_status(token, user, status, **extra):
+     """Push the terminal build state over the user's realtime room so the
+     client can drop polling and just listen."""
++    entry = frappe.cache().get_value(_download_cache_key(token)) or {}
++    names = entry.get("entities", []) + entry.get("files", [])
++    if any(not user_has_permission(name, "read", user) for name in names):
++        status, extra = "failed", {"error": "Archive access is unavailable."}
+     frappe.publish_realtime("drive-download-status", {"token": token, "status": status, **extra}, user=user)
+ 
+ 
+@@ -532,13 +506,16 @@ def build_download_archive(token, entities, zip_name, user):
+     cache_key = _download_cache_key(token)
+     frappe.set_user(user)
+     try:
+-        files = list(_collect_download_files(entities))
++        selection = collect_downloads(entities)
++        files = selection.files
+         if not files:
+             raise frappe.NotFound("No downloadable files found")
+         key, size = _write_archive(token, files)
+         cache.set_value(
+             cache_key,
+-            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size},
++            {"status": "ready", "owner": user, "key": key, "file_name": zip_name, "size": size,
++             "entities": entities, "files": [file.name for _, file in files],
++             "manifest_version": MANIFEST_VERSION, "skipped": selection.skipped},
+             expires_in_sec=DOWNLOAD_TTL,
+         )
+         _publish_download_status(token, user, "ready", size=size)
+@@ -546,10 +523,10 @@ def build_download_archive(token, entities, zip_name, user):
+         frappe.log_error("Drive: archive build failed", e)
+         cache.set_value(
+             cache_key,
+-            {"status": "failed", "owner": user, "error": str(e)},
++            {"status": "failed", "owner": user, "error": "Archive could not be prepared."},
+             expires_in_sec=DOWNLOAD_TTL,
+         )
+-        _publish_download_status(token, user, "failed", error=str(e))
++        _publish_download_status(token, user, "failed", error="Archive could not be prepared.")
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+@@ -566,7 +543,10 @@ def download_folder(entities: str):
+         frappe.throw("Nothing to download", ValueError)
+ 
+     # resolve up front so a permission error surfaces here, not in the job
+-    files = list(_collect_download_files(entities))
++    if not isinstance(entities, list) or any(not isinstance(name, str) for name in entities):
++        frappe.throw("Expected a list of File IDs", ValueError)
++    selection = collect_downloads(entities)
++    files = selection.files
+     if not files:
+         frappe.throw("No downloadable files found", frappe.NotFound)
+ 
+@@ -576,13 +556,16 @@ def download_folder(entities: str):
+     # same selection already building or built → hand back that token instead of
+     # burning another job + artifact
+     selection_key = (
+-        f"drive-download-sel:{user}:{hashlib.sha1(json.dumps(sorted(entities)).encode()).hexdigest()}"
++        f"drive-download-sel:v{MANIFEST_VERSION}:{user}:"
++        + hashlib.sha256(json.dumps([sorted(set(entities)), selection.signature()], sort_keys=True).encode()).hexdigest()
+     )
+     existing = cache.get_value(selection_key)
+     if existing:
+         entry = cache.get_value(_download_cache_key(existing))
+-        if entry and entry.get("status") in ("building", "ready"):
+-            return {"token": existing, "file_name": entry["file_name"]}
++        if entry and entry.get("manifest_version") == MANIFEST_VERSION and entry.get("status") in ("building", "ready"):
++            entry = _get_download_entry(existing)
++            return {"token": existing, "file_name": entry["file_name"],
++                    "skipped_counts": visible_skipped_counts(entry)}
+ 
+     if len(entities) == 1:
+         zip_name = f"{frappe.get_value('File', entities[0], 'file_name')}.zip"
+@@ -592,7 +575,9 @@ def download_folder(entities: str):
+     token = secrets.token_urlsafe(24)
+     cache.set_value(
+         _download_cache_key(token),
+-        {"status": "building", "owner": user, "file_name": zip_name},
++        {"status": "building", "owner": user, "file_name": zip_name,
++         "entities": entities, "files": [file.name for _, file in files],
++         "manifest_version": MANIFEST_VERSION, "skipped": selection.skipped},
+         expires_in_sec=BUILDING_TTL,
+     )
+     cache.set_value(selection_key, token, expires_in_sec=BUILDING_TTL)
+@@ -605,13 +590,20 @@ def download_folder(entities: str):
+         zip_name=zip_name,
+         user=user,
+     )
+-    return {"token": token, "file_name": zip_name}
++    return {"token": token, "file_name": zip_name, "skipped_counts": selection.counts()}
+ 
+ 
+ def _get_download_entry(token):
+     entry = frappe.cache().get_value(_download_cache_key(token))
+     if not entry or entry.get("owner") != frappe.session.user:
+         frappe.throw("Not found", frappe.DoesNotExistError)
++    if entry.get("status") in ("building", "ready"):
++        # Old entries without provenance must be rebuilt, not served unchecked.
++        if entry.get("manifest_version") != MANIFEST_VERSION or "files" not in entry or "entities" not in entry:
++            frappe.throw("Archive expired. Build it again.", frappe.DoesNotExistError)
++        for name in set(entry["entities"] + entry["files"]):
++            if frappe.db.get_value("File", name, "status") != STATUS_ACTIVE or not user_has_permission(name, "read"):
++                raise frappe.PermissionError("You do not have permission to download this archive")
+     return entry
+ 
+ 
+@@ -619,7 +611,8 @@ def _get_download_entry(token):
+ def download_status(token: str):
+     """Poll the state of an archive build: building | ready | failed."""
+     entry = _get_download_entry(token)
+-    return {"status": entry["status"], "error": entry.get("error"), "size": entry.get("size")}
++    return {"status": entry["status"], "error": entry.get("error"), "size": entry.get("size"),
++            "skipped_counts": visible_skipped_counts(entry)}
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+@@ -692,36 +685,46 @@ def remove_or_restore(entity_names: list[str] | str):
+ def toggle_entity_status(doc, manager: FileManager, locked_owners: set):
+     """Trash an Active entity, or restore a Trashed one. Shared by
+     remove_or_restore and WebDAV DELETE."""
+-    # row lock before the disk transfer — same discipline as File.move()
+-    frappe.db.get_value("File", doc.name, "name", for_update=True)
+-    if not user_has_permission(doc, "write"):
+-        raise frappe.PermissionError("You do not have permission to remove this file")
+-    if doc.owner not in locked_owners:
+-        acquire_owner_storage_lock(doc.owner)
+-        locked_owners.add(doc.owner)
+-    if doc.status == STATUS_ACTIVE:
+-        flag = STATUS_TRASHED
+-        manager.move_to_trash(doc)
+-    else:
+-        validate_quota(doc.owner, doc.file_size)
+-        # A trashed name is free — get_new_file_name only counts Active siblings —
+-        # so something may have taken it. Restoring onto it would overwrite the
+-        # newcomer's blob, or, for a folder, land inside it.
++    target = None
++    if doc.status == STATUS_TRASHED:
+         available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
+-        if available != doc.file_name:
+-            doc.flags.drive_disk_rename = True
+-            doc.file_name = available
+-            if not manager.flat and not doc._not_in_disk():
+-                doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
+-        manager.restore(doc)
+-        flag = STATUS_ACTIVE
+-
+-    doc.status = flag
+-    doc.file_modified = frappe.utils.now_datetime()
+-    if doc.folder and doc.file_size:
+-        apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
+-
+-    doc.save()
++        from types import SimpleNamespace
++        proposed = SimpleNamespace(**doc.as_dict())
++        proposed.file_name = available
++        target = manager.get_disk_path(proposed)
++    with ExitStack() as stack:
++        for hook in frappe.get_hooks("drive_storage_mutation"):
++            stack.enter_context(frappe.call(hook, doc=doc, target=target))
++        # row lock before the disk transfer — same discipline as File.move()
++        frappe.db.get_value("File", doc.name, "name", for_update=True)
++        if not user_has_permission(doc, "write"):
++            raise frappe.PermissionError("You do not have permission to remove this file")
++        if doc.owner not in locked_owners:
++            acquire_owner_storage_lock(doc.owner)
++            locked_owners.add(doc.owner)
++        if doc.status == STATUS_ACTIVE:
++            flag = STATUS_TRASHED
++            manager.move_to_trash(doc)
++        else:
++            validate_quota(doc.owner, doc.file_size)
++            # A trashed name is free — get_new_file_name only counts Active siblings —
++            # so something may have taken it. Restoring onto it would overwrite the
++            # newcomer's blob, or, for a folder, land inside it.
++            available = get_new_file_name(doc.file_name, doc.folder, doc.file_type, doc.name)
++            if available != doc.file_name:
++                doc.flags.drive_disk_rename = True
++                doc.file_name = available
++                if not manager.flat and not doc._not_in_disk():
++                    doc.file_url = str(manager.get_disk_path(doc)) + ("/" if doc.is_folder else "")
++            manager.restore(doc)
++            flag = STATUS_ACTIVE
++
++        doc.status = flag
++        doc.file_modified = frappe.utils.now_datetime()
++        if doc.folder and doc.file_size:
++            apply_file_size_delta(doc.folder, doc.file_size * (1 if flag == STATUS_ACTIVE else -1))
++
++        doc.save()
+ 
+ 
+ @frappe.whitelist()
+@@ -940,7 +943,7 @@ def search(query: str):
+         return _add_presentation_thumbnails(rows)
+     except Exception as e:
+         frappe.log_error(frappe.get_traceback(), "Frappe Drive Search Error")
+-        return {"error": str(e)}
++        return {"error": "Archive could not be prepared."}
+ 
+ 
+ @frappe.whitelist(allow_guest=True)
+diff --git a/suite/drive/api/permissions.py b/suite/drive/api/permissions.py
+index 80b8eac84..f0c22025f 100644
+--- a/suite/drive/api/permissions.py
++++ b/suite/drive/api/permissions.py
+@@ -41,7 +41,32 @@ def get_user_access(entity: str | Document | frappe._dict):
+     return get_user_access_for_user(entity, frappe.session.user)
+ 
+ 
++def get_app_access(entity, user):
++    """An app may own access to a File; None preserves Suite semantics."""
++    for hook in frappe.get_hooks("drive_entity_access"):
++        access = frappe.call(hook, entity=entity, user=user)
++        if access is not None:
++            return access
++    return None
++
++
++def get_app_access_batch(entities, user):
++    """Batch providers must return only the File IDs whose access they own."""
++    hooks = frappe.get_hooks("drive_entity_access_batch")
++    if not hooks:
++        return {entity.name: access for entity in entities
++                if (access := get_app_access(entity, user)) is not None}
++    result = {}
++    for hook in hooks:
++        for name, access in frappe.call(hook, entities=entities, user=user).items():
++            result.setdefault(name, access)
++    return result
++
++
+ def get_user_access_for_user(entity: str | Document | frappe._dict, user: str):
++    app_access = get_app_access(entity, user)
++    if app_access is not None:
++        return app_access
+     if isinstance(entity, str):
+         entity = frappe.get_cached_doc("File", entity)
+ 
+diff --git a/suite/drive/api/tests/test_files.py b/suite/drive/api/tests/test_files.py
+index 0a5c55c71..d3bfa4dc8 100644
+--- a/suite/drive/api/tests/test_files.py
++++ b/suite/drive/api/tests/test_files.py
+@@ -170,7 +170,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -191,7 +191,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -214,7 +214,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session=None),
+             ):
+@@ -234,7 +234,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 patch(
+                     "suite.drive.api.files.validate_quota",
+@@ -258,7 +258,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session=None, chunk=(0, 2, 0)),
+                 self.assertRaises(frappe.ValidationError),
+@@ -277,7 +277,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.upload_request(b"partial", "upload.txt", session="", chunk=(0, 2, 0)),
+                 self.assertRaises(frappe.ValidationError),
+@@ -296,7 +296,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -319,7 +319,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -345,7 +345,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+                 patch("suite.drive.api.files.frappe.get_site_path", return_value=str(storage_root)),
+                 patch(
+                     "suite.drive.api.files.frappe.get_single",
+-                    return_value=frappe._dict(root_folder=""),
++                    return_value=frappe._dict(root_folder="", thumbnail_prefix=".thumbnails"),
+                 ),
+                 self.assertRaises(frappe.ValidationError),
+             ):
+@@ -558,7 +558,7 @@ class TestDriveFilesAPI(IntegrationTestCase):
+         with self.set_user(OWNER):
+             file = frappe.get_doc("File", self.file.name)
+             file.file_url = "/private/files/../../invalid.txt"
+-            with self.assertRaises(frappe.ValidationError):
++            with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+                 file.save()
+ 
+     def test_ordered_chunks_are_assembled_byte_for_byte(self):
+diff --git a/suite/drive/tests/test_download_archive.py b/suite/drive/tests/test_download_archive.py
+index 4d4c76811..2f5b491db 100644
+--- a/suite/drive/tests/test_download_archive.py
++++ b/suite/drive/tests/test_download_archive.py
+@@ -8,7 +8,7 @@ from suite.drive.utils import STATUS_ACTIVE, STATUS_TRASHED
+ 
+ 
+ class TestDownloadArchive(unittest.TestCase):
+-    @patch("suite.drive.api.files.user_has_permission", return_value=True)
++    @patch("suite.drive.api.permissions.user_has_permission", return_value=True)
+     def test_collect_files_skips_trashed_entities(self, mock_perm):
+         active_file = frappe._dict(
+             name="f1",
+@@ -42,6 +42,6 @@ class TestDownloadArchive(unittest.TestCase):
+             self.assertEqual(entity.name, "f1")
+ 
+     def test_collect_files_enforces_permission(self):
+-        with patch("suite.drive.api.files.user_has_permission", return_value=False):
++        with patch("suite.drive.api.permissions.user_has_permission", return_value=False):
+             with self.assertRaises(frappe.PermissionError):
+                 list(_collect_download_files(["denied-file"]))
+diff --git a/suite/drive/utils/__init__.py b/suite/drive/utils/__init__.py
+index 41b2f54fa..11f4e5e3f 100644
+--- a/suite/drive/utils/__init__.py
++++ b/suite/drive/utils/__init__.py
+@@ -1,4 +1,5 @@
+ import os
++from contextlib import ExitStack
+ from datetime import datetime
+ from pathlib import Path
+ 
+@@ -153,6 +154,8 @@ FILE_FIELDS = [
+     "file_url",
+     "file_size",
+     "file_type",
++    "mime_type",
++    "status",
+     "is_folder",
+     "content_doctype",
+     "content_docname",
+@@ -170,7 +173,9 @@ def hide_storage_key(row):
+     For managed files it's the raw storage key, which leaks the owner's path;
+     only Link/Presentation files use it client-side.
+     """
+-    if row.get("file_type") not in ("Link", "Presentation"):
++    from .downloads import can_download
++    row["can_download"] = can_download(row)
++    if row.get("file_type") != "Link" and row.get("content_doctype") != "Presentation":
+         row["file_url"] = None
+     return row
+ 
+@@ -513,7 +518,15 @@ def generate_upward_path(entity_name, user=None):
+         if row["perm_user"] is not None:
+             nodes[-1]["perms"].append(row)
+ 
+-    return [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    from suite.drive.api.permissions import get_app_access
++
++    path = [{**node, **dribble_access(nodes[: i + 1])} for i, node in enumerate(nodes)]
++    for node in path:
++        access = get_app_access(node["name"], user)
++        if access is not None:
++            node.update(access)
++            node["decided"] = list(PERMISSION_TYPES)
++    return path
+ 
+ 
+ def get_valid_breadcrumbs(entity_name, user_access):
+@@ -522,9 +535,9 @@ def get_valid_breadcrumbs(entity_name, user_access):
+     """
+     # Admins see the entire path; others get the contiguous readable suffix.
+     path = generate_upward_path(entity_name)
+-    if user_access.get("type") not in ["admin", "user"]:
+-        lose_access = next((i for i, k in enumerate(path[::-1]) if not k["read"]), 0)
+-        path = path[-lose_access:]
++    if user_access.get("type") != "admin":
++        last_unread = next((i for i in range(len(path) - 1, -1, -1) if not path[i]["read"]), -1)
++        path = path[last_unread + 1 :]
+     return _name_own_drive(path)
+ 
+ 
+@@ -637,8 +650,11 @@ def create_drive_file(
+         drive_file._name = name
+     drive_file.insert(ignore_permissions=True)
+     path = entity_path(drive_file) if callable(entity_path) else entity_path
+-    drive_file.file_url = str(path) if path else ""
+-    drive_file.save(ignore_permissions=True)
++    with ExitStack() as binding:
++        for hook in frappe.get_hooks("drive_storage_creation"):
++            binding.enter_context(frappe.call(hook, doc=drive_file, url=str(path) if path else ""))
++        drive_file.file_url = str(path) if path else ""
++        drive_file.save(ignore_permissions=True)
+     if owner:
+         drive_file.db_set("owner", owner, update_modified=False)
+     return drive_file
+diff --git a/suite/drive/utils/files.py b/suite/drive/utils/files.py
+index 02b1d97b3..629a12bf5 100644
+--- a/suite/drive/utils/files.py
++++ b/suite/drive/utils/files.py
+@@ -1,7 +1,7 @@
+ import os
+ import shutil
+ import unicodedata
+-from contextlib import contextmanager
++from contextlib import ExitStack, contextmanager
+ from io import BytesIO
+ from pathlib import Path
+ from urllib.parse import quote, unquote
+@@ -43,6 +43,17 @@ class FileManager:
+                 config=Config(signature_version=settings.signature_version),
+             )
+ 
++    def require_storage_access(self, entity, operation="read", target=None):
++        for hook in frappe.get_hooks("drive_storage_guard"):
++            frappe.call(hook, entity=entity, operation=operation, target=target)
++
++    @contextmanager
++    def storage_binding(self, doc, target):
++        with ExitStack() as stack:
++            for hook in frappe.get_hooks("drive_storage_mutation"):
++                stack.enter_context(frappe.call(hook, doc=doc, target=target))
++            yield
++
+     def get_prefix(self):
+         return self.settings.root_folder or ""
+ 
+@@ -74,8 +85,9 @@ class FileManager:
+         """
+         Moves the file from the current path to another path
+         """
++        self.require_storage_access(file, "write")
+         if self.s3_enabled:
+-            self.conn.upload_file(current_path, self.bucket, get_s3_key(file.file_url))
++            self.conn.upload_file(current_path, self.bucket, storage_key(file.file_url))
+             if create_thumbnail and self.can_create_thumbnail(file):
+                 frappe.enqueue(
+                     self.upload_thumbnail,
+@@ -176,6 +188,7 @@ class FileManager:
+         Function to create a folder in the S3 bucket or on disk.
+         """
+         path = self.get_disk_path(entity)
++        self.require_storage_access(entity, "write", target=str(path))
+         if self.s3_enabled:
+             self.conn.put_object(Bucket=self.bucket, Key=str(path) + "/", Body="")
+         else:
+@@ -186,6 +199,7 @@ class FileManager:
+         """
+         Function to get a file, with an optional range header for S3 objects
+         """
++        self.require_storage_access(entity)
+         file_url = storage_key(entity.file_url)
+         try:
+             if self.s3_enabled and not stored_on_disk(entity.file_url):
+@@ -260,6 +274,7 @@ class FileManager:
+ 
+     def iter_blocks(self, entity, block_size=4 * 1024 * 1024):
+         """Yield a file's bytes lazily so a worker never holds the whole file."""
++        self.require_storage_access(entity)
+         if self.s3_enabled and not stored_on_disk(entity.file_url):
+             source = self.get_file(entity)
+             try:
+@@ -384,7 +399,7 @@ class FileManager:
+         return Path(self.get_root_storage_key()) / self.settings.thumbnail_prefix / (name + ".thumbnail")
+ 
+     def get_thumbnail(self, name):
+-        return self.get_file(frappe._dict({"file_url": str(self.get_thumbnail_path(name))}), log=False)
++        return self.get_file(frappe._dict(name=name, file_url=str(self.get_thumbnail_path(name))), log=False)
+ 
+     def __get_trash_path(self, entity):
+         """Keyed by id, not file_name: trash is one flat directory under a single
+@@ -408,6 +423,7 @@ class FileManager:
+         if not entity.file_url or entity.mime_type in ["frappe/slides", "link"]:
+             return
+ 
++        self.require_storage_access(entity, "write")
+         trash_path = self.__get_trash_path(entity)
+         try:
+             if self.s3_enabled:
+@@ -438,7 +454,7 @@ class FileManager:
+         """
+         Restore a file from the trash.
+         """
+-        self.move(frappe._dict(file_url=self.__get_trash_path(entity)), entity.file_url)
++        self.move(frappe._dict(name=entity.name, file_url=self.__get_trash_path(entity)), entity.file_url)
+ 
+     @_not_if_flat
+     def move(self, entity, new_path: str | Path):
+@@ -447,6 +463,7 @@ class FileManager:
+         """
+         # Callers pass new_path as either a bare key or a stored file_url;
+         # normalize both ends to the actual backend key.
++        self.require_storage_access(entity, "write", target=new_path)
+         src_key = storage_key(entity.file_url)
+         dest_key = storage_key(new_path)
+         try:
+@@ -473,6 +490,8 @@ class FileManager:
+         """Duplicate a blob (files only — folders go through create_folder).
+         S3-to-S3 copies server-side; a local blob under an S3 config (framework
+         adoptions) uploads to the target's key."""
++        self.require_storage_access(source)
++        self.require_storage_access(target, "write")
+         src_key = storage_key(source.file_url)
+         dst_key = storage_key(target.file_url)
+         if self.s3_enabled:
+@@ -506,6 +525,7 @@ class FileManager:
+             pass
+ 
+     def delete_file(self, entity):
++        self.require_storage_access(entity, "write")
+         thumbnail_path = self.get_thumbnail_path(entity.name)
+ 
+         if self.s3_enabled:
+@@ -529,6 +549,7 @@ class FileManager:
+                 pass
+ 
+     def delete_from_trash(self, entity):
++        self.require_storage_access(entity, "write")
+         trash_path = self.__get_trash_path(entity)
+         if self.s3_enabled:
+             self.conn.delete_object(Bucket=self.bucket, Key=str(trash_path))
+diff --git a/suite/drive/utils/overrides.py b/suite/drive/utils/overrides.py
+index 6f3f83c98..5fbd3e80a 100644
+--- a/suite/drive/utils/overrides.py
++++ b/suite/drive/utils/overrides.py
+@@ -4,7 +4,7 @@ from frappe.permissions import SYSTEM_USER_ROLE, get_doctypes_with_read
+ from suite.drive.utils import get_principals, principal_list
+ 
+ 
+-def file_permission_criterion(user=None, table=None):
++def _suite_file_permission_criterion(user=None, table=None):
+     user = user or frappe.session.user
+     roles = frappe.get_roles(user)
+     if user == "Administrator" or "Suite Admin" in roles:
+@@ -34,13 +34,22 @@ def file_permission_criterion(user=None, table=None):
+     return criterion
+ 
+ 
++def file_permission_criterion(user=None, table=None):
++    user = user or frappe.session.user
++    criterion = _suite_file_permission_criterion(user, table)
++    for hook in frappe.get_hooks("drive_file_permission_criterion"):
++        criterion = frappe.call(hook, user=user, table=table, criterion=criterion)
++    return criterion
++
++
+ def filter_file(user=None):
+     """Replaces the framework's File query conditions (skipped because of the
+     `ignore_file_permissions` hook). Conservative: owner, direct Drive grants,
+     public files, DocShares, and readable attachments — folder-inherited access
+     needs Drive's recursive path traversal, impractical in SQL, so it's left to
+     `has_permission`."""
+-    return file_permission_criterion(user)
++    criterion = file_permission_criterion(user)
++    return criterion.get_sql(quote_char='"' if frappe.conf.db_type == "postgres" else "`") if criterion is not None else ""
+ 
+ 
+ def common_filters(func):
+diff --git a/suite/drive/webdav/copy.py b/suite/drive/webdav/copy.py
+index cd60d728b..33d3c1343 100644
+--- a/suite/drive/webdav/copy.py
++++ b/suite/drive/webdav/copy.py
+@@ -9,7 +9,6 @@ runs in the request transaction — on storage failure the created blobs are
+ best-effort removed and the DB insert rolls back with the request.
+ """
+ 
+-from pathlib import Path
+ 
+ import frappe
+ from werkzeug.wrappers import Response
+@@ -18,7 +17,7 @@ from suite.drive.api.files import toggle_entity_status
+ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.api.storage import acquire_owner_storage_lock, validate_quota
+ from suite.drive.utils import apply_file_size_delta, create_drive_file, generate_upward_path
+-from suite.drive.utils.files import FileManager, get_s3_key, get_s3_url, storage_key
++from suite.drive.utils.files import FileManager, get_s3_url, storage_key
+ from suite.drive.webdav import pathmap, perms
+ from suite.drive.webdav.conditional import evaluate_preconditions
+ from suite.drive.webdav.context import DavContext
+@@ -104,7 +103,7 @@ class _Copier:
+             new_name,
+             new_parent.name,
+             node.file_type,
+-            lambda file: "/" + str(manager.get_disk_path(file)),
++            lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+             node.mime_type,
+             node.file_size,
+             _timestamp(node.modified),
+@@ -112,8 +111,10 @@ class _Copier:
+         manager.copy_file(node, target)
+         self.created_blobs.append(frappe._dict(name=target.name, file_url=target.file_url))
+         if manager.s3_enabled:
+-            target.file_url = get_s3_url(get_s3_key(target.file_url))
+-            target.save()
++            new_url = get_s3_url(storage_key(target.file_url))
++            with manager.storage_binding(target, new_url):
++                target.file_url = new_url
++                target.save()
+         if node.get("content_hash"):
+             target.db_set("content_hash", node.content_hash, update_modified=False)
+         self._copy_dead_props(node.name, target.name)
+@@ -121,10 +122,7 @@ class _Copier:
+ 
+     def _copy_folder(self, node: frappe._dict, new_parent: frappe._dict, new_name: str) -> int:
+         manager = self.manager
+-        path = manager.create_folder(
+-            frappe._dict(file_name=new_name, parent_path=Path(storage_key(new_parent.file_url or "")))
+-        )
+-        target = create_drive_file(new_name, new_parent.name, "Folder", path)
++        target = create_drive_file(new_name, new_parent.name, "Folder", manager.create_folder)
+         target_row = frappe._dict(name=target.name, file_url=target.file_url, is_folder=1)
+         # track the folder too, so a mid-copy failure's cleanup removes its
+         # storage marker (an empty S3 object) and not just the copied files
+diff --git a/suite/drive/webdav/get.py b/suite/drive/webdav/get.py
+index 68c5c838a..ad42163b8 100644
+--- a/suite/drive/webdav/get.py
++++ b/suite/drive/webdav/get.py
+@@ -38,6 +38,7 @@ def handle(ctx: DavContext) -> Response:
+         return _collection_response(ctx, f"/drive/d/{row.name}")
+ 
+     manager = ctx.manager
++    manager.require_storage_access(row)
+     if manager.s3_enabled and not stored_on_disk(row.file_url):
+         return _serve_s3(ctx, row, manager)
+     return _serve_local(ctx, row, manager)
+diff --git a/suite/drive/webdav/lock.py b/suite/drive/webdav/lock.py
+index 72aa0bca8..137e46d49 100644
+--- a/suite/drive/webdav/lock.py
++++ b/suite/drive/webdav/lock.py
+@@ -17,6 +17,7 @@ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.api.storage import acquire_owner_storage_lock, validate_quota
+ from suite.drive.utils import create_drive_file, get_ancestors_of
+ from suite.drive.webdav import locks, pathmap, perms
++from suite.drive.utils.files import get_s3_url, storage_key
+ from suite.drive.webdav.context import DavContext
+ from suite.drive.webdav.errors import (
+     BadRequest,
+@@ -211,16 +212,16 @@ def _create_empty_resource(ctx: DavContext, resolved: pathmap.ResolvedPath) -> f
+             name,
+             parent.name,
+             "Application",
+-            lambda file: "/" + str(manager.get_disk_path(file)),
++            lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+             "application/octet-stream",
+             0,
+         )
+         manager.upload_file(scratch, drive_file, create_thumbnail=False)
+         if manager.s3_enabled:
+-            from suite.drive.utils.files import get_s3_key, get_s3_url
+-
+-            drive_file.file_url = get_s3_url(get_s3_key(drive_file.file_url))
+-            drive_file.save()
++            new_url = get_s3_url(storage_key(drive_file.file_url))
++            with manager.storage_binding(drive_file, new_url):
++                drive_file.file_url = new_url
++                drive_file.save()
+         drive_file.db_set("content_hash", hashlib.sha256(b"").hexdigest(), update_modified=False)
+     finally:
+         scratch.unlink(missing_ok=True)
+diff --git a/suite/drive/webdav/perms.py b/suite/drive/webdav/perms.py
+index f9bde6a34..a3c1f1bdf 100644
+--- a/suite/drive/webdav/perms.py
++++ b/suite/drive/webdav/perms.py
+@@ -9,7 +9,7 @@ first, then the state inherited at the parent, then deny.
+ 
+ import frappe
+ 
+-from suite.drive.api.permissions import get_user_access_for_user, is_drive_admin
++from suite.drive.api.permissions import get_app_access, get_app_access_batch, get_user_access_for_user, is_drive_admin
+ from suite.drive.utils import (
+     GENERAL_USER,
+     GROUP_PREFIX,
+@@ -31,15 +31,18 @@ def resolve_children_access(
+     parent_path: list[dict], children: list[frappe._dict], user: str
+ ) -> dict[str, dict]:
+     """Access bits per child name. parent_path is generate_upward_path(parent, user)."""
++    app_access = get_app_access_batch(children, user)
+     if is_drive_admin(user):
+-        return {child.name: dict(ALL_ACCESS) for child in children}
++        return {child.name: app_access.get(child.name, dict(ALL_ACCESS)) for child in children}
+ 
+     inherited = _dribble_state(parent_path)
+     own_rows = _child_permission_rows([child.name for child in children], user)
+ 
+     access = {}
+     for child in children:
+-        if user != "Guest" and child.owner == user:
++        if child.name in app_access:
++            access[child.name] = app_access[child.name]
++        elif user != "Guest" and child.owner == user:
+             # ownership bypasses any deny on the path
+             access[child.name] = dict(ALL_ACCESS)
+         elif child.get("attached_to_doctype") and child.get("attached_to_name"):
+@@ -101,6 +104,9 @@ def _child_permission_rows(child_names: list[str], user: str) -> dict[str, list[
+ 
+ def parent_access(parent_path: list[dict], parent: frappe._dict, user: str) -> dict:
+     """Access at the path's leaf, with the owner/admin short-circuits applied."""
++    app_access = get_app_access(parent, user)
++    if app_access is not None:
++        return app_access
+     if is_drive_admin(user):
+         return dict(ALL_ACCESS)
+     if user != "Guest" and parent.owner == user:
+diff --git a/suite/drive/webdav/put.py b/suite/drive/webdav/put.py
+index 4e7955195..26b01bea0 100644
+--- a/suite/drive/webdav/put.py
++++ b/suite/drive/webdav/put.py
+@@ -162,7 +162,7 @@ def _create(ctx: DavContext, resolved, scratch: Path, size: int, sha256: str) ->
+         name,
+         parent.name,
+         get_file_type(mime_type),
+-        lambda file: "/" + str(manager.get_disk_path(file)),
++        lambda file: get_s3_url(str(manager.get_disk_path(file))) if manager.s3_enabled else "/" + str(manager.get_disk_path(file)),
+         mime_type,
+         size,
+     )
+@@ -205,7 +205,7 @@ def _create(ctx: DavContext, resolved, scratch: Path, size: int, sha256: str) ->
+     # of the transfer window, so an S3-sized upload never stalls a concurrent
+     # PUT's rollup.
+     if manager.s3_enabled:
+-        generation = _stage_s3_generation(manager, blob, scratch, get_s3_key(blob.file_url), replaces=None)
++        generation = _stage_s3_generation(manager, blob, scratch, storage_key(blob.file_url), replaces=None)
+         drive_file.file_url = get_s3_url(generation)
+         drive_file.save()
+     else:
+@@ -232,6 +232,7 @@ def _overwrite(ctx: DavContext, row: frappe._dict, scratch: Path, size: int, sha
+     # later reaps — the key the row actually points at, not a resolve-time
+     # snapshot of it
+     doc = frappe.get_doc("File", row.name, for_update=True)
++    ctx.manager.require_storage_access(doc, "write")
+     delta = size - (doc.file_size or 0)
+     with quota_guard():
+         validate_quota(row.owner, max(0, delta))
+@@ -393,6 +394,7 @@ def _stage_disk_swap(
+                     cleanup(placed)
+                     compensation.run()
+                     return
++                manager.require_storage_access(frappe._dict(name=compensation.stamped.name, file_url=current.file_url), "write")
+                 dest = manager.get_local_path(current.file_url)
+                 missing = placed is None and expects_existing and not dest.exists()
+                 if missing and waits_left:
+@@ -480,6 +482,7 @@ def settle_swap_destination(file, stamp, placed, hops=0):
+         if current is None or current.status != STATUS_ACTIVE:
+             frappe.db.commit()
+             return
++        FileManager().require_storage_access(frappe._dict(name=file, file_url=current.file_url), "write")
+         dest = FileManager().get_local_path(current.file_url)
+         if dest == placed:
+             frappe.db.commit()  # release the row before deciding or waiting
+diff --git a/suite/drive/webdav/structure.py b/suite/drive/webdav/structure.py
+index 9fc603891..09fce3640 100644
+--- a/suite/drive/webdav/structure.py
++++ b/suite/drive/webdav/structure.py
+@@ -6,7 +6,6 @@ controllers, pre-trashing an Overwrite:T target so their auto-rename collision
+ handling never fires and exact WebDAV naming survives.
+ """
+ 
+-from pathlib import Path
+ 
+ import frappe
+ from werkzeug.wrappers import Response
+@@ -14,7 +13,6 @@ from werkzeug.wrappers import Response
+ from suite.drive.api.files import toggle_entity_status
+ from suite.drive.api.permissions import user_has_permission
+ from suite.drive.utils import create_drive_file, generate_upward_path
+-from suite.drive.utils.files import storage_key
+ from suite.drive.webdav import locks, pathmap, perms
+ from suite.drive.webdav.conditional import evaluate_preconditions
+ from suite.drive.webdav.context import DavContext
+@@ -59,10 +57,7 @@ def handle_mkcol(ctx: DavContext) -> Response:
+     # create_folder minus validate_filename: exact-name collision was already
+     # ruled out by resolution, and the LIKE-count heuristic both over- and
+     # under-detects for DAV semantics
+-    path = ctx.manager.create_folder(
+-        frappe._dict(file_name=name, parent_path=Path(storage_key(parent.file_url or "")))
+-    )
+-    create_drive_file(name, parent.name, "Folder", path)
++    create_drive_file(name, parent.name, "Folder", ctx.manager.create_folder)
+     return Response(status=201)
+ 
+ 
+diff --git a/frontend/src/apps/drive/components/DriveToolBar.test.ts b/frontend/src/apps/drive/components/DriveToolBar.test.ts
+new file mode 100644
+index 000000000..0dae005c1
+--- /dev/null
++++ b/frontend/src/apps/drive/components/DriveToolBar.test.ts
+@@ -0,0 +1,28 @@
++import { createApp, defineComponent, h, ref } from 'vue'
++import { describe, expect, it, vi } from 'vitest'
++vi.mock('frappe-ui', () => ({
++  Button: defineComponent({ props: ['tooltip'], setup: (props) => () => h('button', props.tooltip) }),
++  Dropdown: { template: '<div />' }, TextInput: { template: '<input />' }, TabButtons: { template: '<div />' },
++}))
++vi.mock('@/apps/drive/utils/files', () => ({ getIconUrl: vi.fn() }))
++vi.mock('@/apps/drive/data/prefs', () => ({ view: ref('list'), shareView: ref(false) }))
++vi.mock('@/components/SortControl.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('@vueuse/core', () => ({ onKeyDown: vi.fn() }))
++import DriveToolBar from './DriveToolBar.vue'
++describe('selection action gating', () => {
++  it('allows an action whose whole-selection capability is true', () => {
++    window.__ = (message: string) => message
++    const root = document.createElement('div')
++    const app = createApp({ render: () => h(DriveToolBar, {
++      selectionMode: true, selections: [{ can_download: true }, { can_download: false }],
++      actionItems: [{ label: 'Download', important: true, multi: true,
++        isEnabled: (entity) => entity.can_download, isEnabledForSelection: () => true }],
++      getEntities: { data: [] }, filters: [], sortOrder: { field: 'file_name' },
++    }) })
++    app.config.globalProperties.__ = window.__
++    app.config.globalProperties.$route = { name: 'drive-Recents' }
++    app.mount(root)
++    expect(root.textContent).toContain('Download')
++    app.unmount()
++  })
++})
+diff --git a/frontend/src/apps/drive/components/FileRender.test.ts b/frontend/src/apps/drive/components/FileRender.test.ts
+new file mode 100644
+index 000000000..5aa0face1
+--- /dev/null
++++ b/frontend/src/apps/drive/components/FileRender.test.ts
+@@ -0,0 +1,52 @@
++import { createApp, defineComponent, h, nextTick } from 'vue'
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ fetch: vi.fn() }))
++vi.mock('frappe-ui', () => ({ Button: defineComponent({ setup: (_, { slots }) => () => h('button', slots.default?.()) }) }))
++vi.mock('@/apps/drive/resources/permissions', () => ({ diskSettings: { data: { preview_size: 100 }, fetch: vi.fn() } }))
++vi.mock('./FileTypePreview/TextPreview.vue', () => ({ __esModule: true, default: { template: '<div data-preview="text" />' } }))
++vi.mock('./FileTypePreview/PDFPreview.vue', () => ({ __esModule: true, default: { template: '<div data-preview="pdf" />' } }))
++vi.mock('./FileTypePreview/ImagePreview.vue', () => ({ __esModule: true, default: { template: '<div data-preview="image" />' } }))
++import FileRender from './FileRender.vue'
++beforeEach(() => {
++  mocks.fetch.mockClear()
++  window.fetch = mocks.fetch
++  Object.defineProperty(window, 'location', { configurable: true, value: { href: '', origin: 'http://localhost' } })
++})
++async function mount(previewEntity) {
++  const root = document.createElement('div')
++  const app = createApp({ render: () => h(FileRender, { previewEntity }) })
++  app.mount(root)
++  await new Promise((resolve) => setTimeout(resolve, 30))
++  await nextTick()
++  return { app, root }
++}
++describe('stored file preview', () => {
++  it.each(['Document', 'Spreadsheet', 'Presentation'])('shows a local download card for Office %s', async (file_type) => {
++    const { app, root } = await mount({ name: 'office-1', file_name: 'Report.docx', file_type, file_size: 2500, can_download: true })
++    expect(root.textContent).toContain('Report.docx')
++    expect(root.textContent).toContain(file_type)
++    expect(root.textContent).toContain('2.5 KB')
++    expect(root.textContent).toContain('Preview is not available')
++    expect(root.textContent).not.toContain('Microsoft')
++    expect(root.querySelector('iframe')).toBeNull()
++    expect(mocks.fetch).not.toHaveBeenCalled()
++    root.querySelector('button')!.click()
++    expect(window.location.href).toBe('/api/method/suite.drive.api.files.get_file_content?entity_name=office-1&trigger_download=1')
++    app.unmount()
++  })
++  it('uses CSV MIME to keep its text preview', async () => {
++    const { app, root } = await mount({ name: 'csv-1', file_type: 'Spreadsheet', mime_type: 'text/csv', can_download: true })
++    expect(root.querySelector('[data-preview="text"]')).not.toBeNull()
++    app.unmount()
++  })
++  it.each([['PDF', 'pdf'], ['Image', 'image'], ['Text', 'text']])('preserves the %s preview', async (file_type, preview) => {
++    const { app, root } = await mount({ name: 'file-1', file_type, can_download: true })
++    expect(root.querySelector(`[data-preview="${preview}"]`)).not.toBeNull()
++    app.unmount()
++  })
++  it('does not offer download when the server capability is false', async () => {
++    const { app, root } = await mount({ name: 'file-1', file_type: 'Unknown', can_download: false })
++    expect(root.querySelector('button')).toBeNull()
++    app.unmount()
++  })
++})
+diff --git a/frontend/src/apps/drive/components/Navbar.test.ts b/frontend/src/apps/drive/components/Navbar.test.ts
+new file mode 100644
+index 000000000..58886c31b
+--- /dev/null
++++ b/frontend/src/apps/drive/components/Navbar.test.ts
+@@ -0,0 +1,53 @@
++import { createApp, defineComponent, h, ref } from 'vue'
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ download: vi.fn() }))
++vi.mock('./EntityDialogs.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('./EditableBreadcrumbs.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('frappe-ui', () => ({
++  Button: { template: '<button />' },
++  Dropdown: defineComponent({ props: ['options'], setup: (props) => () => h('div',
++    props.options.flatMap((group) => (group.options || [group]).map((item) => h('button', { onClick: item.onClick }, item.label)))) }),
++}))
++vi.mock('@/boot/session', () => ({ useSessionStore: () => ({ isLoggedIn: true }), useCurrentUser: () => ({ systemUser: ref(false) }) }))
++vi.mock('@/apps/drive/data/breadcrumbs', () => ({ isHomeContext: () => true, pageBreadcrumbs: ref([]) }))
++vi.mock('@/apps/drive/data/prefs', () => ({ shareView: ref(false) }))
++vi.mock('@/apps/drive/data/selection', () => ({ startRename: vi.fn() }))
++vi.mock('@/apps/drive/utils/useEmitter', () => ({ useEmitter: vi.fn() }))
++vi.mock('@/apps/drive/emitter', () => ({ default: { emit: vi.fn() } }))
++vi.mock('@/apps/drive/utils/download', () => ({ entitiesDownload: mocks.download }))
++vi.mock('@/apps/drive/resources/files', () => ({ getRecents: {}, getTrash: {}, getFavourites: {}, toggleFav: {}, rootInfo: { data: {} } }))
++vi.mock('@/apps/drive/resources/permissions', () => ({ apps: { data: [] } }))
++vi.mock('vue-router', () => ({ useRoute: () => ({ name: 'drive-File' }) }))
++vi.mock('@/apps/drive/utils/files', () => ({ newExternal: vi.fn(), dynamicList: (rows) => rows, isManaged: () => true, isAttachmentRef: () => false, isVirtual: (e) => e.kind === 'virtual', openEntity: vi.fn() }))
++vi.mock('@/apps/drive/ui/drive/js/utils', () => ({ getFileLink: vi.fn() }))
++vi.mock('@/apps/drive/utils/confirmActions', () => ({ confirmRemove: vi.fn(), confirmClearRecents: vi.fn(), confirmClearFavourites: vi.fn(), confirmClearTrash: vi.fn() }))
++import Navbar from './Navbar.vue'
++function mount(entity) {
++  const root = document.createElement('div')
++  const app = createApp({ render: () => h(Navbar, { rootResource: { data: { name: 'file-1', file_name: 'Report.docx', ...entity } } }) })
++  app.config.globalProperties.$route = { name: 'drive-File' }
++  app.provide('inIframe', false)
++  app.mount(root)
++  return { app, root }
++}
++beforeEach(() => { window.__ = (message: string) => message; mocks.download.mockClear() })
++describe('file navbar download', () => {
++  it.each(['Document', 'Spreadsheet', 'Presentation'])('offers stored %s bytes', (file_type) => {
++    const { app, root } = mount({ file_type, can_download: true })
++    const button = [...root.querySelectorAll('button')].find((node) => node.textContent === 'Download')
++    expect(button).toBeDefined()
++    button!.click()
++    expect(mocks.download).toHaveBeenCalledWith([expect.objectContaining({ can_download: true })])
++    app.unmount()
++  })
++  it('hides a file download when server capability is false', () => {
++    const { app, root } = mount({ file_type: 'PDF', can_download: false })
++    expect(root.textContent).not.toContain('Download')
++    app.unmount()
++  })
++  it('offers a real folder ZIP with can_download false', () => {
++    const { app, root } = mount({ is_folder: true, can_download: false })
++    expect(root.textContent).toContain('Download')
++    app.unmount()
++  })
++})
+diff --git a/frontend/src/apps/drive/components/Sidebar.test.ts b/frontend/src/apps/drive/components/Sidebar.test.ts
+new file mode 100644
+index 000000000..c695897a8
+--- /dev/null
++++ b/frontend/src/apps/drive/components/Sidebar.test.ts
+@@ -0,0 +1,78 @@
++import { createApp, defineComponent, h, nextTick, ref } from 'vue'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const mocks = vi.hoisted(() => ({ assign: vi.fn(), isStaff: null as ReturnType<typeof ref> | null }))
++vi.mock('@/boot/session', () => ({
++  useCurrentUser: () => ({ fullName: ref('Employee'), isStaff: mocks.isStaff }),
++  useSessionStore: () => ({ logout: { submit: vi.fn() } }),
++}))
++vi.mock('frappe-ui', async () => ({
++  // Use the installed pinned SidebarItem: validates on-click reaches its real button.
++  SidebarItem: (await import('../../../../../node_modules/frappe-ui/src/components/Sidebar/SidebarItem.vue')).default,
++  Sidebar: defineComponent({ setup: (_, { slots }) => () => h('aside', slots.default?.()) }),
++  SidebarSection: defineComponent({ setup: (_, { slots }) => () => h('section', slots.default?.()) }),
++  SidebarHeader: { template: '<div />' }, SidebarCollapseToggle: { template: '<div />' },
++}))
++vi.mock('./StorageBar.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('./Settings/SettingsDialog.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('./FrappeDriveLogo.vue', () => ({ default: { template: '<div />' } }))
++vi.mock('@/apps/drive/resources/permissions', () => ({ notifCount: { fetch: vi.fn() }, apps: { data: [] } }))
++vi.mock('@/apps/drive/resources/files', () => ({ rootInfo: { data: {}, fetch: vi.fn() }, move: { submit: vi.fn() } }))
++vi.mock('@/apps/drive/utils/files', () => ({
++  dynamicList: (items) => items.filter((item) => !('cond' in item) || item.cond), isApple: () => false,
++}))
++vi.mock('@/apps/drive/data/breadcrumbs', () => ({ getRootSection: () => ({ name: 'drive-Home' }) }))
++vi.mock('@/apps/drive/data/prefs', () => ({ sidebarCollapsed: ref(false) }))
++vi.mock('@/apps/drive/utils/useEmitter', () => ({ useEmitter: vi.fn() }))
++vi.mock('@/apps/drive/emitter', () => ({ default: { emit: vi.fn() } }))
++vi.mock('@/stores/root', () => ({ useRootStore: () => ({ paletteOpen: false }) }))
++vi.mock('@/composables/useAppSwitcher', () => ({ useAppSwitcher: () => ref({ label: 'Apps' }) }))
++vi.mock('@/utils/setupTheme', () => ({ themeMode: ref('light'), switchTheme: vi.fn() }))
++vi.mock('vue-router', () => ({
++  RouterLink: { template: '<a><slot /></a>' },
++  useRouter: () => ({}), useRoute: () => ({ name: 'drive-Home', params: {} }),
++}))
++import Sidebar from './Sidebar.vue'
++
++let app: ReturnType<typeof createApp> | undefined
++let root: HTMLDivElement
++beforeEach(() => {
++  mocks.assign.mockClear()
++  mocks.isStaff = ref(false)
++  vi.stubGlobal('__', (message: string) => message)
++  vi.stubGlobal('window', { location: { assign: mocks.assign }, __: (message: string) => message })
++  root = document.createElement('div')
++  app = createApp({ render: () => h(Sidebar) })
++  app.config.globalProperties.__ = (message: string) => message
++})
++afterEach(() => { app?.unmount(); vi.unstubAllGlobals() })
++
++describe('Drive return to ERP', () => {
++  it('places a staff return action in the first group and navigates the current tab', () => {
++    mocks.isStaff!.value = true
++    app!.mount(root)
++    const firstSection = root.querySelector('section')!
++    const button = [...firstSection.querySelectorAll('button')].find((button) => button.textContent === 'Back to Kanzlei')
++    expect(button).toBeDefined()
++    button!.click()
++    expect(mocks.assign).toHaveBeenCalledWith('/desk/kanzlei-overview')
++  })
++
++  it('keeps the return action hidden without a confirmed staff profile', () => {
++    app!.mount(root)
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++    expect(root.textContent).toContain('Home')
++    expect(root.textContent).toContain('Search')
++  })
++
++  it('reacts to profile load and hides the return action again when eligibility is lost', async () => {
++    app!.mount(root)
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++    mocks.isStaff!.value = true
++    await nextTick()
++    expect(root.textContent).toContain('Back to Kanzlei')
++    mocks.isStaff!.value = false
++    await nextTick()
++    expect(root.textContent).not.toContain('Back to Kanzlei')
++  })
++})
+diff --git a/frontend/src/apps/drive/runtime.test.ts b/frontend/src/apps/drive/runtime.test.ts
+new file mode 100644
+index 000000000..5f61ce549
+--- /dev/null
++++ b/frontend/src/apps/drive/runtime.test.ts
+@@ -0,0 +1,53 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const mocks = vi.hoisted(() => ({ fetch: vi.fn() }))
++vi.mock('frappe-ui', () => ({
++  createResource: (options) => ({
++    fetch: () => mocks.fetch(options).then((data) => options.transform(data)),
++  }),
++}))
++vi.mock('@/apps/drive/data/selection', () => ({ setActiveEntity: vi.fn() }))
++vi.mock('@/utils/setupTheme', () => ({ setupTheme: vi.fn() }))
++import { bootstrap } from './runtime'
++
++const fetcher = mocks.fetch
++beforeEach(() => {
++  delete window.translatedMessages
++  fetcher.mockReset()
++})
++afterEach(() => {
++  vi.restoreAllMocks()
++})
++
++describe('Drive translation readiness', () => {
++  it.each([
++    { 'Back to Kanzlei': 'Zur Kanzlei' },
++    { 'Back to Kanzlei': 'В Kanzlei' },
++  ])('waits for translations before the router can mount its sidebar %j', async (translations) => {
++    let finish!: (data: typeof translations) => void
++    fetcher.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
++    let ready = false
++    const boot = Promise.resolve(bootstrap()).then(() => { ready = true })
++    await Promise.resolve()
++    expect(ready).toBe(false)
++    expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ url: 'suite.drive.api.product.get_translations' }))
++    finish(translations)
++    await boot
++    expect(window.translatedMessages).toEqual(translations)
++    expect(ready).toBe(true)
++  })
++
++  it('keeps Drive startup available with source labels when translation loading fails', async () => {
++    fetcher.mockRejectedValue(new Error('Translation service unavailable'))
++    vi.spyOn(console, 'warn').mockImplementation(() => {})
++    await expect(bootstrap()).resolves.toBeUndefined()
++    expect(window.translatedMessages).toBeUndefined()
++  })
++
++  it('reuses an already loaded translation dictionary without another request', async () => {
++    window.translatedMessages = { 'Back to Kanzlei': 'Zur Kanzlei' }
++    await bootstrap()
++    expect(fetcher).not.toHaveBeenCalled()
++    expect(window.translatedMessages['Back to Kanzlei']).toBe('Zur Kanzlei')
++  })
++})
+diff --git a/frontend/src/apps/drive/ui/drive/js/utils.test.ts b/frontend/src/apps/drive/ui/drive/js/utils.test.ts
+new file mode 100644
+index 000000000..802aa0dd6
+--- /dev/null
++++ b/frontend/src/apps/drive/ui/drive/js/utils.test.ts
+@@ -0,0 +1,44 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ push: vi.fn(), open: vi.fn(), clipboard: vi.fn() }))
++vi.mock('@/apps/drive/router', () => ({ default: { push: mocks.push } }))
++vi.mock('frappe-ui', () => ({ toast: { success: vi.fn() } }))
++import { getFileLink, openEntity } from './utils'
++
++beforeEach(() => {
++  vi.clearAllMocks()
++  Object.defineProperty(window, 'location', { configurable: true, value: { origin: 'http://localhost' } })
++  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: mocks.clipboard.mockResolvedValue(undefined) } })
++  window.open = mocks.open
++})
++const entity = (overrides = {}) => ({ name: 'file-1', file_name: 'Report.docx', ...overrides })
++describe('file navigation in the legacy entrypoint', () => {
++  it.each(['Document', 'Spreadsheet', 'Presentation', 'Markdown'])(
++    'opens stored %s on its File page', (file_type) => {
++      openEntity(entity({ file_type }))
++      expect(mocks.push).toHaveBeenCalledWith({ name: 'drive-File', params: { entityName: 'file-1' } })
++    }
++  )
++  it.each([
++    ['Writer Document', 'writer-document', { id: 'file-1' }],
++    ['Sheet', 'sheets-editor', { id: 'content-2' }],
++    ['Presentation', 'slides-editor', { presentationId: 'content-2' }],
++  ])('routes %s from content metadata', (content_doctype, name, params) => {
++    openEntity(entity({ file_type: 'Unknown', content_doctype, content_docname: 'content-2' }))
++    expect(mocks.push).toHaveBeenCalledWith({ name, params })
++  })
++  it('uses the File page for uploaded Office copy-link and new-tab actions', () => {
++    const uploaded = entity({ file_type: 'Document' })
++    getFileLink(uploaded)
++    expect(mocks.clipboard).toHaveBeenCalledWith('http://localhost/drive/f/file-1/report-docx')
++    openEntity(uploaded, true)
++    expect(mocks.open).toHaveBeenCalledWith('http://localhost/drive/f/file-1/report-docx', '_blank')
++  })
++  it.each([
++    ['Writer Document', '/writer/w/file-1'],
++    ['Sheet', '/sheets/content-2'],
++    ['Presentation', '/slides/presentation/content-2'],
++  ])('links native %s to its editor', (content_doctype, path) => {
++    expect(getFileLink(entity({ file_type: 'Unknown', content_doctype, content_docname: 'content-2' }), false))
++      .toBe('http://localhost' + path)
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/download.test.ts b/frontend/src/apps/drive/utils/download.test.ts
+new file mode 100644
+index 000000000..057818a15
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/download.test.ts
+@@ -0,0 +1,74 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ call: vi.fn(), toast: vi.fn(), errors: vi.fn(), handlers: {}, off: vi.fn(), promise: vi.fn() }))
++vi.mock('frappe-ui', () => ({ call: mocks.call }))
++vi.mock('@/apps/drive/utils/toasts.js', () => ({ toast: Object.assign(mocks.toast, { error: mocks.errors, promise: mocks.promise }) }))
++vi.mock('@/apps/drive/socket', () => ({ getSocket: () => ({
++  on: (event, callback) => { mocks.handlers[event] = callback }, off: mocks.off,
++}) }))
++import { entitiesDownload } from './download'
++const uploaded = { name: 'office 1', file_type: 'Document', can_download: true }
++const hosted = { name: 'native-1', content_doctype: 'Writer Document', can_download: false }
++async function flush() { for (let i = 0; i < 8; i++) await Promise.resolve() }
++beforeEach(() => {
++  vi.clearAllMocks()
++  mocks.handlers = {}
++  mocks.promise.mockImplementation((promise) => ({ unwrap: () => promise }))
++  Object.defineProperty(window, 'location', { configurable: true, value: { href: '' } })
++})
++describe('download selection', () => {
++  it('downloads uploaded Office bytes directly', () => {
++    entitiesDownload([uploaded])
++    expect(window.location.href).toBe('/api/method/suite.drive.api.files.get_file_content?entity_name=office%201&trigger_download=1')
++    expect(mocks.call).not.toHaveBeenCalled()
++  })
++  it('does not download a single hosted document or link', () => {
++    entitiesDownload([hosted])
++    entitiesDownload([{ name: 'link-1', file_type: 'Link', can_download: false }])
++    expect(window.location.href).toBe('')
++    expect(mocks.call).not.toHaveBeenCalled()
++  })
++  it('does not build an archive for only hosted documents', async () => {
++    entitiesDownload([hosted, { ...hosted, name: 'native-2' }])
++    await flush()
++    expect(mocks.call).not.toHaveBeenCalled()
++  })
++  it('downloads a mixed ZIP with authoritative skipped counts', async () => {
++    mocks.call.mockImplementation((method) => Promise.resolve(method.endsWith('download_folder')
++      ? { token: 'zip-1', skipped_counts: { hosted_content: 99, links: 99 } }
++      : { status: 'ready', skipped_counts: { hosted_content: 1, links: 2 } }))
++    entitiesDownload([uploaded, hosted])
++    await flush()
++    expect(mocks.call).toHaveBeenCalledWith('suite.drive.api.files.download_folder', { entities: '["office 1","native-1"]' })
++    expect(mocks.toast).toHaveBeenCalledWith({ type: 'warning', title: 'ZIP skipped 1 hosted document and 2 links.' })
++    expect(window.location.href).toBe('/api/method/suite.drive.api.files.download_archive?token=zip-1')
++  })
++  it('rechecks permission and counts after a metadata-free socket ready signal', async () => {
++    mocks.call.mockResolvedValueOnce({ token: 'zip-1' })
++      .mockResolvedValueOnce({ status: 'queued' })
++      .mockResolvedValueOnce({ status: 'ready', skipped_counts: { hosted_content: 2, links: 0 } })
++    entitiesDownload([{ name: 'folder-1', is_folder: true, can_download: false }])
++    await flush()
++    mocks.handlers['drive-download-status']({ token: 'zip-1', status: 'ready', skipped_counts: { hosted_content: 99 } })
++    await flush()
++    expect(mocks.call).toHaveBeenCalledTimes(3)
++    expect(mocks.toast).toHaveBeenCalledWith({ type: 'warning', title: 'ZIP skipped 2 hosted documents.' })
++    expect(window.location.href).toContain('download_archive')
++    expect(mocks.off).toHaveBeenCalled()
++  })
++  it('does not navigate when permission is revoked before a ready signal', async () => {
++    mocks.call.mockResolvedValueOnce({ token: 'zip-1' })
++      .mockResolvedValueOnce({ status: 'queued' })
++      .mockRejectedValueOnce(new Error('Not permitted'))
++    entitiesDownload([{ name: 'folder-1', is_folder: true }])
++    await flush()
++    mocks.handlers['drive-download-status']({ token: 'zip-1', status: 'ready' })
++    await flush()
++    expect(window.location.href).toBe('')
++    expect(mocks.off).toHaveBeenCalled()
++  })
++  it('does not issue archive requests for virtual grouping nodes', async () => {
++    entitiesDownload([{ name: 'ToDo', kind: 'virtual', is_folder: true }])
++    await flush()
++    expect(mocks.call).not.toHaveBeenCalled()
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/downloadEligibility.js b/frontend/src/apps/drive/utils/downloadEligibility.js
+new file mode 100644
+index 000000000..eef591ab2
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/downloadEligibility.js
+@@ -0,0 +1,11 @@
++export function canDownloadEntity(entity) {
++  return entity?.kind !== 'virtual' && !!(entity?.is_folder || entity?.can_download)
++}
++
++// Hosted documents and links remain in mixed selections so the archive API
++// can report their omission. Virtual attachment buckets are not File IDs.
++export function canDownloadSelection(entities) {
++  return entities.length > 0 &&
++    entities.every((entity) => entity?.kind !== 'virtual') &&
++    entities.some(canDownloadEntity)
++}
+diff --git a/frontend/src/apps/drive/utils/navigation.js b/frontend/src/apps/drive/utils/navigation.js
+new file mode 100644
+index 000000000..f5097e107
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/navigation.js
+@@ -0,0 +1,45 @@
++import slugify from 'slugify'
++
++export function folderRoute(entity) {
++  return entity.kind === 'virtual'
++    ? {
++        name: 'drive-Attachments',
++        params: entity.attached_to_name
++          ? { doctype: entity.attached_to_doctype, docname: entity.attached_to_name }
++          : { doctype: entity.attached_to_doctype },
++      }
++    : { name: 'drive-Folder', params: { entityName: entity.name } }
++}
++
++// Display types describe uploaded bytes too. Only content metadata identifies
++// a hosted editor document; Writer routes by the containing File's ID.
++export function entityRoute(entity) {
++  if (entity.kind === 'virtual') return folderRoute(entity)
++  if (entity.name === '') return { name: 'drive-Home' }
++  if (entity.is_folder) return folderRoute(entity)
++  if (entity.content_doctype === 'Writer Document')
++    return { name: 'writer-document', params: { id: entity.name } }
++  if (entity.content_doctype === 'Sheet')
++    return { name: 'sheets-editor', params: { id: entity.content_docname || entity.name } }
++  if (entity.content_doctype === 'Presentation')
++    return { name: 'slides-editor', params: { presentationId: entity.content_docname } }
++  return { name: 'drive-File', params: { entityName: entity.name } }
++}
++
++export function entityLink(entity, origin) {
++  if (entity.file_type === 'Link') return entity.file_url
++  const route = entityRoute(entity)
++  const id = encodeURIComponent(entity.name)
++  if (route.name === 'writer-document') return `${origin}/writer/w/${id}`
++  if (route.name === 'sheets-editor') return `${origin}/sheets/${encodeURIComponent(route.params.id)}`
++  if (route.name === 'slides-editor') return `${origin}/slides/presentation/${encodeURIComponent(route.params.presentationId)}`
++  if (route.name === 'drive-Home') return `${origin}/drive`
++  if (route.name === 'drive-Attachments') {
++    const doctype = encodeURIComponent(route.params.doctype)
++    return `${origin}/drive/attachments/${doctype}${route.params.docname ? '/' + encodeURIComponent(route.params.docname) : ''}`
++  }
++  const slug = slugify((entity.file_name || '').split('.').join(' '), {
++    lower: true, trim: true, remove: /[^\w\s']/,
++  })
++  return `${origin}/drive/${entity.is_folder ? 'd' : 'f'}/${id}/${slug}`
++}
+diff --git a/frontend/src/apps/drive/utils/realtimeRefresh.js b/frontend/src/apps/drive/utils/realtimeRefresh.js
+new file mode 100644
+index 000000000..85854f1e7
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/realtimeRefresh.js
+@@ -0,0 +1,28 @@
++// Signals carry only a folder ID. The caller re-fetches through the normal API.
++export function subscribeFolderChanges(socket, accepts, refresh) {
++  let timer, pending = false, running = false, stopped = false
++  const schedule = () => {
++    if (stopped || running || timer) return
++    timer = setTimeout(async () => {
++      timer = undefined
++      if (stopped || !pending) return
++      pending = false
++      running = true
++      try { await refresh() } finally {
++        running = false
++        if (pending) schedule()
++      }
++    }, 150)
++  }
++  const changed = ({ folder } = {}) => {
++    if (stopped || typeof folder !== 'string' || !accepts(folder)) return
++    pending = true
++    schedule()
++  }
++  socket.on('drive-folder-changed', changed)
++  return () => {
++    stopped = true
++    clearTimeout(timer)
++    socket.off('drive-folder-changed', changed)
++  }
++}
+diff --git a/frontend/src/apps/drive/utils/realtimeRefresh.test.ts b/frontend/src/apps/drive/utils/realtimeRefresh.test.ts
+new file mode 100644
+index 000000000..faac34a7d
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/realtimeRefresh.test.ts
+@@ -0,0 +1,28 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { subscribeFolderChanges } from './realtimeRefresh'
++
++afterEach(() => vi.useRealTimers())
++describe('permission-aware folder refresh', () => {
++  it('coalesces signals, serializes requests and unsubscribes', async () => {
++    vi.useFakeTimers()
++    let handler: (payload: { folder: string }) => void
++    const socket = { on: vi.fn((_event, cb) => { handler = cb }), off: vi.fn() }
++    let finish: () => void
++    const refresh = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
++    const stop = subscribeFolderChanges(socket, folder => folder === 'allowed', refresh)
++    handler!({ folder: 'denied' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).not.toHaveBeenCalled()
++    handler!({ folder: 'allowed' }); handler!({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(1)
++    handler!({ folder: 'allowed' })
++    await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(1)
++    finish!(); await vi.advanceTimersByTimeAsync(150)
++    expect(refresh).toHaveBeenCalledTimes(2)
++    stop(); finish!(); await vi.advanceTimersByTimeAsync(150)
++    expect(socket.off).toHaveBeenCalledWith('drive-folder-changed', handler!)
++    expect(refresh).toHaveBeenCalledTimes(2)
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/toasts.test.ts b/frontend/src/apps/drive/utils/toasts.test.ts
+new file mode 100644
+index 000000000..615aa3956
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/toasts.test.ts
+@@ -0,0 +1,19 @@
++import { describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn(), success: vi.fn(), message: vi.fn(), promise: vi.fn() }))
++vi.mock('frappe-ui', () => ({ toast: mocks }))
++import { toast } from './toasts'
++describe('Drive toast adapter against the pinned Frappe UI API', () => {
++  it('dispatches ZIP warnings to the supported warning API', () => {
++    toast({ title: 'ZIP skipped 1 hosted document.', type: 'warning' })
++    expect(mocks.warning).toHaveBeenCalledWith('ZIP skipped 1 hosted document.', expect.objectContaining({ duration: 5000 }))
++  })
++  it('dispatches download errors to the supported error API', () => {
++    toast({ title: 'Download failed', type: 'error' })
++    expect(mocks.error).toHaveBeenCalledWith('Download failed', expect.any(Object))
++  })
++  it('retains string success messages and promise handling', () => {
++    toast('Downloaded')
++    expect(mocks.success).toHaveBeenCalledWith('Downloaded')
++    expect(toast.promise).toBe(mocks.promise)
++  })
++})
+diff --git a/frontend/src/boot/session.test.ts b/frontend/src/boot/session.test.ts
+new file mode 100644
+index 000000000..346705601
+--- /dev/null
++++ b/frontend/src/boot/session.test.ts
+@@ -0,0 +1,69 @@
++import { createPinia, setActivePinia } from 'pinia'
++import { reactive } from 'vue'
++import { beforeEach, describe, expect, it, vi } from 'vitest'
++
++vi.mock('frappe-ui', () => ({
++  createResource: (options) => reactive({ data: null, loading: false, fetched: false, error: null, ...options }),
++}))
++vi.mock('@/apps/slides/utils/serviceWorker', () => ({ clearSlidesUserData: vi.fn() }))
++import { useCurrentUser, useSessionStore, userResource } from './session'
++
++beforeEach(() => {
++  setActivePinia(createPinia())
++  useSessionStore().user = 'staff@example.com'
++  userResource.data = null
++  userResource.fetched = true
++  userResource.loading = false
++  userResource.error = null
++})
++
++describe('staff navigation eligibility', () => {
++  it('offers employee navigation from saved System User without System Manager role', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: ['Employee'] }
++    const user = useCurrentUser()
++    expect(user.isStaff?.value).toBe(true)
++    expect(user.isSystemManager.value).toBe(false)
++    expect(user.systemUser.value).toBe(false)
++  })
++
++  it.each([
++    { name: 'member@example.com', user_type: 'Website User', roles: ['System Manager'] },
++    { name: 'Guest', user_type: 'System User', roles: [] },
++    { name: 'staff@example.com', roles: ['System Manager'] },
++    null,
++  ])('hides employee navigation for an unconfirmed staff profile %j', (profile) => {
++    userResource.data = profile
++    useSessionStore().user = profile?.name === 'Guest' ? null : profile?.name ?? null
++    expect(useCurrentUser().isStaff?.value).toBe(false)
++  })
++
++  it('does not treat a cached offline profile as a confirmed server response', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    userResource.fetched = false
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it.each([null, 'Guest'])('hides a cached staff profile without a current logged-in staff session %j', (sessionUser) => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    useSessionStore().user = sessionUser
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it('does not offer staff navigation from a profile belonging to another session user', () => {
++    userResource.data = { name: 'old-user@example.com', user_type: 'System User', roles: [] }
++    expect(useCurrentUser().isStaff.value).toBe(false)
++  })
++
++  it('hides a previously loaded staff profile during refresh and after a failed request', () => {
++    userResource.data = { name: 'staff@example.com', user_type: 'System User', roles: [] }
++    const { isStaff } = useCurrentUser()
++    expect(isStaff?.value).toBe(true)
++    userResource.loading = true
++    expect(isStaff?.value).toBe(false)
++    userResource.loading = false
++    userResource.error = new Error('Network failure')
++    expect(isStaff?.value).toBe(false)
++    userResource.error = null
++    expect(isStaff?.value).toBe(true)
++  })
++})
+diff --git a/suite/drive/utils/downloads.py b/suite/drive/utils/downloads.py
+new file mode 100644
+index 000000000..8630c4bb6
+--- /dev/null
++++ b/suite/drive/utils/downloads.py
+@@ -0,0 +1,137 @@
++"""Stored-content classification and a complete, permission-checked ZIP manifest."""
++
++from dataclasses import dataclass, field
++from pathlib import PurePosixPath
++
++import frappe
++
++
++DOWNLOAD_FIELDS = ["name", "file_name", "folder", "is_folder", "file_type", "file_url",
++                   "content_doctype", "content_docname", "mime_type", "status",
++                   "modified", "content_hash", "file_size"]
++MANIFEST_VERSION = 2
++
++
++def content_kind(entity):
++    if entity.get("kind") == "virtual":
++        return "virtual"
++    if entity.get("is_folder") or entity.get("file_type") == "Folder":
++        return "folder"
++    if entity.get("file_type") == "Link":
++        return "links"
++    content = entity.get("content_doctype")
++    if (content and content != "File") or (entity.get("content_docname") and not content):
++        return "hosted_content"
++    # Legacy native records must never expose a Writer directory as a blob.
++    if entity.get("mime_type") in ("frappe_doc", "frappe/sheet", "frappe/slides"):
++        return "hosted_content"
++    return "stored" if entity.get("file_url") else "missing"
++
++
++def can_download(entity):
++    return content_kind(entity) == "stored" and entity.get("status") in (None, "Active")
++
++
++def _safe_part(value):
++    value = str(value or "").replace("/", "_").replace("\\", "_")
++    value = "".join(char for char in value if ord(char) >= 32 and char != "\x7f").strip()
++    return value if value not in ("", ".", "..") else "file"
++
++
++@dataclass
++class DownloadSelection:
++    files: list = field(default_factory=list)
++    skipped: list = field(default_factory=list)
++
++    def counts(self):
++        return {reason: sum(item["reason"] == reason for item in self.skipped)
++                for reason in ("hosted_content", "links")}
++
++    def signature(self):
++        # Includes descendants and byte revision, so a changed folder never
++        # reuses yesterday's ZIP just because its selected ID is unchanged.
++        return {"files": [(arc, row.name, row.get("file_url"), str(row.get("modified")),
++                           row.get("content_hash"), row.get("file_size")) for arc, row in self.files],
++                "skipped": self.skipped}
++
++
++def collect_downloads(entity_names):
++    from suite.drive.api.permissions import user_has_permission
++
++    selection = DownloadSelection()
++    seen, used_arcs = set(), set()
++    parents = {}
++
++    def unique_arc(arc, folder=False):
++        path = PurePosixPath(arc)
++        candidate, counter = arc, 1
++        while candidate.casefold() in used_arcs:
++            counter += 1
++            label = f"{path.name} ({counter})" if folder else f"{path.stem} ({counter}){path.suffix}"
++            candidate = str(path.with_name(label))
++        used_arcs.add(candidate.casefold())
++        return candidate
++
++    def visit(row, prefix=""):
++        if row.name in seen:
++            return
++        seen.add(row.name)
++        kind = content_kind(row)
++        arc = prefix + _safe_part(row.file_name)
++        if kind == "folder":
++            # Reserve directories too: a blob called 'reports' must not collide
++            # with 'reports/report.xml' in an otherwise valid ZIP.
++            arc = unique_arc(arc, folder=True)
++            children = frappe.get_all("File", filters={"folder": row.name, "status": "Active"},
++                                      fields=DOWNLOAD_FIELDS, order_by="name")
++            for child in children:
++                if user_has_permission(child.name, "read"):
++                    visit(child, arc + "/")
++        elif kind in ("hosted_content", "links"):
++            selection.skipped.append({"name": row.name, "reason": kind})
++        elif kind == "stored":
++            selection.files.append((unique_arc(arc), row))
++        else:
++            frappe.throw("File content is unavailable. Please contact your administrator.", frappe.DoesNotExistError)
++
++    rows = []
++    for name in sorted(set(entity_names)):
++        if not user_has_permission(name, "read"):
++            raise frappe.PermissionError("You do not have permission to download this file")
++        row = frappe.get_value("File", name, DOWNLOAD_FIELDS, as_dict=True)
++        if row and row.status == "Active":
++            rows.append(row)
++            parents[name] = row.get("folder")
++    selected_folders = {row.name for row in rows if content_kind(row) == "folder"}
++
++    def selected_ancestor_count(row):
++        parent, visited, count = row.get("folder"), set(), 0
++        while parent and parent not in visited:
++            if parent in selected_folders:
++                count += 1
++            visited.add(parent)
++            if parent not in parents:
++                parents[parent] = frappe.db.get_value("File", parent, "folder")
++            parent = parents[parent]
++        return count
++
++    # Visit selected ancestors first to preserve the tree. An explicitly
++    # selected child is only deduplicated if traversal actually reached it;
++    # it may be independently readable behind a denied intermediate folder.
++    rows.sort(key=lambda row: (content_kind(row) != "folder", selected_ancestor_count(row), row.name))
++    for row in rows:
++        visit(row)
++    return selection
++
++
++def visible_skipped_counts(entry):
++    from suite.drive.api.permissions import user_has_permission
++
++    counts = {"hosted_content": 0, "links": 0}
++    for item in entry.get("skipped", []):
++        row = frappe.db.get_value("File", item["name"], DOWNLOAD_FIELDS, as_dict=True)
++        if row and row.status == "Active" and user_has_permission(row.name, "read"):
++            kind = content_kind(row)
++            if kind == item["reason"] and kind in counts:
++                counts[kind] += 1
++    return counts

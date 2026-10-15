@@ -26,6 +26,15 @@ chmod 0600 "$ssh_dir/key" "$ssh_dir/known_hosts"
 ssh-keygen -y -f "$ssh_dir/key" >/dev/null
 ssh_options=(-i "$ssh_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 destination="$DEPLOY_SSH_USER@$DEPLOY_HOST"
+printf -v preflight_command 'exec python3 - --root %q --image %q --revision %q --tag %q' \
+  "$DEPLOY_PATH" "$RELEASE_IMAGE" "$RELEASE_REVISION" "$RELEASE_TAG"
+preflight=$(ssh -p "$DEPLOY_SSH_PORT" "${ssh_options[@]}" "$destination" \
+  "bash -c $(printf '%q' "$preflight_command")" < "$(dirname "$0")/deploy_preflight.py")
+printf '%s\n' "$preflight"
+if [[ ${preflight##*$'\n'} == SKIP ]]; then
+  exit 0
+fi
+[[ ${preflight##*$'\n'} == DEPLOY ]]
 run_id=${GITHUB_RUN_ID:-$(date +%s)}
 attempt=${GITHUB_RUN_ATTEMPT:-1}
 [[ $run_id =~ ^[0-9]+$ && $attempt =~ ^[0-9]+$ ]]

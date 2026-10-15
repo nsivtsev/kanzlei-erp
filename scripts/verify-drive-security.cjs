@@ -80,6 +80,32 @@ async function main(state) {
 		assert.equal(ordinaryFolder.folder, state.homes[2]);
 		assert.ok(!ordinaryFolder.kanzlei_drive_customer);
 		accepted.push('ERP Files menu is unique for staff and manager; portal/Guest Desk denied; staff without Customer access creates an ordinary Home folder');
+		const listMethod = 'kanzlei_erp.mandant_drive.list_mandanten';
+		const search = '_Drive';
+		const clientPage = await writer.call(listMethod, { search, page_length: 1 });
+		assert.equal(clientPage.rows.length, 1); assert.equal(clientPage.has_next, true);
+		const next = await writer.call(listMethod, { search, start: clientPage.next_start, page_length: 1 });
+		assert.equal(next.rows.length, 1); assert.notEqual(clientPage.rows[0].customer, next.rows[0].customer);
+		assert.equal(next.has_next, false);
+		const writerRows = [...clientPage.rows, ...next.rows];
+		assert.equal(writerRows.find(row => row.customer === state.form_customer).state, 'missing');
+		assert.equal(writerRows.find(row => row.customer === state.form_customer).can_create, true);
+		assert.equal(writerRows.find(row => row.customer === state.customer).state, 'ready');
+		const readerRows = (await reader.call(listMethod, { search })).rows;
+		assert.equal(readerRows.length, 1); assert.equal(readerRows[0].customer, state.customer);
+		assert.equal(readerRows[0].folder, state.root); assert.equal(readerRows[0].can_create, false);
+		assert.deepEqual((await stranger.call(listMethod, { search: state.customer })).rows, []);
+		const portalList = await clients.portal.request('/api/method/' + listMethod);
+		assert.equal(portalList.status, 403);
+		const navigation = await reader.call('suite.drive.api.permissions.get_entity_with_permissions', { entity_name: state.original.name });
+		assert.equal(navigation.mandant.customer, state.customer); assert.equal(navigation.mandant.folder, state.root);
+		assert.equal(navigation.breadcrumbs[0].name, state.root);
+		assert.ok(!navigation.breadcrumbs.some(crumb => crumb.file_name === 'Administrator' || crumb.name === 'Administrator'));
+		const grant = spawnSync(state.python, [state.script, '--site', state.site, '--fixtures', '--mode', 'grant'], { input: JSON.stringify(state), encoding: 'utf8' });
+		assert.equal(grant.status, 0, 'Fixture permission grant failed');
+		const newlyReadable = (await reader.call(listMethod, { search })).rows.find(row => row.customer === state.form_customer);
+		assert.equal(newlyReadable.state, 'missing'); assert.equal(newlyReadable.can_create, false);
+		accepted.push('Mandanten lists/search/pages follow current Customer rights; portal denied; grant appears; direct entity context excludes Administrator');
 		const formSnapshot = await writer.call('frappe.client.get', { doctype: 'Customer', name: state.form_customer });
 		assert.ok(!formSnapshot.kanzlei_drive_folder);
 		const folderResults = await Promise.all([1, 2].map(() =>
@@ -185,6 +211,9 @@ print('ZIP byte checks passed')`], { encoding: 'utf8', input: JSON.stringify({ z
 		const revoke = spawnSync(state.python, [state.script, '--site', state.site, '--fixtures', '--mode', 'revoke'],
 			{ input: JSON.stringify(state), encoding: 'utf8' });
 		assert.equal(revoke.status, 0, 'Fixture permission revocation failed: ' + revoke.stderr.trim().split('\n').at(-1));
+		assert.deepEqual((await revoked.call(listMethod, { search: state.customer })).rows, []);
+		assert.equal((await revoked.request('/api/method/suite.drive.api.permissions.get_entity_with_permissions?entity_name=' + encodeURIComponent(state.root))).status, 403);
+		accepted.push('Mandanten removes revoked client and denies its old direct folder URL');
 		assert.equal((await revoked.request('/api/method/suite.drive.api.files.download_archive?token=' + encodeURIComponent(revokedArchive.token))).status, 403);
 		const rejectedZip = await stranger.request('/api/method/suite.drive.api.files.download_folder', { method: 'POST', body: new URLSearchParams({ entities: JSON.stringify([state.root]) }) });
 		assert.equal(rejectedZip.status, 403);

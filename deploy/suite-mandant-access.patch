@@ -1,3 +1,34 @@
+diff --git a/frontend/src/apps/drive/components/BottomBar.vue b/frontend/src/apps/drive/components/BottomBar.vue
+index d2ca7d31f..dca435630 100644
+--- a/frontend/src/apps/drive/components/BottomBar.vue
++++ b/frontend/src/apps/drive/components/BottomBar.vue
+@@ -17,11 +17,13 @@ import LucideHome from '~icons/lucide/home'
+ import LucideStar from '~icons/lucide/star'
+ import LucideBuilding2 from '~icons/lucide/building-2'
+ import { getRootSection } from '@/apps/drive/data/breadcrumbs'
++import { useCurrentUser } from '@/boot/session'
+ import { rootInfo } from '@/apps/drive/resources/files'
+ 
+ export default {
+   name: 'BottomBar',
+   components: { MobileNav, MobileNavItem },
++  setup() { return { isStaff: useCurrentUser().isStaff } },
+   computed: {
+     sidebarItems() {
+       const first = getRootSection()
+@@ -32,6 +34,12 @@ export default {
+           icon: LucideHome,
+           highlight: () => first.name === 'drive-Home',
+         },
++        ...(this.isStaff ? [{
++          label: __('Mandanten'),
++          route: { name: 'drive-Mandanten' },
++          icon: LucideBuilding2,
++          highlight: () => first.name === 'drive-Mandanten',
++        }] : []),
+         {
+           label: 'Recents',
+           route: { name: 'drive-Recents' },
 diff --git a/frontend/src/apps/drive/components/DriveToolBar.vue b/frontend/src/apps/drive/components/DriveToolBar.vue
 index 1cb541b4a..1a264f733 100644
 --- a/frontend/src/apps/drive/components/DriveToolBar.vue
@@ -14,6 +45,28 @@ index 1cb541b4a..1a264f733 100644
            )" :key="item.label">
            <Button variant="outline" :tooltip="item.label" @click.once="item.action(selections)">
              <template #icon>
+diff --git a/frontend/src/apps/drive/components/EditableBreadcrumbs.vue b/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
+index 7d44ef608..ff5f26cda 100644
+--- a/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
++++ b/frontend/src/apps/drive/components/EditableBreadcrumbs.vue
+@@ -32,7 +32,7 @@ const loading = computed(
+ )
+ 
+ const isEditing = computed(
+-  () => props.entity && renamingEntity.value === props.entity.name,
++  () => props.entity && !props.items.at(-1)?.readonly && renamingEntity.value === props.entity.name,
+ )
+ 
+ const parentItems = computed(() => props.items.slice(0, -1))
+@@ -45,7 +45,7 @@ const displayItems = computed(() => {
+   const last = items[items.length - 1]
+   items[items.length - 1] = {
+     ...last,
+-    label: props.entity.file_name ?? last.label,
++    label: last.readonly ? last.label : props.entity.file_name ?? last.label,
+   }
+   return items
+ })
 diff --git a/frontend/src/apps/drive/components/FileRender.vue b/frontend/src/apps/drive/components/FileRender.vue
 index c6572bdbc..c7a8a2e8a 100644
 --- a/frontend/src/apps/drive/components/FileRender.vue
@@ -400,7 +453,7 @@ index ad41a07b8..d22f395b5 100644
          },
          {
 diff --git a/frontend/src/apps/drive/components/Sidebar.vue b/frontend/src/apps/drive/components/Sidebar.vue
-index b8978a02e..953912d0f 100644
+index b8978a02e..b37d6cabf 100644
 --- a/frontend/src/apps/drive/components/Sidebar.vue
 +++ b/frontend/src/apps/drive/components/Sidebar.vue
 @@ -23,7 +23,7 @@ import { rootInfo } from '@/apps/drive/resources/files'
@@ -427,7 +480,7 @@ index b8978a02e..953912d0f 100644
          {
            label: __('Search'),
            icon: LucideSearch,
-@@ -152,7 +158,7 @@ const sidebarItems = computed(() => {
+@@ -152,16 +158,23 @@ const sidebarItems = computed(() => {
            isActive: active('drive-Inbox'),
            suffix: notifCount.data ? String(notifCount.data) : undefined,
          },
@@ -435,7 +488,71 @@ index b8978a02e..953912d0f 100644
 +      ]),
      },
      {
-       items: [
+-      items: [
++      items: dynamicList([
+         {
+           label: 'Home',
+           to: { name: 'drive-Home' },
+           icon: LucideHome,
+           isActive: active('drive-Home'),
+         },
++        {
++          label: __('Mandanten'),
++          to: { name: 'drive-Mandanten' },
++          icon: LucideBuilding2,
++          cond: isStaff.value,
++          isActive: active('drive-Mandanten'),
++        },
+         {
+           label: 'Recents',
+           to: { name: 'drive-Recents' },
+@@ -193,7 +206,7 @@ const sidebarItems = computed(() => {
+           icon: LucideTrash,
+           isActive: active('drive-Trash'),
+         },
+-      ],
++      ]),
+     },
+     {
+       label: 'Browse',
+diff --git a/frontend/src/apps/drive/data/breadcrumbs.ts b/frontend/src/apps/drive/data/breadcrumbs.ts
+index 6097d5c0b..883bd034c 100644
+--- a/frontend/src/apps/drive/data/breadcrumbs.ts
++++ b/frontend/src/apps/drive/data/breadcrumbs.ts
+@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
+ import emitter from '@/apps/drive/emitter'
+ import router from '@/apps/drive/router'
+ import { rootInfo } from '@/apps/drive/resources/files'
++import { mandantBreadcrumbs } from './mandantBreadcrumbs'
+ import { shareView } from '@/apps/drive/data/prefs'
+ import { useSessionStore } from '@/boot/session'
+ 
+@@ -92,6 +93,8 @@ export function isHomeContext() {
+ 
+ /** Build navbar crumbs from entity API payload — pure, no side effects. */
+ function buildBreadCrumbs(entity: Record<string, unknown>) {
++  const clientTrail = mandantBreadcrumbs(entity)
++  if (clientTrail) return clientTrail
+   let breadcrumbs = [
+     ...((entity.breadcrumbs as Array<Record<string, unknown>>) || []),
+   ]
+diff --git a/frontend/src/apps/drive/routes.ts b/frontend/src/apps/drive/routes.ts
+index f05aaab75..f594279d9 100644
+--- a/frontend/src/apps/drive/routes.ts
++++ b/frontend/src/apps/drive/routes.ts
+@@ -57,6 +57,12 @@ export const routes: RouteRecordRaw[] = [
+         beforeEnter: [setPageTitle],
+         props: true,
+       },
++      {
++        path: 'mandanten',
++        name: 'drive-Mandanten',
++        component: () => import('@/apps/drive/pages/Mandanten.vue'),
++        beforeEnter: [setPageTitle],
++      },
+       {
+         path: 'inbox',
+         name: 'drive-Inbox',
 diff --git a/frontend/src/apps/drive/runtime.ts b/frontend/src/apps/drive/runtime.ts
 index 09f3a1edf..0f2a22368 100644
 --- a/frontend/src/apps/drive/runtime.ts
@@ -1293,7 +1410,7 @@ index 86a738764..e355b3877 100644
  
  @frappe.whitelist(allow_guest=True)
 diff --git a/suite/drive/api/permissions.py b/suite/drive/api/permissions.py
-index 80b8eac84..f0c22025f 100644
+index 80b8eac84..1a17b5cad 100644
 --- a/suite/drive/api/permissions.py
 +++ b/suite/drive/api/permissions.py
 @@ -41,7 +41,32 @@ def get_user_access(entity: str | Document | frappe._dict):
@@ -1329,6 +1446,22 @@ index 80b8eac84..f0c22025f 100644
      if isinstance(entity, str):
          entity = frappe.get_cached_doc("File", entity)
  
+@@ -152,6 +177,15 @@ def get_entity_with_permissions(entity_name: str | None = None):
+     )
+     return_obj = entity | user_access | owner_info | breadcrumbs | {"is_favourite": favourite}
+ 
++    for hook in frappe.get_hooks("drive_entity_navigation"):
++        mandant = frappe.call(hook, entity=entity, user=frappe.session.user)
++        if mandant is not None:
++            return_obj["mandant"] = mandant
++            path = return_obj["breadcrumbs"]
++            root = next((i for i, crumb in enumerate(path) if crumb["name"] == mandant["folder"]), None)
++            return_obj["breadcrumbs"] = path[root:] if root is not None else []
++            break
++
+     # General access marker: -2 public (link), -1 site users, 0 restricted.
+     default = 0
+     if get_user_access_for_user(entity, "Guest")["read"]:
 diff --git a/suite/drive/api/tests/test_files.py b/suite/drive/api/tests/test_files.py
 index 0a5c55c71..d3bfa4dc8 100644
 --- a/suite/drive/api/tests/test_files.py
@@ -1903,6 +2036,28 @@ index 9fc603891..09fce3640 100644
      return Response(status=201)
  
  
+diff --git a/frontend/src/apps/drive/components/BottomBar.test.ts b/frontend/src/apps/drive/components/BottomBar.test.ts
+new file mode 100644
+index 000000000..2cfce58a9
+--- /dev/null
++++ b/frontend/src/apps/drive/components/BottomBar.test.ts
+@@ -0,0 +1,16 @@
++import { createApp, defineComponent, h, nextTick, ref } from 'vue'
++import { afterEach, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ staff: null as any }))
++vi.mock('frappe-ui', () => ({ MobileNav: defineComponent({ setup: (_, { slots }) => () => h('nav', slots.default?.()) }), MobileNavItem: defineComponent({ props: ['label'], setup: props => () => h('a', props.label) }) }))
++vi.mock('@/boot/session', () => ({ useCurrentUser: () => ({ isStaff: mocks.staff }) }))
++vi.mock('@/apps/drive/data/breadcrumbs', () => ({ getRootSection: () => ({ name: 'drive-Mandanten' }) }))
++vi.mock('@/apps/drive/resources/files', () => ({ rootInfo: { data: {} } }))
++import BottomBar from './BottomBar.vue'
++let app: ReturnType<typeof createApp>
++afterEach(() => { app?.unmount(); vi.unstubAllGlobals() })
++it('adds Mandanten after Home on mobile only for staff', async () => {
++ vi.stubGlobal('__', (text: string) => text); mocks.staff = ref(true)
++ const root = document.createElement('div'); app = createApp(BottomBar); app.mount(root)
++ expect([...root.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Home','Mandanten','Recents','Everyone','Favourites'])
++ mocks.staff.value = false; await nextTick(); expect(root.textContent).not.toContain('Mandanten')
++})
 diff --git a/frontend/src/apps/drive/components/DriveToolBar.test.ts b/frontend/src/apps/drive/components/DriveToolBar.test.ts
 new file mode 100644
 index 000000000..0dae005c1
@@ -2056,10 +2211,10 @@ index 000000000..58886c31b
 +})
 diff --git a/frontend/src/apps/drive/components/Sidebar.test.ts b/frontend/src/apps/drive/components/Sidebar.test.ts
 new file mode 100644
-index 000000000..c695897a8
+index 000000000..c70c9cd7f
 --- /dev/null
 +++ b/frontend/src/apps/drive/components/Sidebar.test.ts
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,80 @@
 +import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
@@ -2116,6 +2271,7 @@ index 000000000..c695897a8
 +    const firstSection = root.querySelector('section')!
 +    const button = [...firstSection.querySelectorAll('button')].find((button) => button.textContent === 'Back to Kanzlei')
 +    expect(button).toBeDefined()
++    expect(root.textContent).toContain('Mandanten')
 +    button!.click()
 +    expect(mocks.assign).toHaveBeenCalledWith('/desk/kanzlei-overview')
 +  })
@@ -2124,6 +2280,7 @@ index 000000000..c695897a8
 +    app!.mount(root)
 +    expect(root.textContent).not.toContain('Back to Kanzlei')
 +    expect(root.textContent).toContain('Home')
++    expect(root.textContent).not.toContain('Mandanten')
 +    expect(root.textContent).toContain('Search')
 +  })
 +
@@ -2138,6 +2295,184 @@ index 000000000..c695897a8
 +    expect(root.textContent).not.toContain('Back to Kanzlei')
 +  })
 +})
+diff --git a/frontend/src/apps/drive/data/mandantBreadcrumbs.test.ts b/frontend/src/apps/drive/data/mandantBreadcrumbs.test.ts
+new file mode 100644
+index 000000000..4b7b59857
+--- /dev/null
++++ b/frontend/src/apps/drive/data/mandantBreadcrumbs.test.ts
+@@ -0,0 +1,20 @@
++import { describe, expect, it, vi } from 'vitest'
++import { mandantBreadcrumbs } from './mandantBreadcrumbs'
++vi.stubGlobal('__', (text: string) => text)
++const mandant = { customer: 'C', customer_name: 'New name', folder: 'root', customer_url: '/desk/customer/C' }
++describe('Mandant navigation context', () => {
++  it('trims service ancestors and uses the current Customer title', () => {
++    const crumbs = mandantBreadcrumbs({ name: 'child', mandant, write: true, breadcrumbs: [{ name: 'Administrator', file_name: 'secret' }, { name: 'root', file_name: 'Old name' }, { name: 'child', file_name: 'Invoices' }] })!
++    expect(crumbs.map(c => c.label)).toEqual(['Mandanten', 'New name', 'Invoices'])
++    expect(crumbs[0].name).toBe('drive-Mandanten'); expect(crumbs[1].onClick).toBeUndefined(); expect(crumbs[1].route).toEqual({ name: 'drive-Folder', params: { entityName: 'root' } })
++  })
++  it('does not attach a rename action to the client root', () => {
++    const crumbs = mandantBreadcrumbs({ name: 'root', mandant, write: true, breadcrumbs: [{ name: 'root', file_name: 'Old name' }] })!
++    expect(crumbs.at(-1)?.onClick).toBeUndefined(); expect(crumbs.at(-1)?.readonly).toBe(true)
++  })
++  it('does not reveal arbitrary ancestors if the client root is absent', () => {
++    const crumbs = mandantBreadcrumbs({ name: 'file', file_name: 'invoice', mandant, breadcrumbs: [{ name: 'private', file_name: 'secret' }] })!
++    expect(crumbs.map(c => c.label)).toEqual(['Mandanten','New name','invoice'])
++  })
++  it('leaves ordinary file navigation unchanged', () => { expect(mandantBreadcrumbs({ name: 'ordinary' })).toBeNull() })
++})
+diff --git a/frontend/src/apps/drive/data/mandantBreadcrumbs.ts b/frontend/src/apps/drive/data/mandantBreadcrumbs.ts
+new file mode 100644
+index 000000000..36a144f57
+--- /dev/null
++++ b/frontend/src/apps/drive/data/mandantBreadcrumbs.ts
+@@ -0,0 +1,23 @@
++import emitter from '@/apps/drive/emitter'
++
++type Crumb = { label: string; name: string; route: unknown; onClick?: () => void; readonly?: boolean }
++/** Build a client trail without relying on the route by which it was opened. */
++export function mandantBreadcrumbs(entity: Record<string, any>): Crumb[] | null {
++  const context = entity.mandant
++  if (!context?.folder) return null
++  const trail: Crumb[] = [
++    { label: __('Mandanten'), name: 'drive-Mandanten', route: { name: 'drive-Mandanten' } },
++    { label: context.customer_name, name: context.folder, readonly: true,
++      route: entity.name === context.folder ? null : { name: 'drive-Folder', params: { entityName: context.folder } } },
++  ]
++  const crumbs = entity.breadcrumbs || []
++  const root = crumbs.findIndex((crumb: any) => crumb.name === context.folder)
++  const children = root >= 0 ? crumbs.slice(root + 1) : entity.name !== context.folder ? [{ name: entity.name, file_name: entity.file_name }] : []
++  children.forEach((child: any) => {
++    const final = child.name === entity.name
++    trail.push({ label: child.file_name, name: child.name,
++      route: final ? null : { name: 'drive-Folder', params: { entityName: child.name } },
++      onClick: final && entity.write ? () => emitter.emit('rename') : undefined })
++  })
++  return trail
++}
+diff --git a/frontend/src/apps/drive/pages/Mandanten.test.ts b/frontend/src/apps/drive/pages/Mandanten.test.ts
+new file mode 100644
+index 000000000..ae989447a
+--- /dev/null
++++ b/frontend/src/apps/drive/pages/Mandanten.test.ts
+@@ -0,0 +1,48 @@
++import { createApp, defineComponent, h, nextTick, ref } from 'vue'
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++const mocks = vi.hoisted(() => ({ fetch: vi.fn(), push: vi.fn(), staff: null as any, user: null as any }))
++vi.mock('frappe-ui', () => ({
++  createResource: () => ({ fetch: mocks.fetch }),
++  Button: defineComponent({ props: ['disabled','loading'], setup: (props, { slots }) => () => h('button', { disabled: props.disabled }, slots.default?.()) }),
++}))
++vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
++vi.mock('@/boot/session', () => ({ useCurrentUser: () => ({ user: mocks.user, isStaff: mocks.staff }) }))
++vi.mock('@/apps/drive/components/Navbar.vue', () => ({ default: { template: '<nav />' } }))
++import Mandanten from './Mandanten.vue'
++let app: ReturnType<typeof createApp>, root: HTMLElement
++const rows = [
++ { customer: 'C1', customer_name: 'Readable', customer_url: '/desk/customer/C1', state: 'ready', folder: 'root', can_create: false },
++ { customer: 'C2', customer_name: 'Writable', customer_url: '/desk/customer/C2', state: 'missing', folder: null, can_create: true },
++ { customer: 'C3', customer_name: 'Broken', customer_url: '/desk/customer/C3', state: 'unavailable', folder: null, can_create: false },
++]
++const flush = async () => { await Promise.resolve(); await Promise.resolve(); await nextTick() }
++beforeEach(() => {
++ mocks.staff = ref(true); mocks.user = ref('staff'); mocks.fetch.mockReset(); mocks.push.mockReset()
++ mocks.fetch.mockResolvedValue({ rows, has_next: false, next_start: null })
++ vi.stubGlobal('__', (text: string) => text); root = document.createElement('div')
++ app = createApp(Mandanten); app.config.globalProperties.__ = (text: string) => text
++})
++afterEach(() => { app?.unmount(); vi.unstubAllGlobals() })
++describe('Mandanten page', () => {
++ it('renders client states and opens the existing folder in Drive', async () => {
++  app.mount(root); await flush()
++  expect(root.textContent).toContain('Folder available'); expect(root.textContent).toContain('Folder not created'); expect(root.textContent).toContain('Contact an administrator.')
++  expect(root.querySelectorAll('a[target="_blank"]')).toHaveLength(3)
++  const buttons = [...root.querySelectorAll('button')]; buttons.find(b => b.textContent === 'Open folder')!.click()
++  expect(mocks.push).toHaveBeenCalledWith({ name: 'drive-Folder', params: { entityName: 'root' } })
++ })
++ it('creates a missing folder and navigates with its returned ID', async () => {
++  app.mount(root); await flush(); mocks.fetch.mockResolvedValueOnce({ folder: 'new', url: '/drive/d/new' })
++  ;[...root.querySelectorAll('button')].find(b => b.textContent === 'Create Drive Folder')!.click(); await flush()
++  expect(mocks.fetch).toHaveBeenLastCalledWith({ customer: 'C2' }); expect(mocks.push).toHaveBeenCalledWith({ name: 'drive-Folder', params: { entityName: 'new' } })
++ })
++ it('shows an empty state and never loads for portal users', async () => {
++  mocks.staff.value = false; app.mount(root); await flush()
++  expect(mocks.fetch).not.toHaveBeenCalled(); expect(root.textContent).toContain('Please log in as a staff user')
++ })
++ it('shows a retry action after a denied request without client rows', async () => {
++  mocks.fetch.mockRejectedValue({ exc_type: 'PermissionError' }); app.mount(root); await flush()
++  expect(root.textContent).toContain('Could not load clients.'); expect(root.querySelector('table')).toBeNull()
++  expect([...root.querySelectorAll('button')].some(b => b.textContent === 'Retry')).toBe(true)
++ })
++})
+diff --git a/frontend/src/apps/drive/pages/Mandanten.vue b/frontend/src/apps/drive/pages/Mandanten.vue
+new file mode 100644
+index 000000000..08a15eaa4
+--- /dev/null
++++ b/frontend/src/apps/drive/pages/Mandanten.vue
+@@ -0,0 +1,63 @@
++<template>
++  <Navbar />
++  <main class="mx-auto w-full max-w-6xl space-y-5 p-5" :aria-busy="loading">
++    <div class="flex flex-wrap items-center justify-between gap-3">
++      <div>
++        <h1 class="text-2xl font-semibold">{{ __('Mandanten') }}</h1>
++        <p class="mt-1 text-sm text-ink-gray-6">{{ __('Client folders follow your ERP access. Personal folders are in Home.') }}</p>
++      </div>
++      <Button :disabled="!isStaff || loading" @click="refresh">{{ __('Refresh') }}</Button>
++    </div>
++    <template v-if="isStaff">
++      <label class="block max-w-xl text-sm">
++        <span class="mb-1 block">{{ __('Search clients by name or ID') }}</span>
++        <input v-model="search" type="search" class="w-full rounded border border-outline-gray-2 bg-surface-base px-3 py-2 text-ink-gray-9" :placeholder="__('Search clients by name or ID')" />
++      </label>
++      <p v-if="actionError" role="alert" class="text-sm text-ink-red-6">{{ __('Could not create the client folder. The list was refreshed; check its status and try again.') }}</p>
++      <div v-if="error" role="alert" class="space-y-2">
++        <p>{{ __('Could not load clients. Check your access and try again.') }}</p>
++        <Button @click="refresh">{{ __('Retry') }}</Button>
++      </div>
++      <p v-else-if="loading && !rows.length" role="status">{{ __('Loading clients…') }}</p>
++      <p v-else-if="!rows.length" role="status">{{ search.trim() ? __('No clients match this search.') : __('No clients are available to you.') }}</p>
++      <template v-if="rows.length">
++        <div class="overflow-x-auto rounded border border-outline-gray-2">
++          <table class="w-full text-left text-sm">
++            <thead class="bg-surface-gray-1 text-ink-gray-6"><tr>
++              <th scope="col" class="px-4 py-3">{{ __('Client') }}</th>
++              <th scope="col" class="px-4 py-3">{{ __('Drive Folder') }}</th>
++              <th scope="col" class="px-4 py-3">{{ __('Actions') }}</th>
++            </tr></thead>
++            <tbody><tr v-for="row in rows" :key="row.customer" class="border-t border-outline-gray-2 align-top">
++              <td class="px-4 py-3"><div class="font-medium">{{ row.customer_name }}</div><div class="mt-1 text-xs text-ink-gray-5">{{ row.customer }}</div></td>
++              <td class="px-4 py-3">{{ stateLabel(row.state) }}<p v-if="row.state === 'unavailable'" class="mt-1 text-xs text-ink-gray-6">{{ __('Contact an administrator.') }}</p></td>
++              <td class="px-4 py-3"><div class="flex flex-wrap items-center gap-3">
++                <Button v-if="row.state === 'ready'" @click="openFolder(row.folder)">{{ __('Open folder') }}</Button>
++                <Button v-else-if="row.state === 'missing' && row.can_create" :disabled="!!creating" :loading="creating === row.customer" @click="create(row.customer)">{{ __('Create Drive Folder') }}</Button>
++                <a :href="row.customer_url" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2">{{ __('Open ERP record') }}</a>
++              </div></td>
++            </tr></tbody>
++          </table>
++        </div>
++        <Button v-if="hasNext" :disabled="loading" :loading="loading" @click="loadMore">{{ __('Show more') }}</Button>
++      </template>
++    </template>
++    <p v-else role="status">{{ __('Please log in as a staff user') }}</p>
++  </main>
++</template>
++<script setup lang="ts">
++import { Button, createResource } from 'frappe-ui'
++import { useRouter } from 'vue-router'
++import Navbar from '@/apps/drive/components/Navbar.vue'
++import { useCurrentUser } from '@/boot/session'
++import { useMandanten } from '@/apps/drive/utils/mandanten'
++const { user, isStaff } = useCurrentUser()
++const router = useRouter()
++const request = (method: string, params: Record<string, unknown>) => createResource({
++  url: `kanzlei_erp.mandant_drive.${method}`, method: method === 'create_folder' ? 'POST' : 'GET',
++}).fetch(params)
++const { rows, search, loading, error, actionError, hasNext, creating, refresh, loadMore, createFolder } = useMandanten(request, user, isStaff)
++const stateLabel = (state: string) => state === 'ready' ? __('Folder available') : state === 'missing' ? __('Folder not created') : __('Folder unavailable')
++const openFolder = (folder: string | null) => { if (folder) void router.push({ name: 'drive-Folder', params: { entityName: folder } }) }
++async function create(customer: string) { const result = await createFolder(customer); if (result?.folder) openFolder(result.folder) }
++</script>
 diff --git a/frontend/src/apps/drive/runtime.test.ts b/frontend/src/apps/drive/runtime.test.ts
 new file mode 100644
 index 000000000..5f61ce549
@@ -2343,6 +2678,179 @@ index 000000000..eef591ab2
 +  return entities.length > 0 &&
 +    entities.every((entity) => entity?.kind !== 'virtual') &&
 +    entities.some(canDownloadEntity)
++}
+diff --git a/frontend/src/apps/drive/utils/mandanten.test.ts b/frontend/src/apps/drive/utils/mandanten.test.ts
+new file mode 100644
+index 000000000..88714b8b7
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/mandanten.test.ts
+@@ -0,0 +1,79 @@
++import { effectScope, nextTick, ref } from 'vue'
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { useMandanten } from './mandanten'
++
++const scopes: ReturnType<typeof effectScope>[] = []
++afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); vi.useRealTimers() })
++const row = (customer = 'A') => ({ customer, customer_name: customer, customer_url: '/desk/customer/' + customer, state: 'ready', folder: 'folder-' + customer, url: '/drive/d/folder-' + customer, can_create: false })
++const page = (customer = 'A', has_next = false) => ({ rows: [row(customer)], has_next, next_start: 1 })
++function setup(request = vi.fn().mockResolvedValue(page())) {
++  const user = ref<string | null>('staff'), isStaff = ref(true)
++  const scope = effectScope(); scopes.push(scope)
++  const list = scope.run(() => useMandanten(request, user, isStaff))!
++  return { list, request, user, isStaff }
++}
++const flush = async () => { await Promise.resolve(); await Promise.resolve(); await nextTick() }
++function deferred() { let resolve!: (value: any) => void, reject!: (reason: any) => void; const promise = new Promise((a,b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
++
++describe('Mandanten list requests', () => {
++  it('loads only for confirmed staff and clears immediately on session changes', async () => {
++    const { list, request, isStaff, user } = setup(); await flush()
++    expect(list.rows.value).toEqual([row()]); expect(request).toHaveBeenCalledWith('list_mandanten', { search: '', start: 0, page_length: 50 })
++    isStaff.value = false; await flush(); expect(list.rows.value).toEqual([])
++    user.value = null; await flush(); expect(request).toHaveBeenCalledTimes(1)
++  })
++  it('ignores older search responses and debounces for 300ms', async () => {
++    vi.useFakeTimers(); const old = deferred(), newer = deferred()
++    const { list, request } = setup(vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(newer.promise))
++    list.search.value = 'new'; await nextTick(); expect(list.rows.value).toEqual([])
++    await vi.advanceTimersByTimeAsync(299); expect(request).toHaveBeenCalledTimes(1)
++    await vi.advanceTimersByTimeAsync(1); newer.resolve(page('new')); await flush()
++    old.resolve(page('old')); await flush(); expect(list.rows.value[0].customer).toBe('new')
++  })
++  it('ignores responses from a previous user even after a new session starts', async () => {
++    const old = deferred(); const { list, user, request } = setup(vi.fn().mockReturnValueOnce(old.promise).mockResolvedValue(page('new')))
++    user.value = 'next'; await flush(); old.resolve(page('old')); await flush()
++    expect(request).toHaveBeenCalledTimes(2); expect(list.rows.value[0].customer).toBe('new')
++  })
++  it('appends pages using the server continuation then refreshes from zero', async () => {
++    const { list, request } = setup(vi.fn().mockResolvedValueOnce(page('A', true)).mockResolvedValueOnce(page('B')).mockResolvedValueOnce(page('C')))
++    await flush(); await list.loadMore(); expect(list.rows.value.map(r => r.customer)).toEqual(['A','B'])
++    expect(request.mock.calls[1][1].start).toBe(1); await list.refresh(); expect(list.rows.value).toEqual([row('C')])
++  })
++  it('clears rows on permission failure and retries the first page', async () => {
++    const { list, request } = setup(); await flush(); request.mockRejectedValueOnce({ exc_type: 'PermissionError' })
++    await list.refresh(); expect(list.rows.value).toEqual([]); expect(list.error.value).toBeTruthy()
++    await list.refresh(); expect(list.rows.value).toEqual([row()]); expect(list.error.value).toBeNull()
++  })
++  it('creates once while pending and returns the existing API folder result', async () => {
++    const create = deferred(); const { list, request } = setup(); await flush()
++    request.mockReturnValueOnce(create.promise)
++    const pending = list.createFolder('A'); await list.createFolder('A')
++    expect(request.mock.calls.filter(call => call[0] === 'create_folder')).toHaveLength(1)
++    create.resolve({ folder: 'root', url: '/drive/d/root' }); expect(await pending).toEqual({ folder: 'root', url: '/drive/d/root' })
++    expect(list.creating.value).toBeNull()
++  })
++  it('ignores a create response after losing and regaining the same staff session', async () => {
++    const create = deferred(); const { list, request, isStaff } = setup(); await flush()
++    request.mockReturnValueOnce(create.promise)
++    const pending = list.createFolder('A')
++    isStaff.value = false; isStaff.value = true; await flush()
++    create.resolve({ folder: 'old' }); expect(await pending).toBeNull()
++  })
++  it('refreshes after an ambiguous create failure and retains an explanatory error', async () => {
++    const { list, request } = setup(); await flush(); request.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(page('created'))
++    expect(await list.createFolder('A')).toBeNull(); expect(list.rows.value[0].customer).toBe('created'); expect(list.actionError.value).toBeTruthy()
++  })
++  it('rechecks on return while an older request is still pending', async () => {
++    const old = deferred(); const { list, request } = setup(vi.fn().mockReturnValueOnce(old.promise).mockResolvedValue(page('current')))
++    window.dispatchEvent(new Event('focus')); await flush()
++    expect(request).toHaveBeenCalledTimes(2)
++    old.resolve(page('stale')); await flush(); expect(list.rows.value[0].customer).toBe('current')
++  })
++  it('refreshes on focus/visible return without a polling timer and removes listeners on disposal', async () => {
++    const { list, request } = setup(); await flush(); window.dispatchEvent(new Event('focus')); await flush(); expect(request).toHaveBeenCalledTimes(2)
++    document.dispatchEvent(new Event('visibilitychange')); await flush(); expect(request).toHaveBeenCalledTimes(3)
++    scopes[0].stop(); window.dispatchEvent(new Event('focus')); await flush(); expect(request).toHaveBeenCalledTimes(3)
++    expect(list.rows.value).toEqual([])
++  })
++})
+diff --git a/frontend/src/apps/drive/utils/mandanten.ts b/frontend/src/apps/drive/utils/mandanten.ts
+new file mode 100644
+index 000000000..fb1558ab0
+--- /dev/null
++++ b/frontend/src/apps/drive/utils/mandanten.ts
+@@ -0,0 +1,82 @@
++import { onScopeDispose, ref, watch, type Ref } from 'vue'
++
++export type MandantRow = {
++  customer: string
++  customer_name: string
++  customer_url: string
++  state: 'ready' | 'missing' | 'unavailable'
++  folder: string | null
++  url: string | null
++  can_create: boolean
++}
++type Page = { rows: MandantRow[]; has_next: boolean; next_start: number | null }
++type Request = (method: string, params: Record<string, unknown>) => Promise<any>
++
++/** Page-owned state: never shared or persisted between users. */
++export function useMandanten(request: Request, user: Ref<string | null>, isStaff: Ref<boolean>) {
++  const rows = ref<MandantRow[]>([]), search = ref(''), loading = ref(false)
++  const error = ref<unknown>(null), actionError = ref<unknown>(null)
++  const hasNext = ref(false), nextStart = ref<number | null>(0), creating = ref<string | null>(null)
++  let generation = 0, sessionEpoch = 0, disposed = false, timer: ReturnType<typeof setTimeout> | undefined
++  const eligible = () => !disposed && !!user.value && isStaff.value
++  function clear() {
++    generation++; rows.value = []; hasNext.value = false; nextStart.value = 0
++    loading.value = false; error.value = null; actionError.value = null
++  }
++  async function load(append = false) {
++    if (!eligible() || (append && (loading.value || !hasNext.value))) return
++    if (timer) { clearTimeout(timer); timer = undefined }
++    if (!append) clear()
++    const ticket = ++generation, sessionUser = user.value
++    loading.value = true; error.value = null
++    const valid = () => ticket === generation && eligible() && user.value === sessionUser
++    try {
++      const page: Page = await request('list_mandanten', { search: search.value.trim(), start: append ? nextStart.value : 0, page_length: 50 })
++      if (!valid()) return
++      const combined = append ? [...rows.value, ...page.rows] : page.rows
++      rows.value = [...new Map(combined.map(row => [row.customer, row])).values()]
++      hasNext.value = page.has_next; nextStart.value = page.next_start
++    } catch (failure) {
++      if (!valid()) return
++      // An old list is not evidence that these clients remain readable.
++      rows.value = []; hasNext.value = false; nextStart.value = 0; error.value = failure
++    } finally { if (valid()) loading.value = false }
++  }
++  const refresh = () => load()
++  async function createFolder(customer: string) {
++    if (!eligible() || creating.value) return null
++    const sessionUser = user.value, epoch = sessionEpoch
++    const valid = () => eligible() && user.value === sessionUser && epoch === sessionEpoch
++    creating.value = customer; actionError.value = null
++    try {
++      const result = await request('create_folder', { customer })
++      return valid() ? result : null
++    } catch (failure) {
++      if (valid()) {
++        await refresh()
++        if (valid()) actionError.value = failure
++      }
++      return null
++    } finally { if (valid()) creating.value = null }
++  }
++  watch([user, isStaff], () => {
++    sessionEpoch++
++    if (timer) clearTimeout(timer)
++    clear(); creating.value = null
++    if (eligible()) void refresh()
++  }, { immediate: true, flush: 'sync' })
++  watch(search, () => {
++    if (timer) clearTimeout(timer)
++    clear()
++    if (eligible()) timer = setTimeout(() => { timer = undefined; void refresh() }, 300)
++  }, { flush: 'sync' })
++  const returnToPage = () => { if (document.visibilityState === 'visible') void refresh() }
++  window.addEventListener('focus', returnToPage)
++  document.addEventListener('visibilitychange', returnToPage)
++  onScopeDispose(() => {
++    disposed = true; if (timer) clearTimeout(timer); clear()
++    window.removeEventListener('focus', returnToPage)
++    document.removeEventListener('visibilitychange', returnToPage)
++  })
++  return { rows, search, loading, error, actionError, hasNext, creating, refresh, loadMore: () => load(true), createFolder }
 +}
 diff --git a/frontend/src/apps/drive/utils/navigation.js b/frontend/src/apps/drive/utils/navigation.js
 new file mode 100644

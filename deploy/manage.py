@@ -490,6 +490,16 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 				raise ValueError("An existing release tag cannot be reassigned to another image or commit")
 		if pending:
 			previous = pending["previous"]
+		elif previous and (previous["tag"], previous["revision"], previous["image"]) == (
+			self.tag, self.revision, self.image
+		):
+			# Tag pushes and successful CI events can both enqueue this release.
+			# Check the already deployed stack without replaying database changes.
+			current = Compose(self.root, previous["release"], self.image, self.commands, self.config)
+			self.smoke(current)
+			current.running()
+			print("Already deployed and healthy: " + self.tag, flush=True)
+			return
 		print("Preparing " + self.tag + " (" + self.revision + ")", flush=True)
 		self.new.call("config", "--quiet")
 		self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], self.image], timeout=1800)
