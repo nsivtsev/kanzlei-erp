@@ -194,6 +194,9 @@ def canonical_url(url):
 		value = parsed.path
 	# Decode only once, consistently with Frappe's File URLs.
 	value = unquote(value)
+	# Suite also persists site-relative paths without a leading slash.
+	if value.startswith(("private/files/", "files/")):
+		value = "/" + value
 	if not value.startswith(("/files/", "/private/files/")):
 		return None
 	if value.endswith("/"):

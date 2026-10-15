@@ -26,6 +26,13 @@ class MemoryS3:
 
 
 class TestObjectStorage(FrappeTestCase):
+	def test_relative_suite_url_shares_the_browser_binding(self):
+		row = self.storage.bind("private/files/suite-relative.txt", "unit/drive/relative", 4, "a" * 64)
+		self.assertEqual(row.file_url, "/private/files/suite-relative.txt")
+		self.assertEqual(
+			self.storage.get_binding("/private/files/suite-relative.txt").object_key, "unit/drive/relative"
+		)
+
 	def test_framework_thumbnail_is_stored_with_source_permissions(self):
 		from io import BytesIO
 
