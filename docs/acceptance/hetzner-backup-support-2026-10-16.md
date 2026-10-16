@@ -1,5 +1,10 @@
 # Support request: inconsistent S3 AccessDenied in a new private NBG1 bucket
 
+**Historical draft — not sent.** A later recheck succeeded and the first complete
+production backup passed full remote readback. See [acceptance results](offsite-backups-2026-10-16.md).
+The following text preserves the earlier diagnostics; it is no longer a pending
+support request.
+
 Hello Hetzner Support,
 
 We cannot initialize an encrypted Restic backup repository in a newly created
