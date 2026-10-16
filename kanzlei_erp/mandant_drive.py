@@ -379,7 +379,7 @@ def prepare_file(doc, method=None):
 			if not _changing_storage.get():
 				if any(doc.get(field) != old.get(field) for field in ("folder", "status", "file_name")):
 					frappe.throw(frappe._("Manage Mandant files through Drive"), frappe.PermissionError)
-			if (doc.file_url or "") != (old.file_url or ""):
+				if (doc.file_url or "") != (old.file_url or ""):
 					if old.file_url:
 						frappe.throw(frappe._("Manage Mandant files through Drive"), frappe.PermissionError)
 					_validate_initial_storage_key(doc)

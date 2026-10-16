@@ -110,14 +110,9 @@ class TestMandantDocuments(FrappeTestCase):
 				"kanzlei_drive_customer": parent.kanzlei_drive_customer})
 			folder.db_insert()
 			return folder
-		from frappe.utils.file_manager import save_file
-
-		if content == b"drive document":
-			content += frappe.generate_hash(length=8).encode()
-		file = save_file(name, content, None, None, is_private=1)
+		file = self.make_file(name, None, None, None if content == b"drive document" else content)
 		frappe.db.set_value("File", file.name, {"folder": parent.name, "status": "Active",
 			"kanzlei_drive_customer": parent.kanzlei_drive_customer})
-		self.file_names.add(file.name)
 		return file
 
 	def make_file(self, file_name, doctype, docname, content=None):
@@ -130,7 +125,8 @@ class TestMandantDocuments(FrappeTestCase):
 			writer = PdfWriter()
 			writer.add_metadata({"/Title": fixture_suffix})
 			writer.write(pdf)
-			content = pdf.getvalue()
+			# Keep the fixture ASCII so Frappe's text decoding preserves PDF byte offsets.
+			content = pdf.getvalue().replace(b"%\xe2\xe3\xcf\xd3", b"%test", 1)
 		elif content is None:
 			content = f"test document {fixture_suffix}".encode()
 
@@ -431,7 +427,7 @@ class TestMandantDocuments(FrappeTestCase):
 	def test_drive_documents_join_erp_once_with_folder_context_and_filters(self):
 		root = self.make_drive_root()
 		folder = self.make_drive_child(root, "Belege", None)
-		drive = self.make_drive_child(folder, "statement.pdf", b"drive PDF")
+		drive = self.make_drive_child(folder, "statement.pdf")
 		other_root = self.make_drive_root(self.other_customer)
 		other = self.make_drive_child(other_root, "other.pdf")
 		erp = self.make_file("erp.txt", "Customer", self.customer.name)
