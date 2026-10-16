@@ -394,14 +394,11 @@ def _find_existing_communication(account_name: str, message_id: str | None):
 
 
 def _add_contact_links(communication):
-	old_links = {(row.link_doctype, row.link_name) for row in communication.timeline_links}
-	communication.flags.in_receive = True
-	communication.set_timeline_links()
-	communication.deduplicate_timeline_links()
-	new_links = {(row.link_doctype, row.link_name) for row in communication.timeline_links}
-	if new_links != old_links:
-		communication.save(ignore_permissions=True)
-	return len(new_links - old_links)
+	from kanzlei_erp.email_history import link_communication
+
+	_, added = link_communication(communication.name)
+	communication.reload()
+	return added
 
 
 def _decode_address_header(value):

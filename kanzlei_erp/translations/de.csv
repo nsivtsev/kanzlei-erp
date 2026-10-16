@@ -87,6 +87,13 @@ Yearly,Jährlich
 Mandant Documents,Dokumente
 Client,Mandant
 Drive,Drive
+Email history,E-Mail-Historie
+Link old correspondence,Alte Korrespondenz zuordnen
+Save the contact before linking old correspondence.,Speichern Sie den Kontakt vor der Zuordnung alter Korrespondenz.
+Add an email address and a Mandant link to the contact first.,Ergänzen Sie zuerst eine E-Mail-Adresse und eine Mandantenverknüpfung beim Kontakt.
+Email history linking will start after the contact is saved.,Die Zuordnung alter E-Mails startet nach dem Speichern des Kontakts.
+Email history: {0} messages linked; {1} ambiguous messages skipped.,E-Mail-Historie: {0} Nachrichten zugeordnet; {1} mehrdeutige Nachrichten übersprungen.
+Email history linking did not finish. Use Link old correspondence on the contact to retry.,Die E-Mail-Zuordnung wurde nicht abgeschlossen. Starten Sie beim Kontakt „Alte Korrespondenz zuordnen“ erneut.
 Accounting,FiBu
 All,Alle
 All sources,Alle Quellen

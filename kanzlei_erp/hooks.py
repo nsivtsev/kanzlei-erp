@@ -66,6 +66,7 @@ fixtures = [
 ]
 override_doctype_dashboards = {"Customer": "kanzlei_erp.navigation.customer_dashboard"}
 doctype_js = {
+	"Contact": "public/js/contact.js",
 	"Drive Disk Settings": "public/js/s3_storage_settings.js",
 	"Customer": "public/js/customer.js",
 	"Task": "public/js/task.js",
@@ -75,6 +76,7 @@ doctype_js = {
 
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
+	"Contact": {"on_update": "kanzlei_erp.email_history.contact_updated"},
 	"Drive Disk Settings": {"validate": "kanzlei_erp.object_storage.validate_settings", "on_update": "kanzlei_erp.drive_storage.invalidate"},
 	"S3 File Object": {"validate": "kanzlei_erp.object_storage.protect_binding", "on_trash": "kanzlei_erp.object_storage.protect_binding"},
 	"ToDo": {"validate": "kanzlei_erp.fibu_questions.validate_question_assignment"},
