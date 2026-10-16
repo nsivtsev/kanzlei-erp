@@ -41,6 +41,10 @@ Metadata calls confirm the new key and bucket belong to the same project.
 Virtual/path addressing and explicit `nbg1` region did not resolve Restic init.
 Disabling optional SDK checksum headers did not resolve object access either.
 Alternative signing regions were rejected and are not used in configuration.
+An independent curl SigV4 probe from production returned PUT 200, GET 403 and
+DELETE 204 consecutively for the same test object. A ready-to-send provider
+report is in [the support draft](hetzner-backup-support-2026-10-16.md); it has not
+been sent externally.
 
 Example failed request on 2026-10-16:
 
