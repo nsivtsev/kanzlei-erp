@@ -16,6 +16,7 @@
 		all: __("All"),
 		all_sources: __("All sources"),
 		mandant: __("Client"),
+		drive: __("Drive"),
 		email: __("Email"),
 		fibu: __("Accounting"),
 		task: __("Task"),
@@ -212,6 +213,7 @@
 			for (const [value, label] of [
 				["all", strings.all_sources],
 				["mandant", strings.mandant],
+				["drive", strings.drive],
 				["email", strings.email],
 				["fibu", strings.fibu],
 				["task", strings.task],
@@ -546,11 +548,20 @@
 			for (const context of visible) {
 				const line = node("div", undefined, "md-context-line");
 				const anchor = node("a", context.title || context.name);
-				anchor.href = "#";
-				anchor.addEventListener("click", (event) => {
-					event.preventDefault();
-					frappe.set_route("Form", context.doctype, context.name);
-				});
+				anchor.href = context.url || "#";
+				if (context.source === "drive" && context.url) {
+					anchor.target = "_blank";
+					anchor.rel = "noopener noreferrer";
+					anchor.addEventListener("click", (event) => {
+						event.preventDefault();
+						window.open(context.url, "_blank", "noopener,noreferrer");
+					});
+				} else {
+					anchor.addEventListener("click", (event) => {
+						event.preventDefault();
+						frappe.set_route("Form", context.doctype, context.name);
+					});
+				}
 				line.appendChild(anchor);
 				const details = [sourceLabel(context.source), directionLabel(context.direction), context.sender, context.recipients]
 					.filter(Boolean)

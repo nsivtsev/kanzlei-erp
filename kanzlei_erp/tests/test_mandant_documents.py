@@ -9,6 +9,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from kanzlei_erp.mandant_documents import (
 	_file_group,
+	_external_url,
 	_normalize_filters,
 	_safe_archive_names,
 	download_document,
@@ -43,6 +44,13 @@ class TestMandantDocumentHelpers(TestCase):
 			_safe_archive_names(["../Rechnung.pdf", "Rechnung.pdf", "rechnUNG.PDF"]),
 			["Rechnung.pdf", "Rechnung (2).pdf", "rechnUNG (3).PDF"],
 		)
+
+	def test_bound_s3_http_url_is_stored_content(self):
+		file = frappe._dict(file_url="https://erp.example.invalid/private/files/report.pdf")
+		with patch("kanzlei_erp.object_storage.get_binding", return_value=object()):
+			self.assertIsNone(_external_url(file))
+		with patch("kanzlei_erp.object_storage.get_binding", return_value=None):
+			self.assertEqual(_external_url(file), file.file_url)
 
 
 class TestMandantDocuments(FrappeTestCase):
@@ -84,6 +92,33 @@ class TestMandantDocuments(FrappeTestCase):
 			if file and not file.is_remote_file:
 				Path(file.get_full_path()).unlink(missing_ok=True)
 		super().tearDown()
+
+	def make_drive_root(self, customer=None):
+		customer = customer or self.customer
+		root = frappe.get_doc({"doctype": "File", "name": frappe.generate_hash(length=10),
+			"file_name": "Mandant documents", "file_type": "Folder", "is_folder": 1,
+			"is_private": 1, "status": "Active", "kanzlei_drive_customer": customer.name})
+		root.db_insert()
+		customer.db_set("kanzlei_drive_folder", root.name)
+		return root
+
+	def make_drive_child(self, parent, name, content=b"drive document"):
+		if content is None:
+			folder = frappe.get_doc({"doctype": "File", "name": frappe.generate_hash(length=10),
+				"file_name": name, "file_type": "Folder", "is_folder": 1, "is_private": 1,
+				"status": "Active", "folder": parent.name,
+				"kanzlei_drive_customer": parent.kanzlei_drive_customer})
+			folder.db_insert()
+			return folder
+		from frappe.utils.file_manager import save_file
+
+		if content == b"drive document":
+			content += frappe.generate_hash(length=8).encode()
+		file = save_file(name, content, None, None, is_private=1)
+		frappe.db.set_value("File", file.name, {"folder": parent.name, "status": "Active",
+			"kanzlei_drive_customer": parent.kanzlei_drive_customer})
+		self.file_names.add(file.name)
+		return file
 
 	def make_file(self, file_name, doctype, docname, content=None):
 		from frappe.utils.file_manager import save_file
@@ -276,20 +311,26 @@ class TestMandantDocuments(FrappeTestCase):
 		self.assertNotIn("bcc", result["items"][0])
 
 	def test_download_preserves_bytes_and_zip_has_unique_flat_names(self):
-		first = self.make_file("statement.xml", "Customer", self.customer.name, b"\x00<xml encoding='legacy' />\xff")
+		original = b"\x00<xml encoding='legacy' />\xff" + frappe.generate_hash(length=8).encode()
+		first = self.make_file("statement.xml", "Customer", self.customer.name, original)
 		second = self.make_file("STATEMENT.XML", "Customer", self.customer.name, b"second")
 		frappe.db.set_value("File", first.name, "file_name", "statement.xml")
 		frappe.db.set_value("File", second.name, "file_name", "STATEMENT.XML")
-		Path(first.get_full_path()).write_bytes(b"\x00<xml encoding='legacy' />\xff")
+		from kanzlei_erp.object_storage import client, get_binding, settings
+
+		if binding := get_binding(first.file_url):
+			client().put_object(Bucket=settings().bucket, Key=binding.object_key, Body=original)
+		else:
+			Path(first.get_full_path()).write_bytes(original)
 		download_document(self.customer.name, first.name, "inline")
-		self.assertEqual(frappe.local.response.filecontent, b"\x00<xml encoding='legacy' />\xff")
+		self.assertEqual(frappe.local.response.filecontent, original)
 		self.assertEqual(frappe.local.response.content_type, "application/xml")
 		self.assertEqual(frappe.local.response.display_content_as, "attachment")
 
 		download_documents_zip(self.customer.name, [first.name, first.name, second.name])
 		with ZipFile(BytesIO(frappe.local.response.filecontent)) as archive:
 			self.assertEqual(archive.namelist(), ["statement.xml", "STATEMENT (2).XML"])
-			self.assertEqual(archive.read(archive.namelist()[0]), b"\x00<xml encoding='legacy' />\xff")
+			self.assertEqual(archive.read(archive.namelist()[0]), original)
 			self.assertEqual(archive.read(archive.namelist()[1]), b"second")
 
 	def test_file_membership_is_rechecked_before_download_and_zip(self):
@@ -386,3 +427,116 @@ class TestMandantDocuments(FrappeTestCase):
 				get_documents(self.customer.name)
 		finally:
 			frappe.set_user("Administrator")
+
+	def test_drive_documents_join_erp_once_with_folder_context_and_filters(self):
+		root = self.make_drive_root()
+		folder = self.make_drive_child(root, "Belege", None)
+		drive = self.make_drive_child(folder, "statement.pdf", b"drive PDF")
+		other_root = self.make_drive_root(self.other_customer)
+		other = self.make_drive_child(other_root, "other.pdf")
+		erp = self.make_file("erp.txt", "Customer", self.customer.name)
+		frappe.db.set_value("File", drive.name, {"attached_to_doctype": "Customer", "attached_to_name": self.customer.name})
+
+		first = get_documents(self.customer.name, page_length=1)
+		second = get_documents(self.customer.name, cursor=first["next_cursor"], page_length=1)
+		rows = {row["file_id"]: row for row in first["items"] + second["items"]}
+		self.assertEqual(set(rows), {drive.name, erp.name})
+		self.assertNotIn(other.name, rows)
+		self.assertEqual({ctx["source"] for ctx in rows[drive.name]["contexts"]}, {"drive", "mandant"})
+		self.assertEqual(next(ctx["url"] for ctx in rows[drive.name]["contexts"] if ctx["source"] == "drive"),
+			f"/drive/d/{folder.name}")
+		self.assertEqual([row["file_id"] for row in get_documents(self.customer.name,
+			filters={"source": "drive", "file_group": "pdf", "query": "statement"})["items"]], [drive.name])
+		package = self.make_package()
+		self.assertEqual(get_documents(self.customer.name, filters={"package": package.name})["items"], [])
+
+	def test_drive_trash_and_corrupt_root_never_expose_documents(self):
+		root = self.make_drive_root()
+		folder = self.make_drive_child(root, "Belege", None)
+		file = self.make_drive_child(folder, "invoice.txt")
+		erp = self.make_file("erp.txt", "Customer", self.customer.name)
+		self.assertIn(file.name, {row["file_id"] for row in get_documents(self.customer.name)["items"]})
+		frappe.db.set_value("File", folder.name, "status", "Trashed")
+		self.assertEqual([row["file_id"] for row in get_documents(self.customer.name)["items"]], [erp.name])
+		with self.assertRaises(frappe.PermissionError):
+			download_document(self.customer.name, file.name)
+		with self.assertRaises(frappe.PermissionError):
+			download_documents_zip(self.customer.name, [file.name])
+		frappe.db.set_value("File", folder.name, "status", "Active")
+		self.assertIn(file.name, {row["file_id"] for row in get_documents(self.customer.name)["items"]})
+		frappe.db.set_value("File", file.name, "status", "Trashed")
+		self.assertEqual([row["file_id"] for row in get_documents(self.customer.name)["items"]], [erp.name])
+		with self.assertRaises(frappe.PermissionError):
+			download_document(self.customer.name, file.name)
+		frappe.db.set_value("File", file.name, "status", "Active")
+		frappe.db.set_value("Customer", self.customer.name, "kanzlei_drive_folder", "missing-root")
+		self.assertEqual([row["file_id"] for row in get_documents(self.customer.name)["items"]], [erp.name])
+		with self.assertRaises(frappe.PermissionError):
+			download_document(self.customer.name, file.name)
+
+	def test_drive_file_and_erp_file_download_in_same_zip(self):
+		root = self.make_drive_root()
+		drive = self.make_drive_child(root, "invoice.txt", b"drive bytes")
+		erp = self.make_file("invoice.txt", "Customer", self.customer.name, b"erp bytes")
+		link = frappe.get_doc({"doctype": "File", "name": frappe.generate_hash(length=10),
+			"file_name": "Reference", "file_type": "Link", "file_url": "https://example.invalid/document",
+			"status": "Active", "is_private": 1, "folder": root.name,
+			"kanzlei_drive_customer": self.customer.name})
+		link.db_insert()
+		rows = {row["file_id"]: row for row in get_documents(self.customer.name)["items"]}
+		self.assertEqual(set(rows), {drive.name, erp.name, link.name})
+		self.assertEqual(rows[link.name]["external_url"], "https://example.invalid/document")
+		self.assertFalse(rows[link.name]["can_select_for_zip"])
+		download_document(self.customer.name, drive.name)
+		self.assertEqual(frappe.local.response.filecontent, b"drive bytes")
+		download_documents_zip(self.customer.name, [drive.name, erp.name])
+		with ZipFile(BytesIO(frappe.local.response.filecontent)) as archive:
+			self.assertEqual(sorted(archive.read(name) for name in archive.namelist()), [b"drive bytes", b"erp bytes"])
+		with self.assertRaises(frappe.PermissionError):
+			download_document(self.customer.name, link.name)
+
+	def test_drive_reader_revocation_and_nonstaff_access(self):
+		root = self.make_drive_root()
+		drive = self.make_drive_child(root, "private.txt", b"private drive bytes")
+		users = []
+		for label in ("reader", "stranger", "portal"):
+			user = frappe.get_doc({"doctype": "User",
+				"email": f"drive-doc-{label}-{frappe.generate_hash(length=8)}@example.invalid",
+				"first_name": label, "send_welcome_email": 0,
+				"roles": [{"role": "Projects User"}]}).insert(ignore_permissions=True)
+			users.append(user)
+		frappe.share.add("Customer", self.customer.name, users[0].name, read=1)
+		frappe.share.add("Customer", self.customer.name, users[2].name, read=1)
+		frappe.db.set_value("User", users[2].name, "user_type", "Website User")
+		try:
+			frappe.set_user(users[0].name)
+			self.assertEqual([row["file_id"] for row in get_documents(self.customer.name)["items"]], [drive.name])
+			download_document(self.customer.name, drive.name)
+			self.assertEqual(frappe.local.response.filecontent, b"private drive bytes")
+			download_documents_zip(self.customer.name, [drive.name])
+			frappe.set_user("Administrator")
+			frappe.share.remove("Customer", self.customer.name, users[0].name)
+			for user in (users[0].name, users[1].name, users[2].name, "Guest"):
+				frappe.set_user(user)
+				with self.assertRaises(frappe.PermissionError):
+					get_documents(self.customer.name)
+				with self.assertRaises(frappe.PermissionError):
+					download_document(self.customer.name, drive.name)
+				with self.assertRaises(frappe.PermissionError):
+					download_documents_zip(self.customer.name, [drive.name])
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_drive_s3_url_is_downloadable_content_not_external_link(self):
+		from suite.drive.utils.files import get_s3_url
+
+		root = self.make_drive_root()
+		drive = self.make_drive_child(root, "s3-report.txt", b"S3 report")
+		frappe.db.set_value("File", drive.name, "file_url", get_s3_url("local/test/s3-report"))
+		row = get_documents(self.customer.name)["items"][0]
+		self.assertEqual(row["file_id"], drive.name)
+		self.assertEqual(row["storage_kind"], "local")
+		self.assertTrue(row["can_select_for_zip"])
+		with patch("suite.drive.utils.files.FileManager.get_file", return_value=BytesIO(b"S3 report")):
+			download_document(self.customer.name, drive.name)
+		self.assertEqual(frappe.local.response.filecontent, b"S3 report")

@@ -11,9 +11,11 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as Base64Error
 from datetime import date
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import frappe
+
+from kanzlei_erp.mandant_drive import CUSTOMER_FOLDER, FILE_CUSTOMER, _staff
 
 DOCUMENT_PAGE_SIZE = 50
 DOCUMENT_MAX_PAGE_SIZE = 100
@@ -33,7 +35,7 @@ _FILTER_DEFAULTS = {
 	"sort": "newest",
 }
 _FILTER_VALUES = {
-	"source": {"all", "mandant", "email", "fibu", "task", "question"},
+	"source": {"all", "mandant", "drive", "email", "fibu", "task", "question"},
 	"direction": {"all", "received", "sent"},
 	"file_group": {"all", "pdf", "image", "spreadsheet", "document", "xml", "archive", "other"},
 	"sort": {"newest", "oldest"},
@@ -169,6 +171,8 @@ def _readable(doctype, name, permission_cache=None):
 def _require_customer(customer):
 	if not customer:
 		frappe.throw(frappe._("Client is required"), frappe.ValidationError)
+	if not _staff(frappe.session.user):
+		frappe.throw(frappe._("Please log in as a staff user"), frappe.PermissionError)
 	frappe.has_permission("Customer", ptype="read", doc=customer, throw=True)
 	return frappe.get_doc("Customer", customer)
 
@@ -190,6 +194,44 @@ def _append_context(file_contexts, file_name, context):
 		return
 	key = (context["source"], context["doctype"], context["name"])
 	file_contexts.setdefault(file_name, {})[key] = context
+
+
+def _drive_documents(customer):
+	"""Read active descendants of this Customer's verified root, never the marker alone."""
+	if "suite" not in frappe.get_installed_apps() or not frappe.get_meta("File").has_field(FILE_CUSTOMER):
+		return {}
+	root_name = customer.get(CUSTOMER_FOLDER)
+	root = frappe.db.get_value("File", root_name,
+		["name", "file_name", "is_folder", "status", FILE_CUSTOMER], as_dict=True) if root_name else None
+	if not root or not root.is_folder or root.status != "Active" or root.get(FILE_CUSTOMER) != customer.name:
+		return {}
+	from suite.drive.utils.downloads import content_kind
+
+	files = {}
+	folders = [root]
+	seen_folders = {root.name}
+	while folders:
+		children = []
+		for chunk in _chunks(folder.name for folder in folders):
+			children.extend(frappe.get_all("File",
+				filters={"folder": ["in", chunk], FILE_CUSTOMER: customer.name, "status": "Active"},
+				fields=["name", "folder", "file_name", "file_url", "file_type", "is_folder",
+					"content_doctype", "content_docname", "mime_type", "status"]))
+		parents = {folder.name: folder for folder in folders}
+		folders = []
+		for child in children:
+			parent = parents.get(child.folder)
+			if not parent:
+				continue
+			kind = content_kind(child)
+			if kind == "folder" and child.name not in seen_folders:
+				seen_folders.add(child.name)
+				folders.append(child)
+			elif kind in {"stored", "links"}:
+				files[child.name] = frappe._dict(source="drive", doctype="File", name=parent.name,
+					title=parent.file_name, url=f"/drive/d/{quote(parent.name, safe='')}",
+					direction=None, sender=None, recipients=None, package=None, package_title=None)
+	return files
 
 
 def _customer_context(customer):
@@ -616,7 +658,10 @@ def _collect_documents(customer, filters, permission_cache):
 		_append_context(file_contexts, key, context)
 		if name in valid_communications:
 			_append_context(file_contexts, key, _communication_context(communication, package_docs.get(context.package)))
-	return file_contexts, valid_communications, package_docs, checklist_references
+	drive_documents = _drive_documents(customer)
+	for name, context in drive_documents.items():
+		_append_context(file_contexts, name, context)
+	return file_contexts, valid_communications, package_docs, checklist_references, drive_documents
 
 
 def _cursor_fingerprint(customer, filters):
@@ -657,21 +702,23 @@ def _encode_cursor(customer, filters, last_date, last_name, snapshot):
 
 
 def _external_url(file):
-	if not file.is_remote_file:
-		return None
 	parsed = urlparse(file.file_url or "")
 	if parsed.scheme not in {"https", "http"} or not parsed.hostname or parsed.username or parsed.password:
+		return None
+	from kanzlei_erp.object_storage import get_binding
+
+	if get_binding(file.file_url):
 		return None
 	return file.file_url
 
 
 def _context_matches(contexts, filters):
+	if filters["package"] and not any(context["package"] == filters["package"] for context in contexts):
+		return False
 	for context in contexts:
 		if filters["source"] != "all" and context["source"] != filters["source"]:
 			continue
 		if filters["direction"] != "all" and context["direction"] != filters["direction"]:
-			continue
-		if filters["package"] and context["package"] != filters["package"]:
 			continue
 		return True
 	return False
@@ -708,16 +755,18 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	state = _decode_cursor(cursor, customer_doc.name, filters)
 	snapshot = frappe.utils.get_datetime(state["snapshot"]) if state else frappe.utils.now_datetime()
 	permission_cache = {}
-	file_contexts, communication_docs, package_docs, checklist_references = _collect_documents(customer_doc, filters, permission_cache)
+	file_contexts, communication_docs, package_docs, checklist_references, drive_documents = _collect_documents(customer_doc, filters, permission_cache)
 	file_names = sorted(file_contexts)
 	metadata = {}
+	managed_field = frappe.get_meta("File").has_field(FILE_CUSTOMER)
 	for chunk in _chunks(file_names):
 		for file in frappe.get_all(
 			"File",
 			filters={"name": ["in", chunk], "is_folder": 0},
 			fields=[
 				"name", "file_name", "file_url", "file_size", "is_private", "attached_to_doctype",
-				"attached_to_name", "attached_to_field", "creation",
+				"attached_to_name", "attached_to_field", "creation", "file_type", "status",
+				*([FILE_CUSTOMER] if managed_field else []),
 			],
 		):
 			metadata[file.name] = file
@@ -726,6 +775,8 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	rows = []
 	for name, file in metadata.items():
 		if file.creation > snapshot or not file_contexts.get(name):
+			continue
+		if name not in checklist_references and file.get(FILE_CUSTOMER) and name not in drive_documents:
 			continue
 		if name not in checklist_references and not _readable("File", name, permission_cache):
 			continue
@@ -757,7 +808,7 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 			continue
 		contexts.sort(key=lambda context: (context["source"], context["name"], context["doctype"]))
 		remote_url = _external_url(file)
-		if file.is_remote_file and not remote_url:
+		if (file.get("file_type") == "Link" or file.get("is_remote_file")) and not remote_url:
 			continue
 		rows.append(
 			{
@@ -796,7 +847,7 @@ def _authorized_files(customer, file_ids):
 	"""Re-evaluate current Customer, relation graph, and File permissions before serving bytes."""
 	customer_doc = _require_customer(customer)
 	permission_cache = {}
-	file_contexts, _, _, _ = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
+	file_contexts, _, _, _, drive_documents = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
 	authorized = {}
 	for file_id in file_ids:
 		if not frappe.db.exists("File", file_id) or file_id not in file_contexts:
@@ -804,7 +855,9 @@ def _authorized_files(customer, file_ids):
 		if not _readable("File", file_id, permission_cache):
 			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
 		file = frappe.get_doc("File", file_id)
-		if file.is_folder or file.is_remote_file or not file.file_url:
+		if file.get(FILE_CUSTOMER) and file_id not in drive_documents:
+			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+		if file.is_folder or _external_url(file) or not file.file_url:
 			frappe.throw(frappe._("This document cannot be downloaded"), frappe.PermissionError)
 		if file.attached_to_doctype and file.attached_to_name and not _readable(
 			file.attached_to_doctype, file.attached_to_name, permission_cache
