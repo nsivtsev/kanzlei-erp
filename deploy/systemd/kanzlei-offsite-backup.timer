@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Kanzlei ERP external backup at 03:00 Berlin time
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Berlin
+Persistent=true
+AccuracySec=1min
+Unit=kanzlei-offsite-backup.service
+
+[Install]
+WantedBy=timers.target

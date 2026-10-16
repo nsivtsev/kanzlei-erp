@@ -1,5 +1,7 @@
 # Backups with S3 storage
 
+For scheduled encrypted external copies, see [daily offsite backups](offsite-backups.md).
+
 The deployment manager stops the application, scheduler and workers before taking
 the database/files backup and exporting S3. Keep every other writer to the managed
 site prefix stopped too. A bucket must not be shared with another writer under the

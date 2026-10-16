@@ -1,0 +1,21 @@
+[Unit]
+Description=Encrypted verified offsite backup of Kanzlei ERP
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+SupplementaryGroups=docker
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -B /opt/kanzlei-erp/backup-tools/offsite_backup.py run
+TimeoutStartSec=3h
+TimeoutStopSec=10min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+StandardOutput=journal
+StandardError=journal

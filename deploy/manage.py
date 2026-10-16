@@ -358,15 +358,15 @@ class Deployer:
 		self.config = read_config(self.root)
 		self.new = Compose(self.root, self.release, image, self.commands, self.config)
 
-	def backup(self, previous):
+	def backup(self, previous, *, destination=None):
 		identifier = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex[:8]
-		backup = self.root / "backups" / identifier
+		backup = Path(destination) if destination is not None else self.root / "backups" / identifier
 		backup.mkdir(parents=True, mode=0o700)
 		compose = Compose(self.root, previous["release"], previous["image"], self.commands, self.config)
 		snapshot = (
 			"/home/frappe/frappe-bench/sites/"
 			+ self.config["SITE_NAME"]
-			+ "/private/backups/deploy-"
+			+ "/private/kanzlei-snapshots/deploy-"
 			+ identifier
 		)
 		container = self.config["PROJECT_NAME"] + "-backup-" + identifier.lower()

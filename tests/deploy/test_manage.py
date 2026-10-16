@@ -96,6 +96,21 @@ class DeploymentTests(unittest.TestCase):
 		self.assertFalse((self.root / "shared/pending.json").exists())
 		self.assertTrue(any("up" in call and "scheduler" in call for call in commands.calls))
 
+	def test_offsite_snapshot_destination_is_outside_deployment_retention(self):
+		destination = self.root / "offsite" / "snapshot"
+		result = self.deployer().backup(self.state, destination=destination)
+		self.assertEqual(Path(result), destination)
+		manager.verify_backup(destination)
+		self.assertEqual(list((self.root / "backups").iterdir()), [])
+
+	def test_snapshot_staging_does_not_break_frappe_backup_file_cleanup(self):
+		commands = FakeCommands()
+		self.deployer(commands).backup(self.state)
+		backup_call = next(call for call in commands.calls if "backup" in call)
+		paths = [value for value in backup_call if "/private/" in value]
+		self.assertTrue(paths)
+		self.assertFalse(any("/private/backups/" in value for value in paths))
+
 	def test_duplicate_successful_deploy_checks_health_without_another_backup_or_migration(self):
 		self.deployer().deploy()
 		commands = FakeCommands()
