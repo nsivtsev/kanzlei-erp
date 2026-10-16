@@ -1,0 +1,7 @@
+{
+  "version": "0.19.1",
+  "assets": {
+    "linux_amd64": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+    "darwin_arm64": "7be0a144ccc377880f294204aa271d76e4b79554b42a751151d425ce6ebac143"
+  }
+}
