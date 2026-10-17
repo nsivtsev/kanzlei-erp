@@ -44,10 +44,10 @@ drive_authorized_read = ["kanzlei_erp.drive_storage.authorized_read"]
 drive_storage_creation = ["kanzlei_erp.drive_storage.creation_binding"]
 file_storage_creation = ["kanzlei_erp.drive_storage.creation_binding"]
 app_home = "/desk/kanzlei-overview"
-home_page = app_home
+home_page = "/kanzlei-portal"
 setup_wizard_url = "/desk/setup-wizard"
 boot_session = "kanzlei_erp.navigation.configure_desk"
-app_include_js = ["kanzlei_navigation.bundle.js", "mandant_documents.bundle.js", "drive_realtime.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
+app_include_js = ["kanzlei_navigation.bundle.js", "portal_history.bundle.js", "mandant_documents.bundle.js", "drive_realtime.bundle.js", "/assets/kanzlei_erp/js/fibu_workflow.js", "fibu_questions.bundle.js", "/assets/kanzlei_erp/js/fibu_checklist.js"]
 has_permission = {
 	"Communication": "kanzlei_erp.navigation.communication_has_permission",
 	"FiBu Package": "kanzlei_erp.fibu_permissions.package_has_permission",

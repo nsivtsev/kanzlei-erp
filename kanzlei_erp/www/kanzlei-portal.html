@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="{{ lang | e }}" data-theme="{{ theme | e }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex, nofollow">
+	<title>{{ title | e }} · {{ brand | e }}</title>
+	<link rel="icon" href="/assets/frappe/images/frappe-favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/assets/kanzlei_erp/css/portal.css?v={{ asset_version | e }}">
+</head>
+<body>
+{% macro icon(name) -%}
+<svg class="portal-icon" aria-hidden="true" focusable="false"><use href="/assets/kanzlei_erp/images/portal-icons.svg#{{ name }}"></use></svg>
+{%- endmacro %}
+	<a class="portal-skip" href="#portal-main">{{ _("Skip to content") | e }}</a>
+	<header class="portal-header">
+		<a class="portal-brand" href="/" aria-label="{{ title | e }}">
+			<span class="portal-monogram" aria-hidden="true">{{ brand[0] | e }}</span>
+			<span><span class="portal-wordmark">{{ brand | e }}</span><span class="portal-brand-note">{{ title | e }}</span></span>
+		</a>
+		<nav class="portal-account" aria-label="{{ _('Account') | e }}">
+			{% if portal.settings_url %}<a class="portal-icon-button" href="{{ portal.settings_url | e }}" aria-label="{{ _('Settings') | e }}">{{ icon('settings') }}</a>{% endif %}
+			<details class="portal-profile">
+				<summary aria-label="{{ _('Account') | e }}: {{ portal.full_name | e }}"><span class="portal-avatar">{{ initials | e }}</span>{{ icon('chevron') }}</summary>
+				<div class="portal-profile-menu"><span class="portal-profile-name">{{ portal.full_name | e }}</span><a href="{{ portal.profile_url | e }}">{{ _('My profile') | e }}</a><button type="button" data-logout>{{ _('Sign out') | e }}</button></div>
+			</details>
+		</nav>
+	</header>
+	<main id="portal-main" class="portal-main">
+		<div class="portal-intro">
+			<div><p class="portal-eyebrow">{{ greeting | e }}</p><h1>{{ _('All in one place.') | e }}</h1><p class="portal-subtitle">{{ _('Your workspaces. Your documents. Your next step.') | e }}</p></div>
+			<label class="portal-search">{{ icon('search') }}<input id="portal-search" type="search" autocomplete="off" placeholder="{{ _('Find a workspace or shortcut') | e }}" aria-label="{{ _('Find a workspace or shortcut') | e }}" aria-controls="portal-workspaces portal-personal"></label>
+		</div>
+		<section aria-labelledby="portal-workspaces-heading">
+			<h2 id="portal-workspaces-heading" class="portal-section-label">{{ _('Workspaces') | e }}</h2>
+			<div id="portal-workspaces" class="portal-workspaces">
+			{% for workspace in portal.workspaces %}
+				<article class="portal-workspace {% if workspace.key == 'erp' %}portal-workspace-primary{% endif %}" data-search="{{ (workspace.label ~ ' ' ~ workspace.app ~ ' ' ~ workspace.description) | e }}">
+					<div class="portal-workspace-top"><span class="portal-app-icon">{{ icon('workspace' if workspace.key == 'erp' else 'folder') }}</span><span class="portal-app-label">{{ workspace.app | e }}</span></div>
+					<h3><a class="portal-workspace-title" href="{{ workspace.url | e }}">{{ workspace.label | e }}</a></h3><p>{{ workspace.description | e }}</p>
+					<div class="portal-workspace-bottom"><a class="portal-open" href="{{ workspace.url | e }}">{{ _('Open Kanzlei' if workspace.key == 'erp' else 'Open documents') | e }}{{ icon('arrow') }}</a>{% if workspace.shortcut %}<a class="portal-subtle-link" href="{{ workspace.shortcut.url | e }}">{{ workspace.shortcut.label | e }}</a>{% endif %}</div>
+				</article>
+			{% endfor %}
+			</div>
+		</section>
+		<div id="portal-personal" class="portal-personal" aria-busy="true">
+			<section class="portal-recent" aria-labelledby="portal-recent-heading">
+				<div class="portal-section-head"><h2 id="portal-recent-heading">{{ _('Recently opened') | e }}</h2><span>{{ _('Only for you') | e }}</span></div>
+				<div id="portal-recent-list"><p class="portal-empty">{{ _('Loading…') | e }}</p></div>
+			</section>
+			<section aria-labelledby="portal-shortcuts-heading">
+				<div class="portal-section-head"><h2 id="portal-shortcuts-heading">{{ _('Quick access') | e }}</h2>{{ icon('pin') }}</div>
+				<div id="portal-default-shortcuts">{% for shortcut in portal.shortcuts %}<a class="portal-shortcut" href="{{ shortcut.url | e }}" data-search="{{ (shortcut.label ~ ' ' ~ shortcut.app) | e }}">{{ icon(shortcut.icon) }}<span>{{ shortcut.label | e }}</span>{{ icon('arrow') }}</a>{% endfor %}</div>
+				<div id="portal-pins"></div>
+			</section>
+		</div>
+		<p id="portal-no-results" class="portal-empty" hidden>{{ _('No matching entries.') | e }}</p>
+		<div class="portal-feedback"><p id="portal-status" role="status" aria-live="polite"></p><button type="button" id="portal-retry" class="portal-text-button" hidden>{{ _('Retry') | e }}</button><a id="portal-reload" href="/kanzlei-portal" hidden>{{ _('Reload portal') | e }}</a></div>
+		<noscript><p class="portal-empty">{{ _('Enable JavaScript to see recent items and pin links.') | e }}</p></noscript>
+		<footer class="portal-footer"><span>{{ brand | e }} · {{ _('Your digital workplace') | e }}</span><span>{{ _('Kanzlei Portal') | e }}</span></footer>
+	</main>
+	<script id="portal-config" type="application/json">{{ portal_config | tojson }}</script>
+	<script src="/assets/kanzlei_erp/js/portal.js?v={{ asset_version | e }}" defer></script>
+</body>
+</html>
