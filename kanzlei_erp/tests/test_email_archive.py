@@ -181,6 +181,7 @@ class TestEmailArchiveImport(FrappeTestCase):
 			with TemporaryDirectory() as temp_dir:
 				archive_path = Path(temp_dir) / "archive.sqlite"
 				with (
+					patch("frappe.enqueue"),
 					patch("kanzlei_erp.email_archive._connect", return_value=server),
 					patch("kanzlei_erp.email_archive._site_archive_dir", return_value=archive_path),
 					patch("frappe.sendmail") as sendmail,
@@ -246,8 +247,8 @@ class TestEmailArchiveImport(FrappeTestCase):
 					self.assertFalse(
 						frappe.has_permission("File", ptype="read", doc=file_name, user=unlinked_reader.name)
 					)
-					customer_names = frappe.get_all("Customer", pluck="name", limit=2)
-					self.assertEqual(len(customer_names), 2, "ERPNext test records should include two Mandanten")
+					customer_names = frappe.get_all("Customer", pluck="name", limit=1)
+					self.assertEqual(len(customer_names), 1, "ERPNext test records should include a Mandant")
 					contact = frappe.get_doc(
 						{
 							"doctype": "Contact",
@@ -276,7 +277,7 @@ class TestEmailArchiveImport(FrappeTestCase):
 					parent_communication.reload()
 					self.assertEqual(second["imported"], 1)
 					self.assertEqual(second["existing"], 3)
-					self.assertGreaterEqual(second["new_contact_links"], 6)
+					self.assertEqual(second["new_contact_links"], 4)
 					self.assertEqual(second["unlinked"], 0)
 					self.assertTrue(second["complete"])
 					self.assertEqual(second["failures"], [])

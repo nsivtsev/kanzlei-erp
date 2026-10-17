@@ -7,6 +7,14 @@ Add Customer,Добавить клиента
 New Customer,Новый клиент
 Mandant Documents,Документы
 Client,Клиент
+Drive,Drive
+Email history,История переписки
+Link old correspondence,Связать старую переписку
+Save the contact before linking old correspondence.,Сохраните контакт перед привязкой старой переписки.
+Add an email address and a Mandant link to the contact first.,Сначала добавьте контакту email и связь с мандантом.
+Email history linking will start after the contact is saved.,Привязка старых писем начнётся после сохранения контакта.
+Email history: {0} messages linked; {1} ambiguous messages skipped.,История переписки: привязано писем — {0}; пропущено неоднозначных — {1}.
+Email history linking did not finish. Use Link old correspondence on the contact to retry.,Привязка переписки не завершена. Повторите её действием «Связать старую переписку» в контакте.
 Accounting,Бухгалтерия
 All,Все
 All sources,Все источники

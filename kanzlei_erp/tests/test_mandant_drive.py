@@ -49,9 +49,11 @@ class TestMandantDrive(FrappeTestCase):
 
 		result = self.api.create_folder(self.customer.name)
 		root = frappe.get_doc("File", result["folder"])
-		path = FileManager().get_local_path(root.file_url)
-		if path.exists():
-			self.paths.append(path)
+		manager = FileManager()
+		if root.file_url and not manager.flat:
+			path = manager.get_local_path(root.file_url)
+			if path.exists():
+				self.paths.append(path)
 		return root
 
 	def child(self, root, name="invoice.xml"):
