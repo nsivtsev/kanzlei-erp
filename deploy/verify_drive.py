@@ -20,7 +20,12 @@ def check(base, site, password):
 	response = session.post(base + "/api/method/login", data={"usr": "Administrator", "pwd": password}, timeout=30)
 	response.raise_for_status()
 	assert response.json()["message"] == "Logged In"
-	assert response.json()["home_page"].lstrip("/") == "desk/kanzlei-overview", "Kanzlei login landing page changed"
+	assert response.json()["home_page"].lstrip("/") == "kanzlei-portal", "Kanzlei login landing page changed"
+	portal = session.get(base + "/kanzlei-portal", timeout=30)
+	portal.raise_for_status()
+	assert 'id="portal-workspaces"' in portal.text, "Portal workspaces are missing"
+	assert 'href="/desk/kanzlei-overview"' in portal.text, "Portal has no ERP link"
+	assert 'href="/drive"' in portal.text, "Portal has no Drive link"
 	desk = session.get(base + "/desk/kanzlei-overview", timeout=30)
 	desk.raise_for_status()
 	assert "/drive" in desk.text, "Administrator Desk has no Drive link"
