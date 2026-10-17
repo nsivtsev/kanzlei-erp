@@ -28,9 +28,17 @@ docker compose --env-file .env -f .devcontainer/docker-compose.yml down
 
 The Kanzlei ERP Frappe app lives at the repository root and is linked into the ignored `development/frappe-bench/apps/kanzlei_erp/` at runtime. Bench and site data are ignored; MariaDB data is in a named Docker volume. `down` preserves both; `down -v` removes the database, so use it only to discard the local site.
 
+## Shared start page
+
+The site root and `/kanzlei-portal` open the staff-only **Kanzlei Portal**. Its two workspaces lead to the existing ERP work overview and, when Suite is installed, Drive. Personal quick access combines the available Mandanten/Drive shortcuts with up to twelve pinned records. Search filters the visible workspaces, shortcuts and recent entries.
+
+The portal shows five recently opened records. Saved Mandant, Task, FiBu Package and Supplement forms are recorded from Desk; Drive's existing personal file history is included. Drive folders opened through the portal are recorded as well; ordinary folder navigation inside Drive does not populate its native file history. Record labels and access are checked on every load and before opening, so deleted or revoked records are hidden. History and pinned identifiers are stored in bounded user defaults without adding a DocType. Pin changes persist across browsers; the portal does not cache personal labels in browser storage.
+
+DE/RU, light/dark/automatic appearance, keyboard navigation and narrow layouts are supported. Profile and sign-out are in the avatar menu; System Managers also have a settings shortcut. ERP's application home remains `/desk/kanzlei-overview`; its standard Start Screen action returns to the portal.
+
 ## Mandants and work calendar
 
-The Desk opens the **Mandanten** list and has one **Kanzlei** sidebar: **Mandanten**, **FiBu-Perioden**, **Rückfragen**, **Aufgaben**, **Kalender**, **Zeiterfassung**, followed by **E-Mail** when an email account is assigned to the user. Standard ERPNext workspaces are hidden from the navigation. Administrator and System Manager also see **Einstellungen**, which contains the general **Wiederholungen**, **Rechnungen**, and **Zahlungen** lists as well as company, service, activity, billing, user, printing, and import configuration. **Zur Kanzlei** returns to the daily workspace.
+The Desk opens the **Arbeitsübersicht** and has one **Kanzlei** sidebar: **Arbeitsübersicht**, **E-Mail** when an email account is assigned to the user, **Aufgaben**, **Kalender**, **Mandanten**, **FiBu-Perioden**, **Rückfragen**, **Zeiterfassung**, and **Dateien** when Suite is installed. Standard ERPNext workspaces are hidden from the navigation. Administrator and System Manager also see **Einstellungen**, which contains the general **Wiederholungen**, **Rechnungen**, and **Zahlungen** lists as well as company, service, activity, billing, user, printing, and import configuration. **Zur Kanzlei** returns to the daily workspace.
 
 Each Mandant uses ERPNext's Customer record, presented as **Mandant** in the interface. Sales, territory, loyalty, portal, and internal-customer accounting sections are hidden. **Account Manager** is in Details. Administrator and System Manager see the **Abrechnung** tab with billing currency, the Kanzlei's company bank account, price list, payment terms, and standard receivable/credit settings. The company bank account is for the Kanzlei's own billing. The Connections tab shows FiBu packages, Tasks, schedules, and time entries; sales/payment actions, ledger shortcuts, and financial indicators are hidden. Create Mandants directly in **Mandanten**, or import a list through **Einstellungen → Datenimport**.
 
