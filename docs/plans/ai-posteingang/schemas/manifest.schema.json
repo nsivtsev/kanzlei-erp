@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "catalog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "sources": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "scenarios": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "generator": {
+      "type": "object",
+      "properties": {
+        "seed": {
+          "const": 20261018
+        },
+        "date": {
+          "const": "2026-10-18"
+        },
+        "font": {
+          "const": "Helvetica / Pillow Aileron default"
+        },
+        "versions": {
+          "type": "object",
+          "properties": {
+            "reportlab": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "Pillow": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "pypdf": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "reportlab",
+            "Pillow",
+            "pypdf"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "seed",
+        "date",
+        "font",
+        "versions"
+      ],
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "pattern": "^AP01-[0-9]{2}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "source_family": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "split": {
+            "enum": [
+              "development",
+              "holdout"
+            ]
+          },
+          "pdf": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "page_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "generation": {
+            "enum": [
+              "text",
+              "raster"
+            ]
+          },
+          "source_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "ocr": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "extraction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "review": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "received_date_known": {
+            "type": "boolean"
+          },
+          "received_date": {
+            "$ref": "common.schema.json#/$defs/date"
+          },
+          "allowed_customers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 140
+            },
+            "maxItems": 20
+          },
+          "expected": {
+            "type": "object",
+            "properties": {
+              "candidate_customers": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 140
+                },
+                "maxItems": 3
+              },
+              "status": {
+                "enum": [
+                  "Needs Review",
+                  "Needs Clarification",
+                  "Completed"
+                ]
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "customer": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 140
+                    },
+                    "assigned_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 140
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "exp_start_date": {
+                      "$ref": "common.schema.json#/$defs/date"
+                    },
+                    "exp_end_date": {
+                      "$ref": "common.schema.json#/$defs/date"
+                    },
+                    "external_date": {
+                      "$ref": "common.schema.json#/$defs/date"
+                    },
+                    "needs_planning": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "action_id",
+                    "customer",
+                    "assigned_to",
+                    "exp_start_date",
+                    "exp_end_date",
+                    "external_date",
+                    "needs_planning"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 30
+              },
+              "replaces_case": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^AP01-[0-9]{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "candidate_customers",
+              "status",
+              "tasks",
+              "replaces_case"
+            ],
+            "additionalProperties": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "maxItems": 20
+          },
+          "annotations": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "case_id",
+          "description",
+          "source_family",
+          "split",
+          "pdf",
+          "sha256",
+          "page_count",
+          "generation",
+          "source_text",
+          "ocr",
+          "extraction",
+          "review",
+          "received_date_known",
+          "received_date",
+          "allowed_customers",
+          "expected",
+          "tags",
+          "annotations"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    }
+  },
+  "required": [
+    "schema_version",
+    "dataset_version",
+    "synthetic",
+    "catalog",
+    "sources",
+    "scenarios",
+    "generator",
+    "cases"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": "Mandant oder Inhalt muss geklärt werden.",
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "ffffb444-2aae-5935-988e-213fe6fa1622",
+      "source_index": 0,
+      "title": "Unterlagen einreichen",
+      "description": "Bitte die angeforderten Unterlagen einreichen.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": "2026-11-20",
+      "external_date_basis": "Explizites Datum im Schreiben, manuell bestätigt.",
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die angeforderten Unterlagen einreichen.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

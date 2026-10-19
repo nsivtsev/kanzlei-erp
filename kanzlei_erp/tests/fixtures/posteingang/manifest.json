@@ -1,0 +1,645 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "1.0",
+  "synthetic": true,
+  "catalog": "catalog.json",
+  "sources": "sources.json",
+  "scenarios": "scenarios.json",
+  "generator": {
+    "seed": 20261018,
+    "date": "2026-10-18",
+    "font": "Helvetica / Pillow Aileron default",
+    "versions": {
+      "reportlab": "4.4.9",
+      "Pillow": "12.3.0",
+      "pypdf": "6.10.0"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "AP01-01",
+      "description": "Простой запрос с явным внешним сроком",
+      "source_family": "letter-alpha-01",
+      "split": "development",
+      "pdf": "pdfs/AP01-01.pdf",
+      "sha256": "56bf90a9c204f4fbfbeefa75ca464bdeef76d079aaa898649ab7a43bbfb86b7c",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-01.json",
+      "ocr": "ocr/AP01-01.json",
+      "extraction": "extraction/AP01-01.json",
+      "review": "reviews/AP01-01.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "2ac3a73a-f3b7-53b4-87e5-e7c239dd2ebf",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-01.json"
+    },
+    {
+      "case_id": "AP01-02",
+      "description": "Несколько независимых действий, одно отклонено как уже выполненное",
+      "source_family": "AP01-02",
+      "split": "development",
+      "pdf": "pdfs/AP01-02.pdf",
+      "sha256": "74f22add04e8874974f177340e8331645fb56ed297050a5c1e1673289dc6de46",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-02.json",
+      "ocr": "ocr/AP01-02.json",
+      "extraction": "extraction/AP01-02.json",
+      "review": "reviews/AP01-02.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "465247bb-d740-513f-a305-595597b3d523",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          },
+          {
+            "action_id": "65f4a0c3-7bd7-5351-ba57-11175da3e201",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-23",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "reject"
+      ],
+      "annotations": "annotations/AP01-02.json"
+    },
+    {
+      "case_id": "AP01-03",
+      "description": "Информационное письмо с явным решением без действий",
+      "source_family": "AP01-03",
+      "split": "development",
+      "pdf": "pdfs/AP01-03.pdf",
+      "sha256": "f4b6f48f36d7370b84b4d4fd592fbd80f86d27e89f3b1115ff3d7a3acf0947ed",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-03.json",
+      "ocr": "ocr/AP01-03.json",
+      "extraction": "extraction/AP01-03.json",
+      "review": "reviews/AP01-03.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "no_actions"
+      ],
+      "annotations": "annotations/AP01-03.json"
+    },
+    {
+      "case_id": "AP01-04",
+      "description": "Два клиента с одинаковым подтверждённым идентификатором",
+      "source_family": "AP01-04",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-04.pdf",
+      "sha256": "b413fa1db8b13f058c4994e65a29a013aaa811839059d251b1b96c21e4fb4738",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-04.json",
+      "ocr": "ocr/AP01-04.json",
+      "extraction": "extraction/AP01-04.json",
+      "review": "reviews/AP01-04.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-B",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A",
+          "SYN-CUSTOMER-B"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "ambiguous_customer"
+      ],
+      "annotations": "annotations/AP01-04.json"
+    },
+    {
+      "case_id": "AP01-05",
+      "description": "Неизвестный Mandant",
+      "source_family": "AP01-05",
+      "split": "development",
+      "pdf": "pdfs/AP01-05.pdf",
+      "sha256": "4977a6a31a2dbf61f2c8776dab70ed3cc4155ea0406f980f94cb74b2bb3b62e7",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-05.json",
+      "ocr": "ocr/AP01-05.json",
+      "extraction": "extraction/AP01-05.json",
+      "review": "reviews/AP01-05.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "unknown_customer"
+      ],
+      "annotations": "annotations/AP01-05.json"
+    },
+    {
+      "case_id": "AP01-06",
+      "description": "Несколько Mandanten в одном письме",
+      "source_family": "AP01-06",
+      "split": "development",
+      "pdf": "pdfs/AP01-06.pdf",
+      "sha256": "6ddc4b2d3b108d7a27b558a7b8ddbf8c70d6616af21c2a8b7fb37ddf48ee574e",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-06.json",
+      "ocr": "ocr/AP01-06.json",
+      "extraction": "extraction/AP01-06.json",
+      "review": "reviews/AP01-06.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A",
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_customers"
+      ],
+      "annotations": "annotations/AP01-06.json"
+    },
+    {
+      "case_id": "AP01-07",
+      "description": "Относительный срок не вычисляется автоматически",
+      "source_family": "AP01-07",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-07.pdf",
+      "sha256": "0a5e2d4397d20c8b873c40de20107b3bb78ab80458d4850b9bd4d5241835a469",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-07.json",
+      "ocr": "ocr/AP01-07.json",
+      "extraction": "extraction/AP01-07.json",
+      "review": "reviews/AP01-07.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "5e20e61c-c811-5806-82f6-bb82da5bac04",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-10-26",
+            "exp_end_date": "2026-10-26",
+            "external_date": null,
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "relative"
+      ],
+      "annotations": "annotations/AP01-07.json"
+    },
+    {
+      "case_id": "AP01-08",
+      "description": "Задача без внутренней даты после явного решения",
+      "source_family": "AP01-08",
+      "split": "development",
+      "pdf": "pdfs/AP01-08.pdf",
+      "sha256": "1b58138360e970247639bbff0c778c57690d5837462b6d8d4fc78f50309ebacb",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-08.json",
+      "ocr": "ocr/AP01-08.json",
+      "extraction": "extraction/AP01-08.json",
+      "review": "reviews/AP01-08.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "afd354b3-ec18-5340-95c1-4b78d24f27f0",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": null,
+            "exp_end_date": null,
+            "external_date": null,
+            "needs_planning": true
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "not_found",
+        "unscheduled"
+      ],
+      "annotations": "annotations/AP01-08.json"
+    },
+    {
+      "case_id": "AP01-09",
+      "description": "Противоречивые даты оставлены на уточнении",
+      "source_family": "AP01-09",
+      "split": "development",
+      "pdf": "pdfs/AP01-09.pdf",
+      "sha256": "dde79f49346b7db758c9aa5bbd85def320b584dff9c1efdbac8e0bba9e9fe55b",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-09.json",
+      "ocr": "ocr/AP01-09.json",
+      "extraction": "extraction/AP01-09.json",
+      "review": "reviews/AP01-09.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "uncertain"
+      ],
+      "annotations": "annotations/AP01-09.json"
+    },
+    {
+      "case_id": "AP01-10",
+      "description": "Дата получения явно неизвестна",
+      "source_family": "AP01-10",
+      "split": "development",
+      "pdf": "pdfs/AP01-10.pdf",
+      "sha256": "07176495a96d65332510eb55d65ea515dcb0e95ac61f4b60aff75869750b268f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-10.json",
+      "ocr": "ocr/AP01-10.json",
+      "extraction": "extraction/AP01-10.json",
+      "review": "reviews/AP01-10.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "e5cb01ab-d8ca-5fc8-ba23-570310f18977",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "unknown_receipt_date"
+      ],
+      "annotations": "annotations/AP01-10.json"
+    },
+    {
+      "case_id": "AP01-11",
+      "description": "Нечитаемый растровый скан без скрытого текста",
+      "source_family": "AP01-11",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-11.pdf",
+      "sha256": "a29434e0a0732a49d998b940de57fa127890a33e265a3b54d669f00721c80fc3",
+      "page_count": 1,
+      "generation": "raster",
+      "source_text": "texts/AP01-11.json",
+      "ocr": "ocr/AP01-11.json",
+      "extraction": "extraction/AP01-11.json",
+      "review": "reviews/AP01-11.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "poor_scan",
+        "unreadable"
+      ],
+      "annotations": "annotations/AP01-11.json"
+    },
+    {
+      "case_id": "AP01-12",
+      "description": "Письмо и приложения с evidence со страниц 2 и 3",
+      "source_family": "AP01-12",
+      "split": "development",
+      "pdf": "pdfs/AP01-12.pdf",
+      "sha256": "a72268e794b8c618c0501cbfc50bbeaf87c7d65a2831312b77eb10cbfc42a2e5",
+      "page_count": 3,
+      "generation": "text",
+      "source_text": "texts/AP01-12.json",
+      "ocr": "ocr/AP01-12.json",
+      "extraction": "extraction/AP01-12.json",
+      "review": "reviews/AP01-12.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "817e143a-e8a1-5957-9068-7d9f0d087828",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-12-04",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multipage",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-12.json"
+    },
+    {
+      "case_id": "AP01-13",
+      "description": "Инструкции в документе не выполняются",
+      "source_family": "AP01-13",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-13.pdf",
+      "sha256": "47c2f9c0bae0deae8d37c9df03a7743632b33273a7a76279bdb276b93054d7b6",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-13.json",
+      "ocr": "ocr/AP01-13.json",
+      "extraction": "extraction/AP01-13.json",
+      "review": "reviews/AP01-13.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "4b26ea11-fbd3-53df-b54c-b2330cabf81a",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "prompt_injection"
+      ],
+      "annotations": "annotations/AP01-13.json"
+    },
+    {
+      "case_id": "AP01-14",
+      "description": "Идентификатор отправителя не привязывает письмо к Gamma",
+      "source_family": "AP01-14",
+      "split": "development",
+      "pdf": "pdfs/AP01-14.pdf",
+      "sha256": "ee1491fc365e7c83a85f554bd39182891f7e6c125e54b2b868510012c20cb879",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-14.json",
+      "ocr": "ocr/AP01-14.json",
+      "extraction": "extraction/AP01-14.json",
+      "review": "reviews/AP01-14.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "31a261ce-ad95-5618-aad6-53a2635777d3",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "sender_identifier"
+      ],
+      "annotations": "annotations/AP01-14.json"
+    },
+    {
+      "case_id": "AP01-15",
+      "description": "Задача без исполнителя после явного решения",
+      "source_family": "AP01-15",
+      "split": "development",
+      "pdf": "pdfs/AP01-15.pdf",
+      "sha256": "3faeb2b63aba1812f2a46a9572e60e18adf4991b616f1229b8317c856096eb48",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-15.json",
+      "ocr": "ocr/AP01-15.json",
+      "extraction": "extraction/AP01-15.json",
+      "review": "reviews/AP01-15.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "e43e21e1-3f6b-5951-9b63-7ebba9622cb5",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": null,
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": true
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "unassigned"
+      ],
+      "annotations": "annotations/AP01-15.json"
+    },
+    {
+      "case_id": "AP01-16",
+      "description": "Исправленный скан связан с исходником AP01-01",
+      "source_family": "letter-alpha-01",
+      "split": "development",
+      "pdf": "pdfs/AP01-16.pdf",
+      "sha256": "e7186d6ee4c7bdddc0f37ba370a849d18a5267169ce95c643486d73dceabbb01",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-16.json",
+      "ocr": "ocr/AP01-16.json",
+      "extraction": "extraction/AP01-16.json",
+      "review": "reviews/AP01-16.json",
+      "received_date_known": true,
+      "received_date": "2026-10-19",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "3cee6dc8-2ff8-5166-a064-8c2a32670d9c",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-18",
+            "exp_end_date": "2026-11-18",
+            "external_date": "2026-11-20",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": "AP01-01"
+      },
+      "tags": [
+        "replacement"
+      ],
+      "annotations": "annotations/AP01-16.json"
+    }
+  ]
+}

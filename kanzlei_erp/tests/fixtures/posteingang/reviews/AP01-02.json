@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Manuell anhand des synthetischen Kundenkatalogs geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "465247bb-d740-513f-a305-595597b3d523",
+      "source_index": 0,
+      "title": "Unterlagen einreichen",
+      "description": "Bitte die angeforderten Unterlagen einreichen.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-11-20",
+      "external_date_basis": "Explizites Datum im Schreiben, manuell bestätigt.",
+      "internal_date": "2026-11-18",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die angeforderten Unterlagen einreichen.",
+          "verification": "matched"
+        }
+      ]
+    },
+    {
+      "action_id": "65f4a0c3-7bd7-5351-ba57-11175da3e201",
+      "source_index": 1,
+      "title": "Belege prüfen",
+      "description": "Bitte die Rechnungsbelege prüfen.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-11-23",
+      "external_date_basis": "Explizites Datum im Schreiben, manuell bestätigt.",
+      "internal_date": "2026-11-18",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die Rechnungsbelege prüfen.",
+          "verification": "matched"
+        }
+      ]
+    },
+    {
+      "action_id": "44416d52-a018-5c1c-93a9-9d9d080ec134",
+      "source_index": 2,
+      "title": "Rückfrage beantworten",
+      "description": "Bitte die Rückfrage beantworten.",
+      "decision": "reject",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": "2026-11-18",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": "Die Rückfrage wurde vor Eingang dieses Schreibens beantwortet.",
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die Rückfrage beantworten.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

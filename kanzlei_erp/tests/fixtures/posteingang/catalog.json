@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "customers": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "name": "Beispielbetrieb Alpha GmbH",
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "normalized_value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "verified_by": "operator-a@example.invalid",
+          "verification_source": "Synthetic fixture specification",
+          "verified_at": "2026-10-18T08:00:00Z"
+        }
+      ],
+      "address": "Musterweg 7, 00000 Beispielstadt"
+    },
+    {
+      "customer": "SYN-CUSTOMER-B",
+      "name": "Beispielbetrieb Beta GmbH",
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "normalized_value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "verified_by": "operator-a@example.invalid",
+          "verification_source": "Synthetic fixture specification",
+          "verified_at": "2026-10-18T08:00:00Z"
+        }
+      ],
+      "address": "Musterweg 9, 00000 Beispielstadt"
+    },
+    {
+      "customer": "SYN-CUSTOMER-C",
+      "name": "Beispielbetrieb Gamma GmbH",
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0009",
+          "normalized_value": "SYN-0009",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "verified_by": "operator-a@example.invalid",
+          "verification_source": "Synthetic fixture specification",
+          "verified_at": "2026-10-18T08:00:00Z"
+        }
+      ],
+      "address": "Musterweg 9, 00000 Beispielstadt"
+    },
+    {
+      "customer": "SYN-CUSTOMER-HIDDEN",
+      "name": "Nicht freigegebener Beispielbetrieb GmbH",
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-HIDDEN",
+          "normalized_value": "SYN-HIDDEN",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "verified_by": "operator-a@example.invalid",
+          "verification_source": "Synthetic fixture specification",
+          "verified_at": "2026-10-18T08:00:00Z"
+        }
+      ],
+      "address": "Musterweg 9, 00000 Beispielstadt"
+    }
+  ],
+  "users": [
+    {
+      "user": "operator-a@example.invalid",
+      "enabled": true,
+      "user_type": "System User",
+      "customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-B",
+        "SYN-CUSTOMER-C"
+      ]
+    },
+    {
+      "user": "portal@example.invalid",
+      "enabled": true,
+      "user_type": "Website User",
+      "customers": [
+        "SYN-CUSTOMER-A"
+      ]
+    }
+  ]
+}

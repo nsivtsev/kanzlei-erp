@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "annotations.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "purpose": {
+      "const": "semantic_ground_truth_never_provider_input"
+    },
+    "sender": {
+      "$ref": "#/$defs/fact"
+    },
+    "document_date": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "common.schema.json#/$defs/date"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "recipients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/fact"
+          },
+          "address": {
+            "$ref": "#/$defs/fact"
+          },
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "de_steuernummer",
+                    "de_tax_id",
+                    "de_vat_id",
+                    "other"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 140
+                },
+                "jurisdiction": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 140
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "authority": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 140
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "other_type": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 140
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "holder_role": {
+                  "enum": [
+                    "addressee",
+                    "sender",
+                    "representative",
+                    "other",
+                    "unknown"
+                  ]
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/evidence"
+                  },
+                  "maxItems": 5
+                }
+              },
+              "required": [
+                "type",
+                "value",
+                "jurisdiction",
+                "authority",
+                "other_type",
+                "holder_role",
+                "evidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "other"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "other_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 140
+                      },
+                      "authority": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 140
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "identifiers"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 20
+    },
+    "customer_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 140
+      },
+      "maxItems": 3
+    },
+    "candidate_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "kind": {
+            "enum": [
+              "exact_identifier",
+              "name_address"
+            ]
+          },
+          "recipient_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 19
+          },
+          "identifier_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 19
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "customer",
+          "kind",
+          "recipient_index",
+          "identifier_index"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 3
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "gold_action_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "deadline": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "explicit_date",
+                  "relative",
+                  "not_found",
+                  "uncertain"
+                ]
+              },
+              "date": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "wording": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/evidence"
+                },
+                "maxItems": 5
+              }
+            },
+            "required": [
+              "kind",
+              "date",
+              "wording",
+              "anchor",
+              "evidence"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "explicit_date"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "wording": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1000
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "date": {
+                      "type": "null"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "not_found"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "wording": {
+                      "type": "null"
+                    },
+                    "anchor": {
+                      "type": "null"
+                    },
+                    "evidence": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "relative",
+                        "uncertain"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "wording": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1000
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/evidence"
+            },
+            "maxItems": 5
+          }
+        },
+        "required": [
+          "gold_action_id",
+          "title",
+          "description",
+          "deadline",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 30
+    }
+  },
+  "required": [
+    "schema_version",
+    "case_id",
+    "purpose",
+    "sender",
+    "document_date",
+    "recipients",
+    "customer_candidates",
+    "candidate_evidence",
+    "actions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "page",
+        "quote"
+      ],
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
