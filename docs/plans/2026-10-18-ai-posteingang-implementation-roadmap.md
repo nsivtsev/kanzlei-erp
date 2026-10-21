@@ -8,7 +8,7 @@
 
 **Стек:** Frappe/ERPNext v16, Python по `pyproject.toml`, Frappe jobs, MariaDB, текущий File/S3 слой, Desk JS, Node tests и Bench tests. Suite Drive подключается отдельным расширением.
 
-**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01, AP-02 и AP-03 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-04…AP-10 ещё не реализованы.
+**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01…AP-04 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-04 offline, wheel, migrations и DE/RU — PASS; живой Mistral smoke — NOT RUN. AP-05…AP-10 ещё не реализованы.
 
 **Проектное решение:** [AI Posteingang](2026-10-18-ai-posteingang-design.md). Все договорённости и ограничения этого документа применяются к каждому этапу.
 
@@ -31,7 +31,7 @@
 | AP-01 | Контракты, сценарии и размеченный набор примеров | — | Завершён 18.10.2026; [контракт v1.0](ai-posteingang/contracts.md) |
 | AP-02 | Модель входящего письма, приватный источник и права | AP-01 | [Завершён 19.10.2026, серверная приёмка PASS](2026-10-19-ai-posteingang-ap02-implementation.md#8-результат-исполнения-19102026); визуальный DE/RU проход пропущен по решению владельца |
 | AP-03 | Приём PDF и обнаружение точных дублей | AP-02 | [Завершён 20.10.2026](2026-10-20-ai-posteingang-ap03-implementation.md#фактические-результаты), серверная и DE/RU UI приёмка PASS |
-| AP-04 | Настройки и адаптер OCR/извлечения Mistral | AP-01, AP-02 | Не начат |
+| AP-04 | Настройки и адаптер OCR/извлечения Mistral | AP-01, AP-02 | [Завершён 21.10.2026](2026-10-21-ai-posteingang-ap04-implementation.md#результат-исполнения); offline и DE/RU PASS, живой smoke NOT RUN |
 | AP-05 | Фоновая обработка и восстановление после ошибок | AP-03, AP-04 | Не начат |
 | AP-06 | Подбор Mandant по проверяемым признакам | AP-01, AP-02; формат результата AP-04 | Не начат |
 | AP-07 | Подтверждение и защищённое создание Tasks | AP-03, AP-05, AP-06 | Не начат |
@@ -131,6 +131,10 @@ AP-03 и AP-04 логически независимы после AP-02. AP-06 �
 **Приёмка:** fake и Mistral следуют одному контракту; невалидный ответ не принимается как готовые предложения. Prompt injection не приводит к действиям или обходу схемы. Отказ API не уничтожает оригинал и не создаёт Task. Результат сохраняет версии используемых моделей, prompt и схемы.
 
 **Проверки:** `test_posteingang_ai` с записанными синтетическими ответами, timeout/429/5xx, неверной схемой, выдуманной цитатой и отсутствующим сроком. Сетевой smoke отмечать отдельно от offline-тестов. При изменении зависимостей проверить совместимость Python и сборку затронутого пакета без полного локального CI.
+
+**Результат 21.10.2026:** read-only `prepare_source/recognize/extract/analyze_letter`, общий fake/Mistral контракт, runtime Draft 2020-12 schemas и jsonschema 4.26.0. OCR и extraction разделены; только серверный приватный оригинал/Base64, без публичных URL/Files API, tools, fallback или retries. Версии запроса `mistral-ocr-4-1` / `mistral-small-2603`, prompt `ap04-extraction-v1`. Настройки проверяют конкретные модели и скрывают секрет; ожидаемые validation errors не создают Frappe developer snapshots с serialized key. Никаких записей Run/Action/Event/Task или изменений Letter.
+
+**Приёмка:** AI suite — 20 PASS (disk/MemoryS3); без Suite — 19 PASS, один ожидаемый S3 skip. AP-02 model/permissions/files/setup — 11/11/15/4 PASS; AP-03 intake — 20 PASS. Автономные AP-01/AP-04/PDF tests — 61 PASS в Linux, validator 16 писем PASS. Wheel/resources без docs, Python 3.14 dependency/pip check, две миграции с контролем записей/Settings/секрета/ролей, DE/RU browser, JSON/CSV/Ruff/diff — PASS. Независимое ревью: оставшихся конкретных P1/P2 нет. Живой Mistral smoke — NOT RUN; обычные тесты не измеряют качество модели. Полный CI image build, основной сайт, AP-05, commit/PR/deployment не выполнялись. Подробности и пределы проверки — в [результатах AP-04](2026-10-21-ai-posteingang-ap04-implementation.md#результат-исполнения).
 
 ## AP-05 — Фоновая обработка и восстановление
 

@@ -138,8 +138,20 @@ def validate_action(action):
 		deny()
 
 
+class SettingsValidationError(frappe.ValidationError, frappe.SecurityException):
+	"""Expected validation without Frappe error snapshots containing serialized credentials."""
+
+
 class SettingsRecord(Document):
+	def as_dict(self, *args, **kwargs):
+		data = super().as_dict(*args, **kwargs)
+		if data.get("api_key"):
+			data["api_key"] = "********"
+		return data
+
 	def validate(self):
+		from kanzlei_erp.posteingang_ai import concrete_model
+
 		limits = {
 			"max_file_bytes": (1, 20971520),
 			"max_pages": (1, 50),
@@ -149,7 +161,13 @@ class SettingsRecord(Document):
 		}
 		for field, (low, high) in limits.items():
 			if not low <= cint(self.get(field)) <= high:
-				frappe.throw(frappe._("Posteingang limit exceeded"), frappe.ValidationError)
+				frappe.throw(frappe._("Posteingang limit exceeded"), SettingsValidationError)
+		for field in ("ocr_model", "extraction_model"):
+			if self.get(field) and not concrete_model(self.get(field)):
+				frappe.throw(frappe._("Use a concrete versioned Posteingang model"), SettingsValidationError)
+		if self.provider == "mistral" and self.external_analysis_enabled:
+			if not self.api_key or not self.ocr_model or not self.extraction_model:
+				frappe.throw(frappe._("Mistral analysis requires an API key and both model versions"), SettingsValidationError)
 
 
 def create_received_letter(*, actor, original, receipt, operation):

@@ -613,3 +613,9 @@ Already uploaded,Bereits hochgeladen
 PDF received,PDF angenommen
 Open Incoming Letter,Eingangsschreiben öffnen
 Discard local request,Lokale Anfrage verwerfen
+Recommended OCR model: mistral-ocr-4-1. Use a concrete version; latest is not allowed.,Empfohlenes OCR-Modell: mistral-ocr-4-1. Eine konkrete Version verwenden; latest ist nicht erlaubt.
+Recommended extraction model: mistral-small-2603. Use a concrete version; latest is not allowed.,Empfohlenes Extraktionsmodell: mistral-small-2603. Eine konkrete Version verwenden; latest ist nicht erlaubt.
+Stored as a server-side secret. Saving settings does not contact Mistral.,Als serverseitiges Geheimnis gespeichert. Beim Speichern wird Mistral nicht aufgerufen.
+Use a concrete versioned Posteingang model,Eine konkrete Modellversion für den Posteingang verwenden
+Mistral analysis requires an API key and both model versions,Für die Mistral-Analyse sind ein API-Schlüssel und beide Modellversionen erforderlich
+OCR returned no readable text; human review is required.,OCR hat keinen lesbaren Text geliefert; eine manuelle Prüfung ist erforderlich.

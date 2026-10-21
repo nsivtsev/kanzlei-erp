@@ -633,3 +633,9 @@ Already uploaded,Уже загружено
 PDF received,PDF принят
 Open Incoming Letter,Открыть входящее письмо
 Discard local request,Удалить локальный запрос
+Recommended OCR model: mistral-ocr-4-1. Use a concrete version; latest is not allowed.,Рекомендуемая OCR-модель: mistral-ocr-4-1. Укажите конкретную версию; latest запрещён.
+Recommended extraction model: mistral-small-2603. Use a concrete version; latest is not allowed.,Рекомендуемая модель извлечения: mistral-small-2603. Укажите конкретную версию; latest запрещён.
+Stored as a server-side secret. Saving settings does not contact Mistral.,Хранится как серверный секрет. Сохранение настроек не вызывает Mistral.
+Use a concrete versioned Posteingang model,Укажите конкретную версию модели Posteingang
+Mistral analysis requires an API key and both model versions,Для анализа Mistral нужны API-ключ и версии обеих моделей
+OCR returned no readable text; human review is required.,OCR не вернул читаемый текст; требуется проверка сотрудником.

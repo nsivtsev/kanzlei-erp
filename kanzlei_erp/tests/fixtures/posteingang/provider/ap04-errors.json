@@ -1,0 +1,9 @@
+[
+  {"id": "unauthorized", "status": 401, "code": "CONFIGURATION_INVALID", "retryable": false},
+  {"id": "forbidden", "status": 403, "code": "CONFIGURATION_INVALID", "retryable": false},
+  {"id": "unknown_model", "status": 404, "code": "CONFIGURATION_INVALID", "retryable": false},
+  {"id": "rate_limit", "status": 429, "code": "PROVIDER_UNAVAILABLE", "retryable": true},
+  {"id": "upstream_error", "status": 503, "code": "PROVIDER_UNAVAILABLE", "retryable": true},
+  {"id": "redirect", "status": 302, "code": "PROVIDER_UNAVAILABLE", "retryable": false},
+  {"id": "payload_too_large", "status": 413, "code": "LIMIT_EXCEEDED", "retryable": false}
+]
