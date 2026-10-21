@@ -46,6 +46,20 @@ index 1df576f..90cc0dc 100755
  def _scoped_attachment_condition(doctype: str, user: str, exists_condition: str) -> str:
  	"""Build `(attached_to_doctype = X AND (EXISTS(...) OR individually shared))`."""
  	table = get_table_name(doctype, wrap_in_backticks=True)
+diff --git a/frappe/database/query.py b/frappe/database/query.py
+index 1ff1335..7a33784 100644
+--- a/frappe/database/query.py
++++ b/frappe/database/query.py
+@@ -1574,6 +1574,9 @@ class Engine:
+ 
+ 		if condition := self.get_permission_conditions(self.permission_doctype, self.permission_table):
+ 			self.query = self.query.where(condition)
++		for hook in frappe.get_hooks("required_permission_query_conditions"):
++			if condition := frappe.call(hook, doctype=self.permission_doctype, user=self.user):
++				self.query = self.query.where(RawCriterion(condition))
+ 
+ 	def get_permission_conditions(self, doctype: str, table: Table) -> Criterion | None:
+ 		role_permissions = frappe.permissions.get_role_permissions(doctype, user=self.user)
 diff --git a/frappe/email/email_body.py b/frappe/email/email_body.py
 index 15eae0e..7669129 100755
 --- a/frappe/email/email_body.py
@@ -81,6 +95,46 @@ index 76feb5f..011f201 100644
  
  		def patch_start_response(status, headers, exc_info=None):
  			if (
+diff --git a/frappe/model/db_query.py b/frappe/model/db_query.py
+index 094f6d7..73b2057 100644
+--- a/frappe/model/db_query.py
++++ b/frappe/model/db_query.py
+@@ -1086,6 +1086,9 @@ from {tables}
+ 			if not only_if_shared and self.shared and conditions:
+ 				conditions = f"(({conditions}) or ({self.get_share_condition()}))"
+ 
++			for hook in frappe.get_hooks("required_permission_query_conditions"):
++				if required := frappe.call(hook, doctype=self.doctype, user=self.user):
++					conditions = f"({conditions or '1=1'}) AND ({required})"
+ 			return conditions
+ 
+ 		else:
+diff --git a/frappe/permissions.py b/frappe/permissions.py
+--- a/frappe/permissions.py
++++ b/frappe/permissions.py
+@@ -106,6 +106,11 @@
+ 		user = frappe.session.user
+ 
+ 	if user == "Administrator":
++		for hook in frappe.get_hooks("required_administrator_permission"):
++			admin_doc = doc or (doctype if hasattr(doctype, "doctype") else None)
++			admin_type = getattr(doctype, "doctype", doctype)
++			if frappe.call(hook, doctype=admin_type, doc=admin_doc, ptype=ptype, user=user) is False:
++				return False
+ 		debug and _debug_log("Allowed everything because user is Administrator")
+ 		return True
+ 
+@@ -223,6 +228,10 @@
+ 			ignore_share_permissions=ignore_share_permissions,
+ 		)
+ 
++	# Additional application boundaries remain mandatory after DocShare fallback.
++	for hook in frappe.get_hooks("required_document_permission"):
++		if frappe.call(hook, doctype=doctype, doc=doc, ptype=ptype, user=user) is False:
++			return False
+ 	return bool(perm)
+ 
+ 
 diff --git a/frappe/realtime.py b/frappe/realtime.py
 index 7e8e31f..a250f1d 100644
 --- a/frappe/realtime.py

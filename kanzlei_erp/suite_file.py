@@ -32,6 +32,14 @@ def require_drive_material(doc):
 
 
 class ERPAttachmentGuard:
+	def save_file(self, *args, **kwargs):
+		from kanzlei_erp.posteingang_files import require_access
+		from kanzlei_erp.posteingang_model import creating
+		require_access(self, "write")
+		if creating(file=self.get("name")):
+			kwargs["ignore_existing_file_check"] = True
+		return super().save_file(*args, **kwargs)
+
 	def insert(self, *args, **kwargs):
 		from kanzlei_erp.drive_storage import creation_flow
 
@@ -39,6 +47,8 @@ class ERPAttachmentGuard:
 			return super().insert(*args, **kwargs)
 
 	def db_set(self, *args, **kwargs):
+		from kanzlei_erp.posteingang_files import validate_binding
+		validate_binding(self)
 		from kanzlei_erp.drive_storage import invalidate
 
 		invalidate()
@@ -58,6 +68,8 @@ class ERPAttachmentGuard:
 		changed(self)
 
 	def before_insert(self):
+		from kanzlei_erp.posteingang_files import validate_binding
+		validate_binding(self)
 		from kanzlei_erp.drive_storage import grant_creation, invalidate, validate_file_binding
 		from kanzlei_erp.object_storage import lock_binding
 
@@ -156,6 +168,20 @@ class ERPAttachmentGuard:
 		return super().handle_is_private_changed()
 
 	def on_rollback(self):
+		# File insertion already required a server capability. After rollback its
+		# parent no longer exists; retain that narrow authority for byte cleanup.
+		if self.attached_to_doctype == "Incoming Letter" and not frappe.db.exists("Incoming Letter", self.attached_to_name) and not frappe.db.exists("File", self.name):
+			from kanzlei_erp.posteingang_model import _creation
+			with _creation(self.attached_to_name, self.name):
+				# Protected creations own a distinct URL, even for identical bytes.
+				# Core's hash-based sharing check would leave that new file behind.
+				if self.flags.new_file and not frappe.db.exists("File", {"file_url": self.file_url}):
+					self.delete_file_data_content()
+					for flag in ("new_file", "original_content", "original_path"):
+						self.flags.pop(flag, None)
+					return
+				from frappe.core.doctype.file.file import File
+				return File.on_rollback(self)
 		from kanzlei_erp.drive_storage import is_alias
 
 		# A rejected pre-existing alias never owned the bytes it points at.

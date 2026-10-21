@@ -1,0 +1,127 @@
+{
+ "doctype": "DocType",
+ "name": "Posteingang Settings",
+ "module": "Kanzlei ERP",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": [
+  "enabled",
+  "external_analysis_enabled",
+  "provider",
+  "ocr_model",
+  "extraction_model",
+  "api_key",
+  "max_file_bytes",
+  "max_pages",
+  "max_actions",
+  "max_retries",
+  "request_timeout_seconds"
+ ],
+ "fields": [
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "read_only": 0,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "external_analysis_enabled",
+   "fieldtype": "Check",
+   "label": "External Analysis Enabled",
+   "read_only": 0,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "fake\nmistral",
+   "default": "fake"
+  },
+  {
+   "fieldname": "ocr_model",
+   "fieldtype": "Data",
+   "label": "Ocr Model",
+   "read_only": 0,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "extraction_model",
+   "fieldtype": "Data",
+   "label": "Extraction Model",
+   "read_only": 0,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "Api Key",
+   "read_only": 0,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "max_file_bytes",
+   "fieldtype": "Int",
+   "label": "Max File Bytes",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "20971520"
+  },
+  {
+   "fieldname": "max_pages",
+   "fieldtype": "Int",
+   "label": "Max Pages",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "50"
+  },
+  {
+   "fieldname": "max_actions",
+   "fieldtype": "Int",
+   "label": "Max Actions",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "30"
+  },
+  {
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "2"
+  },
+  {
+   "fieldname": "request_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Request Timeout Seconds",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "120"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "issingle": 1
+}

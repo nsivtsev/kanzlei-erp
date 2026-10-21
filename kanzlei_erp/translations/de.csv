@@ -538,3 +538,78 @@ Skip to content,Zum Inhalt springen
 Account,Konto
 My profile,Mein Profil
 Sign out,Abmelden
+Incoming Letter,Posteingang
+Incoming Letter Run,Posteingang-Analyse
+Incoming Letter Action,Posteingang-Aktion
+Incoming Letter Event,Posteingang-Verlauf
+Posteingang Settings,Posteingang-Einstellungen
+Posteingang Operator,Posteingang-Bearbeiter
+Original File,Originaldokument
+Page Count,Seitenzahl
+Received By,Erfasst von
+Received At,Erfasst am
+Received Date Known,Empfangsdatum bekannt
+Received Date,Empfangsdatum
+Sender,Absender
+Document Date,Dokumentdatum
+Letter Type,Briefart
+Confirmed Customer,Bestätigter Mandant
+Review Outcome,Prüfergebnis
+No Actions Reason,Begründung: keine Aktionen
+Clarification Reason,Klärungsbedarf
+Confirmed By,Bestätigt von
+Confirmed At,Bestätigt am
+Correction Reason,Korrekturgrund
+Correction Quarantined,Für Korrektur gesperrt
+Cancellation Reason,Abbruchgrund
+External Analysis Enabled,Externe Analyse aktiviert
+Ocr Model,OCR-Modell
+Extraction Model,Extraktionsmodell
+Api Key,API-Schlüssel
+Max File Bytes,Maximale Dateigröße in Bytes
+Max Pages,Maximale Seitenzahl
+Max Actions,Maximale Aktionen
+Max Retries,Maximale Wiederholungen
+Request Timeout Seconds,Zeitlimit in Sekunden
+Assignment Decision,Zuweisungsentscheidung
+Assignment Reason,Zuweisungsbegründung
+External Date,Externe Frist
+External Date Basis,Grundlage der externen Frist
+Internal Date,Interner Termin
+Scheduling Decision,Terminentscheidung
+Scheduling Reason,Terminbegründung
+Rejection Reason,Ablehnungsgrund
+Needs Planning,Planung erforderlich
+Created Task,Erstellte Aufgabe
+Needs Review,Prüfung erforderlich
+Needs Clarification,Klärung erforderlich
+Posteingang operation is not permitted,Diese Posteingang-Aktion ist nicht erlaubt
+Posteingang limit exceeded,Posteingang-Grenzwert überschritten
+Receipt date must be explicit or unknown,Empfangsdatum angeben oder als unbekannt markieren
+Invalid content hash,Ungültiger Dokument-Hash
+Duplicate action identity,Doppelte Aktionskennung
+Invalid action text,Ungültiger Aktionstext
+Upload PDF,PDF hochladen
+Check the receipt date and upload parameters,Eingangsdatum und Upload-Angaben prüfen
+PDF exceeds the allowed size,PDF überschreitet die zulässige Größe
+The file is not a valid PDF,Die Datei ist kein gültiges PDF
+Encrypted PDF files are not accepted,Verschlüsselte PDFs werden nicht angenommen
+PDF exceeds the allowed page count,PDF überschreitet die zulässige Seitenzahl
+PDF validation exceeded its resource limit,PDF-Prüfung hat ihr Ressourcenlimit überschritten
+Intake is busy; retry with the same request,Posteingang ist ausgelastet; dieselbe Anfrage erneut senden
+This request was already used with different data,Diese Anfrage wurde bereits mit anderen Daten verwendet
+This file cannot be accepted,Diese Datei kann nicht angenommen werden
+The result is unknown; check the request before retrying,Ergebnis unbekannt; Anfrage vor erneutem Senden prüfen
+Browser storage is unavailable; PDF upload cannot start,Browserspeicher nicht verfügbar; PDF-Upload kann nicht starten
+Receipt dates are separate from upload dates. Unknown dates stay unknown.,Eingangsdatum und Upload-Datum sind getrennt. Unbekannte Daten bleiben unbekannt.
+New PDF intake is disabled,Annahme neuer PDFs ist deaktiviert
+Receipt date,Eingangsdatum
+Apply date to all unsent files,Datum für alle noch nicht gesendeten Dateien übernehmen
+Recovered upload request,Wiederhergestellte Upload-Anfrage
+Receipt date known,Eingangsdatum bekannt
+Select the original file to retry this request,"Originaldatei wählen, um diese Anfrage erneut zu senden"
+Uploading PDF,PDF wird hochgeladen
+Already uploaded,Bereits hochgeladen
+PDF received,PDF angenommen
+Open Incoming Letter,Eingangsschreiben öffnen
+Discard local request,Lokale Anfrage verwerfen

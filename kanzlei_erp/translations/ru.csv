@@ -558,3 +558,78 @@ Skip to content,Перейти к содержимому
 Account,Учётная запись
 My profile,Мой профиль
 Sign out,Выйти
+Incoming Letter,Входящее письмо
+Incoming Letter Run,Анализ входящего письма
+Incoming Letter Action,Действие по письму
+Incoming Letter Event,История входящего письма
+Posteingang Settings,Настройки входящих писем
+Posteingang Operator,Оператор входящих писем
+Original File,Оригинал документа
+Page Count,Количество страниц
+Received By,Принял сотрудник
+Received At,Время приёма
+Received Date Known,Дата получения известна
+Received Date,Дата получения
+Sender,Отправитель
+Document Date,Дата документа
+Letter Type,Тип письма
+Confirmed Customer,Подтверждённый клиент
+Review Outcome,Итог проверки
+No Actions Reason,Причина отсутствия действий
+Clarification Reason,Причина уточнения
+Confirmed By,Подтвердил сотрудник
+Confirmed At,Время подтверждения
+Correction Reason,Причина исправления
+Correction Quarantined,Заблокировано для исправления
+Cancellation Reason,Причина отмены
+External Analysis Enabled,Внешний анализ включён
+Ocr Model,Модель OCR
+Extraction Model,Модель извлечения
+Api Key,Ключ API
+Max File Bytes,Максимальный размер файла в байтах
+Max Pages,Максимум страниц
+Max Actions,Максимум действий
+Max Retries,Максимум повторов
+Request Timeout Seconds,Тайм-аут в секундах
+Assignment Decision,Решение о назначении
+Assignment Reason,Причина отсутствия исполнителя
+External Date,Внешний срок
+External Date Basis,Основание внешнего срока
+Internal Date,Внутренний срок
+Scheduling Decision,Решение о планировании
+Scheduling Reason,Причина отсутствия срока
+Rejection Reason,Причина отклонения
+Needs Planning,Требует планирования
+Created Task,Созданная задача
+Needs Review,Требует проверки
+Needs Clarification,Требует уточнения
+Posteingang operation is not permitted,Операция с входящим письмом запрещена
+Posteingang limit exceeded,Превышен лимит входящего письма
+Receipt date must be explicit or unknown,Укажите дату получения либо отметьте её как неизвестную
+Invalid content hash,Некорректный хэш документа
+Duplicate action identity,Повтор идентификатора действия
+Invalid action text,Некорректный текст действия
+Upload PDF,Загрузить PDF
+Check the receipt date and upload parameters,Проверьте дату получения и параметры загрузки
+PDF exceeds the allowed size,PDF превышает допустимый размер
+The file is not a valid PDF,Файл не является корректным PDF
+Encrypted PDF files are not accepted,Зашифрованные PDF не принимаются
+PDF exceeds the allowed page count,PDF превышает допустимое число страниц
+PDF validation exceeded its resource limit,Проверка PDF превысила лимит ресурсов
+Intake is busy; retry with the same request,Приём занят; повторите тот же запрос
+This request was already used with different data,Этот запрос уже использован с другими данными
+This file cannot be accepted,Этот файл не может быть принят
+The result is unknown; check the request before retrying,Результат неизвестен; проверьте запрос перед повтором
+Browser storage is unavailable; PDF upload cannot start,Хранилище браузера недоступно; загрузка PDF не начата
+Receipt dates are separate from upload dates. Unknown dates stay unknown.,Дата получения отличается от даты загрузки. Неизвестные даты остаются неизвестными.
+New PDF intake is disabled,Приём новых PDF выключен
+Receipt date,Дата получения
+Apply date to all unsent files,Применить дату ко всем неотправленным файлам
+Recovered upload request,Восстановленный запрос загрузки
+Receipt date known,Дата получения известна
+Select the original file to retry this request,Выберите исходный файл для повтора запроса
+Uploading PDF,PDF загружается
+Already uploaded,Уже загружено
+PDF received,PDF принят
+Open Incoming Letter,Открыть входящее письмо
+Discard local request,Удалить локальный запрос

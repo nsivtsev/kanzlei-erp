@@ -275,6 +275,16 @@ request_key — непустая строка <=80 символов, генер�
 
 Уникальные intake_key/Event.operation_key/Task.action_key и транзакционная блокировка защищают реальные параллельные запросы. Их работоспособность проверяется реальными DB-сессиями в AP-03/07; AP-01 проверяет только согласованность спецификации. Поиск одинаковых байтов — отдельная проверка, не синоним request replay. Недоступный дубль не раскрывает письмо, его имя, Customer или существование связи; безопасная нейтральная ошибка/отказ без указания объекта. Административный reuse_original в correction разрешён явно и обходит только duplicate-intake решение, не права или File guards.
 
+### Уточнение AP-03: серверная квитанция приёма
+
+Аддитивное уточнение v1.0 от 20.10.2026. `Incoming Letter Intake Receipt` — самостоятельный серверный DocType: name = SHA-256 canonical [actor, receive, request_key] (PK), actor (Link User, R), payload_fingerprint (Data, R), letter (Link Incoming Letter, R/index), outcome (Select created/duplicate, R), result_json (JSON, R), created_at (Datetime, R). Все поля серверные, запись неизменяема; generic CRUD/list/export/DocShare запрещены, включая Administrator. Исходный request key и байты здесь не хранятся.
+
+`receive` принимает ровно один multipart file, request_key, received_date_known (`true`/`false`) и received_date (YYYY-MM-DD или null). Не принимает File/URL/Customer/actor/hash/pages от клиента. Разрешён только служебный routing cmd самой receive. Ответ: schema_version=1.0, outcome=created/duplicate, letter, original_file, revision/status на момент операции, replayed. Квитанция хранит ответ без replayed. Для duplicate квитанция не меняет письмо/Event/revision; существующая дата получения сохраняется. При нескольких доступных совпадениях предпочтителен не-Cancelled, затем самый ранний received_at/name. Недоступный дубль даёт CANNOT_ACCEPT_FILE без сведений о причине/объекте.
+
+POST get_intake_result(request_key) ищет только namespace текущего активного System User с ролью оператора и повторно проверяет права письма; неизвестный/недоступный результат одинаково возвращает outcome=unknown. Replay и чтение результата доступны при enabled=0; новые приёмы/duplicate receipts запрещены. Результат не означает актуального статуса письма: для него читается сама запись.
+
+Ограничения PDF: 20 MiB/50 страниц или меньшие Settings. pypdf работает в отдельном процессе с CPU/memory/wall limits; шифрование и структурные ошибки отклоняются, растровый скан допустим. Читаемость/действия определяются последующими этапами. Полный результат и новые bytes сохраняются до отправки успешного ответа. При неизвестном исходе COMMIT удаление оригинала допускается только после подтверждения отсутствия durable references.
+
 ## 5. Права и идентификаторы
 
 ### Матрица доступа

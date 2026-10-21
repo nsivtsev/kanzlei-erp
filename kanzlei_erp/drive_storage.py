@@ -207,6 +207,8 @@ def validate_binding_event(doc, method=None):
 
 
 def require_storage_access(file, operation="read", user=None, target=None):
+	from kanzlei_erp.posteingang_files import require_access
+	require_access(file, operation, user, target)
 	if "suite" not in frappe.get_installed_apps():
 		return
 	if isinstance(file, str):
@@ -226,6 +228,9 @@ def require_storage_access(file, operation="read", user=None, target=None):
 		manager = _index()[0]
 		allowed = [identity(path, manager.settings) for path in _sidecar_paths(row, manager)]
 		allowed.extend(identity(url) for entity, url in _bindings.get() if entity == name)
+		from kanzlei_erp.object_storage import get_binding
+		if (binding := get_binding(file.file_url)) and binding.source_file == name:
+			allowed.append(identity(file.file_url))
 		if identity(file.file_url) not in allowed:
 			_deny()
 	if customer:
@@ -276,6 +281,8 @@ def audit_storage_aliases():
 
 
 def alias_names():
+	if "suite" not in frappe.get_installed_apps():
+		return []
 	if hasattr(frappe.local, "kanzlei_storage_aliases"):
 		return frappe.local.kanzlei_storage_aliases
 	index = _index()
@@ -366,6 +373,8 @@ def guard_privacy_change(doc, source, target):
 
 def require_path_access(path, operation="read"):
 	"""Guard direct framework/DAV IO using the actual resolved storage path."""
+	from kanzlei_erp.posteingang_files import path_guard
+	path_guard(path, operation)
 	if "suite" not in frappe.get_installed_apps():
 		return
 	from kanzlei_erp.mandant_drive import _customer_access

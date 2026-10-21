@@ -2732,10 +2732,9 @@ index b00b05417..e835411bf 100644
 +        self.assertIsNone(unwrap(account.get_logged_in_user)())
 +        self.frappe.get_doc.assert_not_called()
 diff --git a/suite/drive/api/files.py b/suite/drive/api/files.py
-index 86a738764..1d3c278eb 100644
 --- a/suite/drive/api/files.py
 +++ b/suite/drive/api/files.py
-@@ -5,6 +5,7 @@ import re
+@@ -5,6 +5,7 @@
  import secrets
  import tempfile
  import zipfile
@@ -2743,7 +2742,7 @@ index 86a738764..1d3c278eb 100644
  from io import BytesIO
  from pathlib import Path
  from urllib.parse import quote
-@@ -32,6 +33,12 @@ from suite.drive.utils import (
+@@ -32,6 +33,12 @@
  )
  from suite.drive.utils import get_root_folder as drive_root
  from suite.drive.utils.api import prettify_file
@@ -2756,7 +2755,7 @@ index 86a738764..1d3c278eb 100644
  from suite.drive.utils.files import (
      FileManager,
      content_disposition,
-@@ -42,9 +49,7 @@ from suite.drive.utils.files import (
+@@ -42,9 +49,7 @@
  )
  from suite.drive.utils.users import mark_as_viewed
  
@@ -2767,7 +2766,7 @@ index 86a738764..1d3c278eb 100644
  
  
  @frappe.whitelist(allow_guest=True)
-@@ -116,7 +121,7 @@ def upload_file(
+@@ -116,7 +121,7 @@
          file_name,
          parent,
          file_type,
@@ -2776,7 +2775,7 @@ index 86a738764..1d3c278eb 100644
          mime_type,
          file_size,
          int(file_modified) / 1000 if file_modified else None,
-@@ -126,8 +131,10 @@ def upload_file(
+@@ -126,8 +131,10 @@
      manager.upload_file(temp_path, drive_file, not embed)
      # Change path to be s3 compatible
      if manager.s3_enabled:
@@ -2789,7 +2788,7 @@ index 86a738764..1d3c278eb 100644
  
      try:
          update_file_size(parent, file_size)
-@@ -135,7 +142,12 @@ def upload_file(
+@@ -135,7 +142,12 @@
          # Find a cleaner way to handle folder sizes as multiple simultaneous uploads will break this
          pass
  
@@ -2803,7 +2802,7 @@ index 86a738764..1d3c278eb 100644
  
      return drive_file
  
-@@ -182,21 +194,7 @@ def create_folder(file_name: str, parent: str | None = None):
+@@ -182,21 +194,7 @@
      validate_filename(file_name, parent, "Folder", error=f"Folder '{file_name}' already exists.")
  
      manager = FileManager()
@@ -2826,21 +2825,29 @@ index 86a738764..1d3c278eb 100644
  
  
  def ensure_path(fullpath, parent=None):
-@@ -282,9 +280,12 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+@@ -261,6 +259,8 @@
+ 
+ @frappe.whitelist(allow_guest=True)
+ def create_auth_token(entity_name: str):
++    for hook in frappe.get_hooks("drive_token_guard"):
++        frappe.call(hook, entity_name=entity_name)
+     if not user_has_permission(entity_name, "read"):
+         raise frappe.PermissionError("You do not have permission to view this file")
+     token = frappe.get_doc(
+@@ -282,8 +282,11 @@
      if token:
          # Single-use capability minted by create_auth_token, for cookieless
          # fetches (e.g. the Office Online preview).
 -        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry"], as_dict=True)
 +        auth = frappe.db.get_value("Drive Token", token, ["file", "expiry", "user"], as_dict=True)
          if not auth or auth.file != entity_name or frappe.utils.now_datetime() > auth.expiry:
-             raise frappe.PermissionError("You do not have permission to view this file")
++            raise frappe.PermissionError("You do not have permission to view this file")
 +        app_access = get_app_access(entity_name, auth.user)
 +        if app_access is not None and not app_access.get("read"):
-+            raise frappe.PermissionError("You do not have permission to view this file")
+             raise frappe.PermissionError("You do not have permission to view this file")
          frappe.delete_doc("Drive Token", token, ignore_permissions=True, force=True)
      elif not user_has_permission(entity_name, "read"):
-         raise frappe.PermissionError("You do not have permission to view this file")
-@@ -300,23 +301,27 @@ def get_file_content(entity_name: str, trigger_download: bool = False, token: st
+@@ -300,23 +303,27 @@
              "file_url",
              "is_private",
              "mime_type",
@@ -2873,7 +2880,7 @@ index 86a738764..1d3c278eb 100644
      return get_file_internal(file, trigger_download)
  
  
-@@ -355,13 +360,26 @@ def _serve_resumable(manager, key, download_name, mime_type=None):
+@@ -355,13 +362,30 @@
      return response
  
  
@@ -2889,6 +2896,10 @@ index 86a738764..1d3c278eb 100644
 +
 +
  def get_file_internal(file, trigger_download=0):
++    for hook in frappe.get_hooks("drive_file_response"):
++        response = frappe.call(hook, file=file)
++        if response is not None:
++            return response
      if not trigger_download and file.file_type == "Video" and frappe.request.headers.get("Range"):
          return stream_file_content(file.name)
  
@@ -2901,7 +2912,7 @@ index 86a738764..1d3c278eb 100644
      return send_file(
          manager.get_file(file),
          as_attachment=False,
-@@ -414,7 +432,7 @@ def stream_file_content(entity_name: str):
+@@ -414,7 +438,7 @@
  
      manager = FileManager()
      data = None
@@ -2910,7 +2921,7 @@ index 86a738764..1d3c278eb 100644
          data = manager.get_file(entity, f"bytes={byte1}-{byte1 + length - 1}")
      else:
          with manager.open_file(storage_key(entity.file_url)) as f:
-@@ -427,50 +445,12 @@ def stream_file_content(entity_name: str):
+@@ -427,50 +451,12 @@
  
  
  def _iter_folder_files(entity_name, prefix=""):
@@ -2964,7 +2975,7 @@ index 86a738764..1d3c278eb 100644
  
  
  DOWNLOAD_TTL = 60 * 60  # finished archives live for an hour
-@@ -507,7 +487,8 @@ def _write_archive(token, files):
+@@ -507,7 +493,8 @@
              with open(tmp_path, "wb") as fh:
                  _build_zip(manager, files, fh)
              size = os.path.getsize(tmp_path)
@@ -2974,7 +2985,7 @@ index 86a738764..1d3c278eb 100644
              manager.conn.upload_file(tmp_path, manager.bucket, s3_key)
              return s3_key, size
          finally:
-@@ -515,14 +496,22 @@ def _write_archive(token, files):
+@@ -515,14 +502,22 @@
      else:
          target = manager.site_folder / key
          target.parent.mkdir(parents=True, exist_ok=True)
@@ -3000,7 +3011,7 @@ index 86a738764..1d3c278eb 100644
      frappe.publish_realtime("drive-download-status", {"token": token, "status": status, **extra}, user=user)
  
  
-@@ -532,13 +521,16 @@ def build_download_archive(token, entities, zip_name, user):
+@@ -532,13 +527,16 @@
      cache_key = _download_cache_key(token)
      frappe.set_user(user)
      try:
@@ -3019,7 +3030,7 @@ index 86a738764..1d3c278eb 100644
              expires_in_sec=DOWNLOAD_TTL,
          )
          _publish_download_status(token, user, "ready", size=size)
-@@ -546,10 +538,10 @@ def build_download_archive(token, entities, zip_name, user):
+@@ -546,10 +544,10 @@
          frappe.log_error("Drive: archive build failed", e)
          cache.set_value(
              cache_key,
@@ -3032,7 +3043,7 @@ index 86a738764..1d3c278eb 100644
  
  
  @frappe.whitelist(allow_guest=True)
-@@ -566,7 +558,10 @@ def download_folder(entities: str):
+@@ -566,7 +564,10 @@
          frappe.throw("Nothing to download", ValueError)
  
      # resolve up front so a permission error surfaces here, not in the job
@@ -3044,7 +3055,7 @@ index 86a738764..1d3c278eb 100644
      if not files:
          frappe.throw("No downloadable files found", frappe.NotFound)
  
-@@ -576,13 +571,16 @@ def download_folder(entities: str):
+@@ -576,13 +577,16 @@
      # same selection already building or built → hand back that token instead of
      # burning another job + artifact
      selection_key = (
@@ -3064,7 +3075,7 @@ index 86a738764..1d3c278eb 100644
  
      if len(entities) == 1:
          zip_name = f"{frappe.get_value('File', entities[0], 'file_name')}.zip"
-@@ -592,7 +590,9 @@ def download_folder(entities: str):
+@@ -592,7 +596,9 @@
      token = secrets.token_urlsafe(24)
      cache.set_value(
          _download_cache_key(token),
@@ -3075,7 +3086,7 @@ index 86a738764..1d3c278eb 100644
          expires_in_sec=BUILDING_TTL,
      )
      cache.set_value(selection_key, token, expires_in_sec=BUILDING_TTL)
-@@ -605,13 +605,20 @@ def download_folder(entities: str):
+@@ -605,13 +611,22 @@
          zip_name=zip_name,
          user=user,
      )
@@ -3094,10 +3105,12 @@ index 86a738764..1d3c278eb 100644
 +        for name in set(entry["entities"] + entry["files"]):
 +            if frappe.db.get_value("File", name, "status") != STATUS_ACTIVE or not user_has_permission(name, "read"):
 +                raise frappe.PermissionError("You do not have permission to download this archive")
++    for hook in frappe.get_hooks("drive_archive_guard"):
++        frappe.call(hook, entities=entry.get("files", []) + entry.get("entities", []))
      return entry
  
  
-@@ -619,7 +626,8 @@ def _get_download_entry(token):
+@@ -619,7 +634,8 @@
  def download_status(token: str):
      """Poll the state of an archive build: building | ready | failed."""
      entry = _get_download_entry(token)
@@ -3107,7 +3120,7 @@ index 86a738764..1d3c278eb 100644
  
  
  @frappe.whitelist(allow_guest=True)
-@@ -692,36 +700,46 @@ def remove_or_restore(entity_names: list[str] | str):
+@@ -692,36 +708,46 @@
  def toggle_entity_status(doc, manager: FileManager, locked_owners: set):
      """Trash an Active entity, or restore a Trashed one. Shared by
      remove_or_restore and WebDAV DELETE."""
@@ -3183,7 +3196,7 @@ index 86a738764..1d3c278eb 100644
  
  
  @frappe.whitelist()
-@@ -852,7 +870,9 @@ def _add_presentation_thumbnails(rows):
+@@ -852,7 +878,9 @@
          if row.get("content_doctype") == "Presentation" and row.get("content_docname")
      }
      if not names:
@@ -3194,7 +3207,7 @@ index 86a738764..1d3c278eb 100644
      thumbnails = {
          row.name: row.thumbnail
          for row in frappe.get_all(
-@@ -864,7 +884,9 @@ def _add_presentation_thumbnails(rows):
+@@ -864,7 +892,9 @@
      for row in rows:
          if row.get("content_doctype") == "Presentation":
              row["thumbnail"] = thumbnails.get(row.get("content_docname"))
@@ -3205,7 +3218,7 @@ index 86a738764..1d3c278eb 100644
  
  
  SEARCH_QUERY = """
-@@ -938,9 +960,9 @@ def search(query: str):
+@@ -938,9 +968,9 @@
              if len(batch) < SEARCH_SCAN_WINDOW:
                  break
          return _add_presentation_thumbnails(rows)
@@ -3217,7 +3230,7 @@ index 86a738764..1d3c278eb 100644
  
  
  @frappe.whitelist(allow_guest=True)
-@@ -1023,7 +1045,7 @@ def track_visit(
+@@ -1023,7 +1053,7 @@
  def get_upload_path(file_name):
      root_folder = frappe.get_single("Drive Disk Settings").root_folder or ""
      uploads_path = Path(frappe.get_site_path("private/files"), root_folder, ".uploads")
@@ -3507,7 +3520,6 @@ index 41b2f54fa..11f4e5e3f 100644
          drive_file.db_set("owner", owner, update_modified=False)
      return drive_file
 diff --git a/suite/drive/utils/files.py b/suite/drive/utils/files.py
-index 02b1d97b3..6640983e3 100644
 --- a/suite/drive/utils/files.py
 +++ b/suite/drive/utils/files.py
 @@ -1,7 +1,7 @@
@@ -3519,7 +3531,7 @@ index 02b1d97b3..6640983e3 100644
  from io import BytesIO
  from pathlib import Path
  from urllib.parse import quote, unquote
-@@ -35,13 +35,34 @@ class FileManager:
+@@ -35,13 +35,34 @@
          self.site_folder = Path(frappe.get_site_path())
  
          if self.s3_enabled:
@@ -3561,20 +3573,21 @@ index 02b1d97b3..6640983e3 100644
  
      def get_prefix(self):
          return self.settings.root_folder or ""
-@@ -74,8 +95,11 @@ class FileManager:
+@@ -74,8 +95,11 @@
          """
          Moves the file from the current path to another path
          """
-+        self.require_storage_access(file, "write")
-         if self.s3_enabled:
+-        if self.s3_enabled:
 -            self.conn.upload_file(current_path, self.bucket, get_s3_key(file.file_url))
++        self.require_storage_access(file, "write")
++        if self.s3_enabled:
 +            for hook in frappe.get_hooks("drive_s3_write_intent"):
 +                frappe.call(hook, key=storage_key(file.file_url))
 +            self.conn.upload_file(current_path, self.bucket, storage_key(file.file_url))
              if create_thumbnail and self.can_create_thumbnail(file):
                  frappe.enqueue(
                      self.upload_thumbnail,
-@@ -103,6 +127,10 @@ class FileManager:
+@@ -103,6 +127,10 @@
          """
          save_path = self.get_thumbnail_path(file.name).with_suffix(".png")
          disk_path = str(self.site_folder / save_path)
@@ -3585,7 +3598,7 @@ index 02b1d97b3..6640983e3 100644
  
          try:
              with DistributedLock(file_path, exclusive=False):
-@@ -148,6 +176,9 @@ class FileManager:
+@@ -148,6 +176,9 @@
                      os.remove(file_path)
                  except FileNotFoundError:
                      pass
@@ -3595,7 +3608,7 @@ index 02b1d97b3..6640983e3 100644
  
      def get_disk_path(self, entity, embed=False):
          """
-@@ -176,6 +207,7 @@ class FileManager:
+@@ -176,6 +207,7 @@
          Function to create a folder in the S3 bucket or on disk.
          """
          path = self.get_disk_path(entity)
@@ -3603,7 +3616,7 @@ index 02b1d97b3..6640983e3 100644
          if self.s3_enabled:
              self.conn.put_object(Bucket=self.bucket, Key=str(path) + "/", Body="")
          else:
-@@ -186,6 +218,11 @@ class FileManager:
+@@ -186,6 +218,11 @@
          """
          Function to get a file, with an optional range header for S3 objects
          """
@@ -3615,7 +3628,16 @@ index 02b1d97b3..6640983e3 100644
          file_url = storage_key(entity.file_url)
          try:
              if self.s3_enabled and not stored_on_disk(entity.file_url):
-@@ -234,6 +271,8 @@ class FileManager:
+@@ -215,6 +252,8 @@
+ 
+     def presigned_url(self, key, download_name, mime_type=None, expires=3600):
+         """Short-lived S3 GET URL, range-capable, served straight to the client."""
++        for hook in frappe.get_hooks("drive_presign_guard"):
++            frappe.call(hook, key=key)
+         bucket = self.bucket
+         params = {
+             "Bucket": bucket,
+@@ -234,6 +273,8 @@
          outright with PermanentRedirect instead of serving the object. Detect
          the bucket's real region once (get_bucket_location is itself
          region-agnostic) and sign with a client that matches it."""
@@ -3624,7 +3646,7 @@ index 02b1d97b3..6640983e3 100644
          if self.settings.endpoint_url:
              # custom/S3-compatible endpoints (e.g. MinIO) don't do AWS's
              # multi-region redirect dance
-@@ -260,7 +299,8 @@ class FileManager:
+@@ -260,7 +301,8 @@
  
      def iter_blocks(self, entity, block_size=4 * 1024 * 1024):
          """Yield a file's bytes lazily so a worker never holds the whole file."""
@@ -3634,7 +3656,7 @@ index 02b1d97b3..6640983e3 100644
              source = self.get_file(entity)
              try:
                  while chunk := source.read(block_size):
-@@ -384,7 +424,7 @@ class FileManager:
+@@ -384,7 +426,7 @@
          return Path(self.get_root_storage_key()) / self.settings.thumbnail_prefix / (name + ".thumbnail")
  
      def get_thumbnail(self, name):
@@ -3643,7 +3665,7 @@ index 02b1d97b3..6640983e3 100644
  
      def __get_trash_path(self, entity):
          """Keyed by id, not file_name: trash is one flat directory under a single
-@@ -408,6 +448,7 @@ class FileManager:
+@@ -408,6 +450,7 @@
          if not entity.file_url or entity.mime_type in ["frappe/slides", "link"]:
              return
  
@@ -3651,7 +3673,7 @@ index 02b1d97b3..6640983e3 100644
          trash_path = self.__get_trash_path(entity)
          try:
              if self.s3_enabled:
-@@ -438,7 +479,7 @@ class FileManager:
+@@ -438,7 +481,7 @@
          """
          Restore a file from the trash.
          """
@@ -3660,7 +3682,7 @@ index 02b1d97b3..6640983e3 100644
  
      @_not_if_flat
      def move(self, entity, new_path: str | Path):
-@@ -447,6 +488,7 @@ class FileManager:
+@@ -447,6 +490,7 @@
          """
          # Callers pass new_path as either a bare key or a stored file_url;
          # normalize both ends to the actual backend key.
@@ -3668,7 +3690,7 @@ index 02b1d97b3..6640983e3 100644
          src_key = storage_key(entity.file_url)
          dest_key = storage_key(new_path)
          try:
-@@ -473,11 +515,17 @@ class FileManager:
+@@ -473,11 +517,17 @@
          """Duplicate a blob (files only — folders go through create_folder).
          S3-to-S3 copies server-side; a local blob under an S3 config (framework
          adoptions) uploads to the target's key."""
@@ -3687,7 +3709,7 @@ index 02b1d97b3..6640983e3 100644
              else:
                  # managed copy: copy_object caps at 5GB, conn.copy does multipart
                  self.conn.copy(
-@@ -506,6 +554,7 @@ class FileManager:
+@@ -506,6 +556,7 @@
              pass
  
      def delete_file(self, entity):
@@ -3695,7 +3717,7 @@ index 02b1d97b3..6640983e3 100644
          thumbnail_path = self.get_thumbnail_path(entity.name)
  
          if self.s3_enabled:
-@@ -529,6 +578,7 @@ class FileManager:
+@@ -529,6 +580,7 @@
                  pass
  
      def delete_from_trash(self, entity):
@@ -5853,10 +5875,9 @@ index 000000000..a6ffff5fa
 +    return rows
 diff --git a/suite/drive/utils/downloads.py b/suite/drive/utils/downloads.py
 new file mode 100644
-index 000000000..8630c4bb6
 --- /dev/null
 +++ b/suite/drive/utils/downloads.py
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,139 @@
 +"""Stored-content classification and a complete, permission-checked ZIP manifest."""
 +
 +from dataclasses import dataclass, field
@@ -5915,6 +5936,8 @@ index 000000000..8630c4bb6
 +
 +
 +def collect_downloads(entity_names):
++    for hook in frappe.get_hooks("drive_archive_guard"):
++        frappe.call(hook, entities=entity_names)
 +    from suite.drive.api.permissions import user_has_permission
 +
 +    selection = DownloadSelection()

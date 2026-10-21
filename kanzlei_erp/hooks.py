@@ -100,3 +100,43 @@ doc_events = {
 }
 scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"], "hourly": ["kanzlei_erp.object_storage.retry_deletions"]}
 after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles", "kanzlei_erp.suite_setup.configure"]
+
+# Posteingang structures are additive; no user role assignments.
+before_install = ["kanzlei_erp.posteingang_setup.ensure_role"]
+before_migrate = ["kanzlei_erp.posteingang_setup.ensure_role"]
+after_install = ["kanzlei_erp.posteingang_setup.configure"]
+after_migrate += ["kanzlei_erp.posteingang_setup.configure"]
+
+for _doctype in ("Incoming Letter", "Incoming Letter Run", "Incoming Letter Event", "Incoming Letter Action"):
+	has_permission[_doctype] = "kanzlei_erp.posteingang_permissions.has_permission"
+permission_query_conditions.update({
+	"Incoming Letter": "kanzlei_erp.posteingang_permissions.letter_query",
+	"Incoming Letter Run": "kanzlei_erp.posteingang_permissions.run_query",
+	"Incoming Letter Event": "kanzlei_erp.posteingang_permissions.event_query",
+})
+file_access_override.insert(0, "kanzlei_erp.posteingang_permissions.file_access_override")
+file_query_condition_override.append("kanzlei_erp.posteingang_permissions.file_query_condition_override")
+drive_entity_access.insert(0, "kanzlei_erp.posteingang_permissions.drive_access")
+drive_entity_access_batch.insert(0, "kanzlei_erp.posteingang_permissions.drive_access_batch")
+drive_file_permission_criterion.append("kanzlei_erp.posteingang_permissions.drive_criterion")
+before_request.insert(0, "kanzlei_erp.posteingang_files.before_request")
+doc_events["File"]["before_validate"].insert(0, "kanzlei_erp.posteingang_files.validate_binding")
+doc_events["File"]["on_trash"].insert(0, "kanzlei_erp.posteingang_files.validate_binding")
+
+required_document_permission = ["kanzlei_erp.posteingang_permissions.required_permission"]
+required_permission_query_conditions = ["kanzlei_erp.posteingang_permissions.required_query"]
+drive_presign_guard = ["kanzlei_erp.posteingang_files.presign_guard"]
+drive_token_guard = ["kanzlei_erp.posteingang_files.token_guard"]
+drive_file_response = ["kanzlei_erp.posteingang_files.suite_response"]
+drive_archive_guard = ["kanzlei_erp.posteingang_files.reject_archive"]
+
+has_permission["Posteingang Settings"] = "kanzlei_erp.posteingang_permissions.settings_permission"
+
+# Intake receipts are server-only, including mandatory DocShare guards.
+has_permission["Incoming Letter Intake Receipt"] = "kanzlei_erp.posteingang_permissions.receipt_permission"
+permission_query_conditions["Incoming Letter Intake Receipt"] = "kanzlei_erp.posteingang_permissions.receipt_query"
+after_request.append("kanzlei_erp.posteingang.release_request_locks")
+
+app_include_js.append("posteingang_intake.bundle.js")
+
+required_administrator_permission = ["kanzlei_erp.posteingang_permissions.receipt_administrator_permission"]
