@@ -20,7 +20,17 @@
   "attempt_count",
   "error_code",
   "ocr_pages_json",
-  "result_json"
+  "result_json",
+  "queued_by",
+  "source_snapshot_json",
+  "configuration_json",
+  "configuration_epoch",
+  "stage",
+  "next_attempt_at",
+  "lease_token",
+  "lease_expires_at",
+  "error_stage",
+  "reused_ocr_from"
  ],
  "fields": [
   {
@@ -151,6 +161,88 @@
    "label": "Result Json",
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "queued_by",
+   "fieldtype": "Link",
+   "label": "Queued By",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User",
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "source_snapshot_json",
+   "fieldtype": "JSON",
+   "label": "Source Snapshot Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "configuration_json",
+   "fieldtype": "JSON",
+   "label": "Configuration Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "configuration_epoch",
+   "fieldtype": "Int",
+   "label": "Configuration Epoch",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "label": "Stage",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "pending\nprepare\nocr\nextraction\nfinished"
+  },
+  {
+   "fieldname": "next_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "Next Attempt At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "lease_token",
+   "fieldtype": "Data",
+   "label": "Lease Token",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1,
+   "length": 36
+  },
+  {
+   "fieldname": "lease_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Lease Expires At",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "error_stage",
+   "fieldtype": "Select",
+   "label": "Error Stage",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "\ndispatch\nprepare\nocr\nextraction\nworker"
+  },
+  {
+   "fieldname": "reused_ocr_from",
+   "fieldtype": "Link",
+   "label": "Reused Ocr From",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Run",
+   "ignore_user_permissions": 1
   }
  ],
  "permissions": [

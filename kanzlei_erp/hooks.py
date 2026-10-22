@@ -99,6 +99,7 @@ doc_events = {
 	},
 }
 scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"], "hourly": ["kanzlei_erp.object_storage.retry_deletions"]}
+scheduler_events["cron"] = {"* * * * *": ["kanzlei_erp.posteingang_jobs.recover_runs"]}
 after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles", "kanzlei_erp.suite_setup.configure"]
 
 # Posteingang structures are additive; no user role assignments.
@@ -138,5 +139,6 @@ permission_query_conditions["Incoming Letter Intake Receipt"] = "kanzlei_erp.pos
 after_request.append("kanzlei_erp.posteingang.release_request_locks")
 
 app_include_js.append("posteingang_intake.bundle.js")
+app_include_js.append("posteingang_jobs.bundle.js")
 
 required_administrator_permission = ["kanzlei_erp.posteingang_permissions.receipt_administrator_permission"]

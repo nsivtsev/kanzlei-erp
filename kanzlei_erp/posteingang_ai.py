@@ -120,6 +120,7 @@ def _configuration(settings):
 		settings.max_pages,
 		settings.max_actions,
 		settings.request_timeout_seconds,
+		settings.get("analysis_configuration_epoch"),
 	)
 
 

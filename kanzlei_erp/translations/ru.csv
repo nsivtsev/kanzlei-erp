@@ -639,3 +639,37 @@ Stored as a server-side secret. Saving settings does not contact Mistral.,Хра
 Use a concrete versioned Posteingang model,Укажите конкретную версию модели Posteingang
 Mistral analysis requires an API key and both model versions,Для анализа Mistral нужны API-ключ и версии обеих моделей
 OCR returned no readable text; human review is required.,OCR не вернул читаемый текст; требуется проверка сотрудником.
+Auto Analysis Enabled,Включить автоматический анализ
+Retry Backoff Seconds,Базовая задержка повтора (секунды)
+Recovery Interval Seconds,Интервал восстановления (секунды)
+Recovery Batch Size,Попыток за проход восстановления
+Worker Timeout Seconds,Лимит работы worker (секунды)
+Analyze new uploads automatically after commit. Existing letters require an explicit start.,Автоматически анализировать новые загрузки после сохранения. Старые письма запускаются явным действием.
+Base delay for technical retries; processing starts on a later scheduler tick.,Базовая задержка технического повтора; запуск происходит при следующем подходящем проходе планировщика.
+Minimum interval between recovery sweeps; the Bench scheduler tick may be longer.,Минимальный интервал восстановления; фактический интервал планировщика Bench может быть больше.
+Maximum runs inspected per recovery sweep.,Максимум попыток анализа за один проход восстановления.
+Worker execution limit; interrupted requests require an explicit retry.,Лимит исполнения worker; прерванный запрос требует явного повтора.
+Worker timeout is too short for both analysis steps,Лимит worker слишком мал для двух шагов анализа.
+The letter changed. Reload the form before continuing.,Письмо изменилось. Перезагрузите форму перед продолжением.
+Analysis is already in progress.,Анализ уже выполняется.
+Analysis stopped. Check access and settings before starting again.,Анализ остановлен. Перед новым запуском проверьте доступ и настройки.
+Analysis configuration is invalid. Contact a system manager.,Некорректные настройки анализа. Обратитесь к системному администратору.
+The analysis service is temporarily unavailable.,Сервис анализа временно недоступен.
+The OCR result could not be accepted. Human review is required.,Результат OCR не принят. Требуется проверка сотрудника.
+The analysis result could not be accepted. Human review is required.,Результат анализа не принят. Требуется проверка сотрудника.
+Analysis exceeded an allowed limit. Human review is required.,Анализ превысил допустимый лимит. Требуется проверка сотрудника.
+The test provider supports synthetic fixture documents only.,Тестовый провайдер поддерживает только синтетические документы набора.
+Analysis was interrupted. Start again explicitly; a request may already have been processed.,Анализ прерван. Запустите его явно: предыдущий запрос уже мог быть обработан.
+Analysis is waiting for the queue to recover.,Анализ ожидает восстановления очереди.
+Analysis could not finish. Retry explicitly or use human review.,Анализ не завершён. Повторите его явно или перейдите к ручной проверке.
+This operation is not available in the current state.,Это действие недоступно в текущем состоянии.
+Check the analysis request parameters.,Проверьте параметры запроса анализа.
+Start analysis,Запустить анализ
+Analyze again,Повторить анализ
+Switch to human review,Перейти к ручной проверке
+Cancel letter,Отменить письмо
+Reload the form before managing analysis.,Перезагрузите форму перед управлением анализом.
+Analyze this letter again? Your current review edits will be preserved.,Повторно анализировать письмо? Текущие правки сохранятся.
+Next attempt no earlier than,Следующая попытка не ранее
+Queued,В очереди
+Processing,Обработка

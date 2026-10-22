@@ -429,3 +429,75 @@ OCR требует полный уникальный набор provider indices
 Возвращаются типизированные OcrResult/AnalysisResult или Failure(code, stage, retryable, retry_after_seconds). Проверенный OCR доступен отдельно при ошибке extraction; ожидаемые ошибки не пробрасывают provider exceptions. Коды: CONFIGURATION_INVALID, PROVIDER_UNAVAILABLE, OCR_FAILED, INVALID_RESULT, LIMIT_EXCEEDED, ANALYSIS_STOPPED; неизвестный synthetic hash — FAKE_FIXTURE_NOT_FOUND. Для 429 Retry-After допускается только ограниченное числовое значение 0…120 секунд. Нет OCR, PDF, ключа или error body в repr/логах. Секрет извлекается только перед сетью и проверяется как непустой ASCII header token. Settings сериализует ключ маской даже до save; его ожидаемые ошибки совместимы с ValidationError/HTTP417 и SecurityException, чтобы Frappe developer mode не записывал serialized form key в error snapshot.
 
 Живой synthetic smoke учитывается отдельно и не блокирует offline-приёмку AP-04; fake не подтверждает качество Mistral. Внешняя обработка реальных документов остаётся условием последующих этапов.
+
+## 10. Аддитивное уточнение AP-05 — durable workflow
+
+Реализованы POST `posteingang_jobs.queue_analysis(letter, expected_revision, request_key)`,
+`manual_review` с тем же вводом и `cancel` с обязательной reason (1…1000 символов).
+`get_analysis_state(letter)` — GET/POST read-only projection. Разрешён только собственный
+transport cmd; неизвестные бизнес-параметры, actor/File/URL/model/generation отвергаются.
+Ревизия — положительный SQL Int; строки параметров должны быть корректным UTF-8.
+
+Mutations требуют активного System User/Operator, текущего чтения письма и write
+selected_customer, если он указан. Обычный Frappe write не выдаётся: узкий серверный
+workflow меняет только allowlist полей, проверяет переход и создаёт Event той же
+транзакцией. Generic insert/save/db_set/delete/rename по-прежнему запрещены.
+Идемпотентность Event: SHA-256 canonical [actor, letter, operation, request_key];
+fingerprint schema_version/operation/letter/reason без expected_revision. Текущие права
+проверяются до replay, replay до REVISION_CONFLICT. Квитанция историческая:
+schema_version, letter, run, generation, revision, status; replayed добавляется транспортом.
+
+Run дополнен queued_by (Link User), source_snapshot_json/configuration_json (JSON без
+секрета), configuration_epoch (Int), stage (pending/prepare/ocr/extraction/finished),
+next_attempt_at/lease_expires_at (Datetime), lease_token (Data UUID), error_stage
+(dispatch/prepare/ocr/extraction/worker или null), reused_ocr_from (Link Run).
+Lease и snapshots не возвращаются generic as_dict формы. Индексы status+next_attempt_at
+и status+lease_expires_at дополняют неизменную unique letter+generation.
+
+Settings: auto_analysis_enabled=0; retry_backoff_seconds=60 [30…3600];
+recovery_interval_seconds=60 [60…3600]; recovery_batch_size=100 [1…500];
+worker_timeout_seconds=600 [300…1800, >=2*request_timeout_seconds+60]. Серверный
+analysis_configuration_epoch повышается при смене enabled/external_enabled,
+провайдера/моделей/ключа/лимитов адаптера; маска ключа не считается новым ключом.
+Изменение автозапуска/recovery не инвалидирует Run. Служебный server-owned
+recovery_cursor обеспечивает ротацию batch; его обновление не меняет modified,
+modified_by или epoch настроек и не является бизнес-изменением письма. Cursor
+не возвращается обычной сериализацией Settings, чтобы не раскрывать внутренний Run ID.
+
+При auto=1 и доступной обработке новый intake атомарно сохраняет receive receipt
+Received/revision=1, затем Run и queue Event Queued/revision=2/generation=1.
+Dispatch в long выполняется только after commit, с IDs, без секретов/PDF/OCR.
+Ошибка Redis не отменяет intake; запись Run остаётся источником recovery. Дубли и
+replay не запускают анализ. Включение обработки не запускает прежние Received.
+
+Worker предоставляет свежие транзакции и authorization caches между шагами;
+блокировки только Letter→Run, без HTTP под locks. Claim выдаёт UUID lease на
+worker_timeout+60 и повышает attempt_count. OCR валидируется и сохраняется отдельным
+checkpoint с Event. Перед provider calls и публикацией проверяются текущие права,
+источник/конфигурация/epoch и generation/current_run/token/lease. Succeeded сохраняет
+canonical result и Needs Review; draft/actions/applied_run/review_outcome не меняются.
+Применение предложений остаётся отдельной операцией следующих этапов.
+
+Временная retryable ошибка сохраняет тот же Run Queued и письмо Processing, с
+next_attempt_at: exponential backoff с ограниченным Retry-After, максимум 3600 секунд;
+всего 1+max_retries технических исполнений, не число оплаченных HTTP-запросов.
+Sleep/RQ Retry/framework RetryBackgroundJobError не применяются. OCR повторно
+используется только того же письма/источника/провайдера/OCR-модели/формата после
+валидации; provenance сохраняется, исходный Run не меняется. Повреждённый checkpoint
+даёт явный отказ без платного fallback.
+
+Cron Frappe каждую минуту, с фактической частотой не выше Bench scheduler tick,
+восстанавливает due Queued. Приоритет expired Running, затем ротация текущих Runs;
+JOIN current_run/generation/status исключает historical orphan из batch. DB cleanup
+выполняется и при отказе Redis/выключенном AI. Просроченный Running/RQ timeout —
+Failed/Error/WORKER_INTERRUPTED, без автоматического повтора неизвестного запроса.
+Отзыв прав/конфигурации — Cancelled/Error/ANALYSIS_STOPPED, без автопродолжения после
+восстановления условий. Manual active→Superseded/Needs Review и generation++;
+cancel→Cancelled и generation++. Поздний ответ не меняет историю или черновик.
+
+Дополнительные безопасные коды: ANALYSIS_IN_PROGRESS, QUEUE_UNAVAILABLE,
+WORKER_INTERRUPTED, INTERNAL_ERROR. Worker/RQ возвращает только code; cleanup при DB
+outage не выпускает traceback с OCR в generic logging. Статус API возвращает только
+безопасные метаданные и allowed_operations. DE/RU форма имеет кнопки, явный повтор,
+ручной переход, отмену с причиной и poll 5 секунд; dirty/покинутая форма не
+перезагружается поздним ответом. Контент не хранится в браузерном storage.

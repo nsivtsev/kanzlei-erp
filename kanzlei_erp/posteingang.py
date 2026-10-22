@@ -285,6 +285,10 @@ def _receive(stream, filename, request_key, received_date_known, received_date=N
 					"status": doc.status,
 				}
 				_save_receipt(key, actor, fingerprint, result)
+				if duplicate is None:
+					from kanzlei_erp.posteingang_jobs import queue_received
+
+					queue_received(doc.name)
 				retain()
 				return {**result, "replayed": False}
 		except Exception:

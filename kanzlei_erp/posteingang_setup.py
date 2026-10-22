@@ -11,6 +11,13 @@ DEFAULTS = {
 	"max_actions": 30,
 	"max_retries": 2,
 	"request_timeout_seconds": 120,
+	"auto_analysis_enabled": 0,
+	"retry_backoff_seconds": 60,
+	"recovery_interval_seconds": 60,
+	"recovery_batch_size": 100,
+	"worker_timeout_seconds": 600,
+	"analysis_configuration_epoch": 1,
+	"recovery_cursor": "",
 }
 
 
@@ -30,6 +37,8 @@ def configure():
 			frappe.db.set_single_value("Posteingang Settings", field, value)
 	frappe.db.add_index("Incoming Letter", ["status", "received_at"], "ap02_queue")
 	frappe.db.add_unique("Incoming Letter Run", ["letter", "generation"], "ap02_letter_generation")
+	frappe.db.add_index("Incoming Letter Run", ["status", "next_attempt_at"], "ap05_due")
+	frappe.db.add_index("Incoming Letter Run", ["status", "lease_expires_at"], "ap05_lease")
 	frappe.db.add_unique("Incoming Letter Action", ["parent", "action_id"], "ap02_parent_action")
 
 	# Frappe Int defaults to NOT NULL/0. A manual action needs SQL NULL to

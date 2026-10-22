@@ -619,3 +619,37 @@ Stored as a server-side secret. Saving settings does not contact Mistral.,Als se
 Use a concrete versioned Posteingang model,Eine konkrete Modellversion für den Posteingang verwenden
 Mistral analysis requires an API key and both model versions,Für die Mistral-Analyse sind ein API-Schlüssel und beide Modellversionen erforderlich
 OCR returned no readable text; human review is required.,OCR hat keinen lesbaren Text geliefert; eine manuelle Prüfung ist erforderlich.
+Auto Analysis Enabled,Automatische Analyse aktivieren
+Retry Backoff Seconds,Basiswartezeit für Wiederholungen (Sekunden)
+Recovery Interval Seconds,Wiederherstellungsintervall (Sekunden)
+Recovery Batch Size,Anzahl Versuche je Wiederherstellung
+Worker Timeout Seconds,Zeitlimit der Verarbeitung (Sekunden)
+Analyze new uploads automatically after commit. Existing letters require an explicit start.,Neue Uploads nach dem Speichern automatisch analysieren. Bestehende Briefe müssen ausdrücklich gestartet werden.
+Base delay for technical retries; processing starts on a later scheduler tick.,Basiswartezeit für technische Wiederholungen; der tatsächliche Start erfolgt mit einem späteren Scheduler-Lauf.
+Minimum interval between recovery sweeps; the Bench scheduler tick may be longer.,Mindestabstand zwischen Wiederherstellungsläufen; das Bench-Scheduler-Intervall kann länger sein.
+Maximum runs inspected per recovery sweep.,Maximale Anzahl geprüfter Analyseversuche pro Wiederherstellungslauf.
+Worker execution limit; interrupted requests require an explicit retry.,Zeitlimit der Verarbeitung; unterbrochene Anfragen müssen ausdrücklich wiederholt werden.
+Worker timeout is too short for both analysis steps,Das Zeitlimit reicht für die beiden Analyseschritte nicht aus.
+The letter changed. Reload the form before continuing.,Der Brief wurde geändert. Laden Sie das Formular neu.
+Analysis is already in progress.,Die Analyse läuft bereits.
+Analysis stopped. Check access and settings before starting again.,Die Analyse wurde angehalten. Prüfen Sie Zugriff und Einstellungen vor einem erneuten Start.
+Analysis configuration is invalid. Contact a system manager.,Die Analyse ist nicht korrekt eingerichtet. Wenden Sie sich an die Systemverwaltung.
+The analysis service is temporarily unavailable.,Der Analysedienst ist vorübergehend nicht verfügbar.
+The OCR result could not be accepted. Human review is required.,Das OCR-Ergebnis konnte nicht übernommen werden. Eine manuelle Prüfung ist erforderlich.
+The analysis result could not be accepted. Human review is required.,Das Analyseergebnis konnte nicht übernommen werden. Eine manuelle Prüfung ist erforderlich.
+Analysis exceeded an allowed limit. Human review is required.,Die Analyse hat einen Grenzwert überschritten. Eine manuelle Prüfung ist erforderlich.
+The test provider supports synthetic fixture documents only.,Der Testanbieter unterstützt nur die synthetischen Testdokumente.
+Analysis was interrupted. Start again explicitly; a request may already have been processed.,Die Analyse wurde unterbrochen. Starten Sie sie ausdrücklich erneut; eine Anfrage kann bereits verarbeitet worden sein.
+Analysis is waiting for the queue to recover.,Die Analyse wartet auf die Wiederherstellung der Warteschlange.
+Analysis could not finish. Retry explicitly or use human review.,Die Analyse konnte nicht abgeschlossen werden. Wiederholen Sie sie ausdrücklich oder prüfen Sie manuell.
+This operation is not available in the current state.,Diese Aktion ist im aktuellen Zustand nicht verfügbar.
+Check the analysis request parameters.,Prüfen Sie die Parameter der Analyseanfrage.
+Start analysis,Analyse starten
+Analyze again,Erneut analysieren
+Switch to human review,Zur manuellen Prüfung wechseln
+Cancel letter,Brief abbrechen
+Reload the form before managing analysis.,Laden Sie das Formular vor einer Analyseaktion neu.
+Analyze this letter again? Your current review edits will be preserved.,Diesen Brief erneut analysieren? Ihre bisherigen Änderungen bleiben erhalten.
+Next attempt no earlier than,Nächster Versuch frühestens
+Queued,In Warteschlange
+Processing,In Bearbeitung

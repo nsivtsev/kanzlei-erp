@@ -74,6 +74,10 @@ class ProtectedRecord(Document):
 				"payload_json",
 				"replaces_letter",
 				"replacement_letter",
+				"lease_token",
+				"lease_expires_at",
+				"source_snapshot_json",
+				"configuration_json",
 			):
 				if field in data:
 					data[field] = None
@@ -147,6 +151,7 @@ class SettingsRecord(Document):
 		data = super().as_dict(*args, **kwargs)
 		if data.get("api_key"):
 			data["api_key"] = "********"
+		data["recovery_cursor"] = None
 		return data
 
 	def validate(self):
@@ -158,6 +163,10 @@ class SettingsRecord(Document):
 			"max_actions": (1, 30),
 			"max_retries": (0, 2),
 			"request_timeout_seconds": (1, 120),
+			"retry_backoff_seconds": (30, 3600),
+			"recovery_interval_seconds": (60, 3600),
+			"recovery_batch_size": (1, 500),
+			"worker_timeout_seconds": (300, 1800),
 		}
 		for field, (low, high) in limits.items():
 			if not low <= cint(self.get(field)) <= high:
@@ -165,9 +174,22 @@ class SettingsRecord(Document):
 		for field in ("ocr_model", "extraction_model"):
 			if self.get(field) and not concrete_model(self.get(field)):
 				frappe.throw(frappe._("Use a concrete versioned Posteingang model"), SettingsValidationError)
+		if cint(self.worker_timeout_seconds) < 2 * cint(self.request_timeout_seconds) + 60:
+			frappe.throw(frappe._("Worker timeout is too short for both analysis steps"), SettingsValidationError)
 		if self.provider == "mistral" and self.external_analysis_enabled:
 			if not self.api_key or not self.ocr_model or not self.extraction_model:
 				frappe.throw(frappe._("Mistral analysis requires an API key and both model versions"), SettingsValidationError)
+		# Serialize concurrent Settings saves without decrypting the password.
+		old = dict(frappe.db.sql("SELECT field, value FROM `tabSingles` WHERE doctype=%s FOR UPDATE", (self.doctype,)))
+		fields = ("enabled", "external_analysis_enabled", "provider", "ocr_model", "extraction_model", "max_file_bytes", "max_pages", "max_actions", "request_timeout_seconds")
+		def normalized(field, value):
+			return cint(value) if self.meta.get_field(field).fieldtype in ("Int", "Check") else (value or "")
+
+		changed = any(normalized(k, self.get(k)) != normalized(k, old.get(k)) for k in fields)
+		password = self.get("api_key")
+		changed |= bool(password and not self.is_dummy_password(password)) or bool(not password and old.get("api_key"))
+		self.analysis_configuration_epoch = max(1, cint(old.get("analysis_configuration_epoch"))) + int(changed)
+		self.recovery_cursor = old.get("recovery_cursor") or ""
 
 
 def create_received_letter(*, actor, original, receipt, operation):
