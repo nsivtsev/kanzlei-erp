@@ -111,6 +111,7 @@ async function syncMandantDriveBeforeSave(frm) {
 frappe.ui.form.on("Customer", {
 	before_save: syncMandantDriveBeforeSave,
 	refresh(frm) {
+		frappe.mandant_identifiers?.attach(frm);
 		frm.toggle_display(
 			"accounting_tab",
 			frappe.session.user === "Administrator" || frappe.user.has_role("System Manager")

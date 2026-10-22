@@ -396,5 +396,25 @@
   "label": "Question Actions",
   "insert_after": "kanzlei_question_events",
   "depends_on": "eval:doc.kanzlei_work_kind=='Question'"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_identifiers_section",
+  "dt": "Customer",
+  "fieldname": "kanzlei_identifiers_section",
+  "fieldtype": "Section Break",
+  "label": "Verified Mandant Identifiers",
+  "insert_after": "tax_id"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_identifiers",
+  "dt": "Customer",
+  "fieldname": "kanzlei_identifiers",
+  "fieldtype": "Table",
+  "label": "Mandant Identifiers",
+  "options": "Mandant Identifier",
+  "insert_after": "kanzlei_identifiers_section",
+  "no_copy": 0
  }
 ]

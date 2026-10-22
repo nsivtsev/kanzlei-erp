@@ -30,7 +30,7 @@ TRANSITIONS = {
 	"Error": {"Queued", "Needs Review", "Needs Clarification", "Cancelled"},
 	"Completed": set(), "Cancelled": set(),
 }
-LETTER_FIELDS = {"status", "analysis_generation", "current_run", "cancellation_reason"}
+LETTER_FIELDS = {"status", "analysis_generation", "current_run", "cancellation_reason", "selected_customer", "customer_reason"}
 RUN_FIELDS = {"status", "stage", "started_at", "finished_at", "attempt_count", "error_code", "error_stage",
 	"next_attempt_at", "lease_token", "lease_expires_at", "ocr_pages_json", "result_json", "reused_ocr_from"}
 

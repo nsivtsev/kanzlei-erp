@@ -86,6 +86,17 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         self.assertEqual((self.root / "apps/frappe/binding.txt").read_text(), "current\n")
         self.assertEqual((self.root / "apps/frappe/unrelated.txt").read_text(), "keep this work\n")
 
+    def test_framework_v8_upgrade_and_child_query_context(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        (self.root / "apps/frappe/binding.txt").write_text("v8\n")
+        (self.root / "deploy/frappe-mandant-access-v8.patch").write_text(self.git("frappe", "diff", "--", "binding.txt"))
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "apps/frappe/unrelated.txt").read_text(), "keep this work\n")
+        self.assertIn("!deploy/frappe-mandant-access-v8.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertIn("query_doctype=self.doctype", (ROOT / "deploy/frappe-mandant-access.patch").read_text())
+
     def test_v7_predecessors_are_exact_and_included_in_image(self):
         for app in ("frappe", "suite"):
             filename = f"deploy/{app}-mandant-access-v7.patch"

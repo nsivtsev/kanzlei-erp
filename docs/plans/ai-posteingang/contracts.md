@@ -4,6 +4,9 @@
 
 ## 1. Статус, версии и границы
 
+Аддитивные разделы 8…11 описывают реализованные AP-02…AP-06; следующие абзацы
+сохраняют исходную фиксацию AP-01. Версия extraction/review остаётся 1.0.
+
 Это нормативный контракт последующих этапов, а не работающий Posteingang. AP-01 поставляет документацию, JSON Schema Draft 2020-12, синтетические PDF, gold-ответы и автономные проверки. DocTypes, migrations, API, permissions hooks, jobs и UI ещё не реализованы. Изменение несовместимого формата требует новой версии схемы; сохранённые Runs и receipts сохраняют исходную версию. Провайдерные модели/SDK и их живые лимиты фиксируются в AP-04.
 
 Один PDF — одно письмо с приложениями. Несколько отдельных PDF принимаются по отдельности. Пачка с несколькими письмами не разделяется в MVP. Дата получения может быть неизвестна. Несколько Mandanten в одном письме означают Needs Clarification.
@@ -501,3 +504,89 @@ outage не выпускает traceback с OCR в generic logging. Статус
 безопасные метаданные и allowed_operations. DE/RU форма имеет кнопки, явный повтор,
 ручной переход, отмену с причиной и poll 5 секунд; dirty/покинутая форма не
 перезагружается поздним ответом. Контент не хранится в браузерном storage.
+
+## 11. Аддитивное уточнение AP-06 — проверенные номера и явный Mandant
+
+Customer.kanzlei_identifiers — Table `Mandant Identifier`; обычные read/write права
+Customer распространяются на строки. identifier_type (Select: de_steuernummer,
+de_tax_id, de_vat_id, other) и raw_value (Data140) обязательны; normalized_value
+(Data140) вычисляет сервер. jurisdiction/authority/other_type — nullable Data140;
+verification_source — Small Text до 1000 символов, verified_by — Link User,
+verified_at — Datetime. Последние три поля до явной проверки null. Индекс
+(identifier_type, normalized_value, jurisdiction) не уникален. Customer.tax_id
+не переносится и не участвует в подборе.
+
+Нормализация: NFKC+trim, ведущие нули сохраняются. Steuernummer удаляет whitespace
+и `/`, принимает ASCII цифры; для проверки/сравнения нужны одинаковые явно
+заданные jurisdiction и authority. Steuer-ID удаляет только whitespace, принимает
+ASCII цифры. USt-IdNr. удаляет whitespace, приводит к uppercase, принимает ASCII
+A–Z/0–9. Other сохраняет внутренние знаки, пробелы и регистр; нужны other_type и
+authority, jurisdiction сравнивается включая null. Контекст — NFKC+trim без алиасов.
+Нет checksum, региональных преобразований, определения типа по длине.
+
+Обычное сохранение Customer пересчитывает normalized_value, сохраняет серверные
+stamps только у неизменённой строки и очищает их при изменении raw/type/context.
+Подставленные клиентом stamps и foreign child IDs не принимаются. Копирование не
+переносит подтверждение. Standalone child writes закрыты; generic child list,
+Customer joins и экспорт дочерних строк ограничены текущим Customer read.
+Для этого обязательный Frappe query hook получает фактический query_doctype,
+а exporter вызывает узкий required_child_export_permission; другие child types
+сохраняют прежнее поведение.
+
+POST `mandant_identifiers.verify_identifier(customer, identifier, expected_modified,
+verification_source)` требует активного System User с Customer read/write, но не
+Operator. После текущего lock Customer повторяются права, modified, принадлежность
+строки и необходимые контексты. Сервер ставит источник/автора/время через обычный
+Customer.save с Version audit. Stale form даёт CUSTOMER_CHANGED. Потерянный ответ
+требует перечитать Customer, без автоматического повторного подтверждения.
+
+`posteingang_matching.get_matching_state(letter)` и `search_customers(letter, text,
+start=0, page_length=20)` доступны активному Operator с текущим чтением письма,
+включая выключенную функцию. Search text ≤140, page_length 1…50; пагинация и
+can_select учитывают только читаемые Customer, write нужен отдельно. Неизвестные
+бизнес-параметры запрещены. Нет прав — нет прежних кандидатов/выбора/причины.
+
+Источник matching — только current Succeeded Run того же letter/generation и
+snapshot оригинала. OCR/extraction повторно валидируются hard caps AP-01, evidence
+пересчитывается. Нет успешного Run: matching=null; валидный Run без кандидатов:
+ambiguity=not_found. Повреждение даёт INVALID_RESULT без обращения к AI.
+matching_result_json не заполняется общим кэшем.
+
+Сигнал exact_identifier требует verified Customer row и matched evidence номера
+адресата recipients с holder_role=addressee. Номер должен действительно входить в
+цитату после нормализации его типа, с границами значения. Sender/representative/
+unknown и непривязанные other_identifiers не используются. При exact matches пул
+состоит из них; иначе — полное имя NFKC/casefold/whitespace, без fuzzy/транслитерации/
+удаления правовой формы. Читаемый связанный structured Address уточняет порядок по
+улице, индексу и городу, HTML primary_address не используется.
+
+Порядок: число различных exact IDs, совпадение имени, адрес, нормализованное имя
+Customer, ID. Matching 1.0 сохраняет reasons exact_identifier/name_address,
+conflicts identifier_conflict/name_mismatch и ambiguity none/multiple_matches/
+multiple_addressees/not_found. Customer label и can_select — аддитивные UI-поля.
+Ambiguity вычисляется до top-3 только по доступному пулу. Повторяющиеся полные факты
+адресата объединяют evidence; неполный контекст не превращает разные факты в один.
+Несколько адресатов блокируют новый ненулевой выбор; очистка старого выбора
+остаётся доступной. Подбор сам не меняет статус и никогда не выбирает автоматически.
+
+POST `select_customer(letter, customer, reason, expected_revision, request_key)`
+меняет только selected_customer и customer_reason через узкий AP-05 allowlist,
+revision++ и Event в одной транзакции. customer=null очищает выбор. Reason 1…1000
+обязателен в обоих случаях. Требуются enabled, активный Operator, letter access,
+read/write прежнего и нового Customer; допустимы Received/Needs Review/
+Needs Clarification/Error. Quarantine, Queued/Processing, Completed/Cancelled закрыты.
+Не меняются status/generation/Run/actions/confirmed_customer/Customer, Tasks не создаются.
+
+Event scope — hash canonical [actor, letter, select_customer, request_key]; semantic
+fingerprint содержит customer+reason без expected_revision. Текущие права до replay,
+replay до REVISION_CONFLICT; другой payload — IDEMPOTENCY_CONFLICT. Receipt содержит
+исторические workflow metadata без Customer label, актуальный выбор читается отдельно.
+allowed_operations различает select_customer и clear_customer. Все изменения идут
+через сервер, обычный CRUD защищённых полей не разрешён.
+
+DE/RU формы показывают кандидатов, основания, страницы evidence, конфликты и явный
+выбор с причиной. Изменённая строка Customer сразу непроверенная; verification
+доступна только после сохранения чистой формы. Сетевой повтор выбора сохраняет key
+и исходную ревизию только при неизвестном исходе; окончательный отказ завершает
+намерение. Поздние ответы не применяются к dirty, заменённой или покинутой форме.
+Строки выводятся как текст, контент/причины/идентификаторы не попадают в browser storage.

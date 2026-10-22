@@ -55,7 +55,7 @@ index 1ff1335..7a33784 100644
  		if condition := self.get_permission_conditions(self.permission_doctype, self.permission_table):
  			self.query = self.query.where(condition)
 +		for hook in frappe.get_hooks("required_permission_query_conditions"):
-+			if condition := frappe.call(hook, doctype=self.permission_doctype, user=self.user):
++			if condition := frappe.call(hook, doctype=self.permission_doctype, user=self.user, query_doctype=self.doctype):
 +				self.query = self.query.where(RawCriterion(condition))
  
  	def get_permission_conditions(self, doctype: str, table: Table) -> Criterion | None:
@@ -230,3 +230,16 @@ index 1897ca8..34ba786 100644
  	let users = [];
  
  	socket.nsp.sockets.forEach((sock) => {
+diff --git a/frappe/core/doctype/data_export/exporter.py b/frappe/core/doctype/data_export/exporter.py
+index 5756599..6f1a6f4 100644
+--- a/frappe/core/doctype/data_export/exporter.py
++++ b/frappe/core/doctype/data_export/exporter.py
+@@ -408,6 +408,8 @@ class DataExporter:
+ 			if self.all_doctypes:
+ 				# add child tables
+ 				for c in self.child_doctypes:
++					if any(frappe.call(hook, doctype=c["doctype"], parent_doctype=self.doctype, parent=doc.name, parentfield=c["parentfield"], user=frappe.session.user) is False for hook in frappe.get_hooks("required_child_export_permission")):
++						continue
+ 					if is_virtual_doctype(c["doctype"]):
+ 						continue
+ 					child_doctype_table = DocType(c["doctype"])

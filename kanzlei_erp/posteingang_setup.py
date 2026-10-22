@@ -40,6 +40,8 @@ def configure():
 	frappe.db.add_index("Incoming Letter Run", ["status", "next_attempt_at"], "ap05_due")
 	frappe.db.add_index("Incoming Letter Run", ["status", "lease_expires_at"], "ap05_lease")
 	frappe.db.add_unique("Incoming Letter Action", ["parent", "action_id"], "ap02_parent_action")
+	if frappe.db.table_exists("Mandant Identifier"):
+		frappe.db.add_index("Mandant Identifier", ["identifier_type", "normalized_value", "jurisdiction"], "ap06_identifier")
 
 	# Frappe Int defaults to NOT NULL/0. A manual action needs SQL NULL to
 	# distinguish it from proposal zero. Schema sync skips Int nullability;

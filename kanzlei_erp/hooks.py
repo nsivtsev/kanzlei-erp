@@ -140,5 +140,9 @@ after_request.append("kanzlei_erp.posteingang.release_request_locks")
 
 app_include_js.append("posteingang_intake.bundle.js")
 app_include_js.append("posteingang_jobs.bundle.js")
+app_include_js.append("posteingang_matching.bundle.js")
+doc_events["Customer"]["validate"].append("kanzlei_erp.mandant_identifiers.validate_customer")
+required_permission_query_conditions.append("kanzlei_erp.mandant_identifiers.required_query")
+required_child_export_permission = ["kanzlei_erp.mandant_identifiers.child_export_permission"]
 
 required_administrator_permission = ["kanzlei_erp.posteingang_permissions.receipt_administrator_permission"]

@@ -1,0 +1,93 @@
+{
+ "doctype": "DocType",
+ "name": "Mandant Identifier",
+ "module": "Kanzlei ERP",
+ "istable": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "identifier_type",
+  "raw_value",
+  "normalized_value",
+  "jurisdiction",
+  "authority",
+  "other_type",
+  "verification_source",
+  "verified_by",
+  "verified_at",
+  "verify_identifier"
+ ],
+ "fields": [
+  {
+   "fieldname": "identifier_type",
+   "label": "Identifier Type",
+   "fieldtype": "Select",
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "de_steuernummer\nde_tax_id\nde_vat_id\nother"
+  },
+  {
+   "fieldname": "raw_value",
+   "label": "Original Identifier",
+   "fieldtype": "Data",
+   "length": 140,
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "normalized_value",
+   "label": "Normalized Identifier",
+   "fieldtype": "Data",
+   "length": 140,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "jurisdiction",
+   "label": "Jurisdiction",
+   "fieldtype": "Data",
+   "length": 140
+  },
+  {
+   "fieldname": "authority",
+   "label": "Authority",
+   "fieldtype": "Data",
+   "length": 140
+  },
+  {
+   "fieldname": "other_type",
+   "label": "Other Identifier Type",
+   "fieldtype": "Data",
+   "length": 140
+  },
+  {
+   "fieldname": "verification_source",
+   "label": "Verification Source",
+   "fieldtype": "Small Text",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "verified_by",
+   "label": "Verified By",
+   "fieldtype": "Link",
+   "options": "User",
+   "read_only": 1,
+   "no_copy": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "verified_at",
+   "label": "Verified At",
+   "fieldtype": "Datetime",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "verify_identifier",
+   "fieldtype": "Button",
+   "label": "Verify identifier",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": []
+}

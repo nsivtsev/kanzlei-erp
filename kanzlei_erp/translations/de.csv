@@ -653,3 +653,36 @@ Analyze this letter again? Your current review edits will be preserved.,Diesen B
 Next attempt no earlier than,Nächster Versuch frühestens
 Queued,In Warteschlange
 Processing,In Bearbeitung
+Verified Mandant Identifiers,Geprüfte Mandantenkennungen
+Mandant Identifiers,Mandantenkennungen
+Identifier Type,Kennungstyp
+Original Identifier,Ursprüngliche Kennung
+Normalized Identifier,Normalisierte Kennung
+Jurisdiction,Zuständigkeitsbereich
+Authority,Behörde oder Stelle
+Other Identifier Type,Anderer Kennungstyp
+Verification Source,Prüfquelle
+Verified By,Geprüft von
+Verified At,Geprüft am
+Verify identifier,Kennung prüfen
+Mandant selection,Mandantenauswahl
+Check the Mandant selection parameters.,Bitte die Angaben zur Mandantenauswahl prüfen.
+The Customer changed. Reload it before verifying an identifier.,Der Mandant wurde geändert. Vor der Kennungsprüfung bitte neu laden.
+Several addressees require clarification before selecting one Mandant.,Mehrere Adressaten müssen vor der Mandantenauswahl geklärt werden.
+Could not load Mandant candidates. Reload and try again.,Mandantenvorschläge konnten nicht geladen werden. Bitte neu laden und erneut versuchen.
+Selected Mandant,Ausgewählter Mandant
+No completed analysis is available. You can search for a Mandant manually.,Es liegt keine abgeschlossene Analyse vor. Sie können manuell nach einem Mandanten suchen.
+Review the proposed Mandant before selecting it.,Bitte den vorgeschlagenen Mandanten vor der Auswahl prüfen.
+No Mandant candidates found.,Keine Mandantenvorschläge gefunden.
+Several Mandant candidates match. An explicit decision is required.,Mehrere Mandanten passen. Eine ausdrückliche Auswahl ist erforderlich.
+Verified identifier match,Übereinstimmung einer geprüften Kennung
+Matching name,Übereinstimmender Name
+Conflicting identifiers require review.,Widersprüchliche Kennungen müssen geprüft werden.
+The extracted name differs from this Customer.,Der erkannte Name weicht von diesem Mandanten ab.
+Read-only Customer; selection requires write access.,Mandant nur lesbar; die Auswahl erfordert Schreibrechte.
+Select Mandant,Mandant auswählen
+Clear Mandant selection,Mandantenauswahl aufheben
+Find another Mandant,Anderen Mandanten suchen
+Refresh Mandant candidates,Mandantenvorschläge aktualisieren
+Save the Customer before verifying an identifier.,Den Mandanten vor der Kennungsprüfung speichern.
+Page {0},Seite {0}

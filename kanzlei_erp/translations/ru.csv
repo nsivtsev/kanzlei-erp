@@ -673,3 +673,36 @@ Analyze this letter again? Your current review edits will be preserved.,Повт
 Next attempt no earlier than,Следующая попытка не ранее
 Queued,В очереди
 Processing,Обработка
+Verified Mandant Identifiers,Проверенные идентификаторы Mandant
+Mandant Identifiers,Идентификаторы Mandant
+Identifier Type,Тип идентификатора
+Original Identifier,Исходный идентификатор
+Normalized Identifier,Нормализованный идентификатор
+Jurisdiction,Юрисдикция
+Authority,Орган или организация
+Other Identifier Type,Другой тип идентификатора
+Verification Source,Источник проверки
+Verified By,Проверил
+Verified At,Время проверки
+Verify identifier,Подтвердить идентификатор
+Mandant selection,Выбор Mandant
+Check the Mandant selection parameters.,Проверьте параметры выбора Mandant.
+The Customer changed. Reload it before verifying an identifier.,Карточка Customer изменилась. Перечитайте её перед подтверждением номера.
+Several addressees require clarification before selecting one Mandant.,Перед выбором одного Mandant нужно разобрать несколько адресатов.
+Could not load Mandant candidates. Reload and try again.,Не удалось загрузить кандидатов Mandant. Перечитайте форму и повторите.
+Selected Mandant,Выбранный Mandant
+No completed analysis is available. You can search for a Mandant manually.,Завершённого анализа нет. Можно найти Mandant вручную.
+Review the proposed Mandant before selecting it.,Проверьте предложенного Mandant перед выбором.
+No Mandant candidates found.,Кандидаты Mandant не найдены.
+Several Mandant candidates match. An explicit decision is required.,Подходят несколько Mandanten. Требуется явный выбор.
+Verified identifier match,Совпадение проверенного идентификатора
+Matching name,Совпадение имени
+Conflicting identifiers require review.,Противоречивые идентификаторы требуют проверки.
+The extracted name differs from this Customer.,Извлечённое имя отличается от этой карточки Customer.
+Read-only Customer; selection requires write access.,Customer доступен только для чтения; для выбора нужно право изменения.
+Select Mandant,Выбрать Mandant
+Clear Mandant selection,Очистить выбор Mandant
+Find another Mandant,Найти другого Mandant
+Refresh Mandant candidates,Обновить кандидатов Mandant
+Save the Customer before verifying an identifier.,Сохраните Customer перед подтверждением идентификатора.
+Page {0},Страница {0}
