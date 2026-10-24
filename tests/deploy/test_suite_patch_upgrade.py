@@ -97,6 +97,22 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         self.assertIn("!deploy/frappe-mandant-access-v8.patch", (ROOT / ".dockerignore").read_text().splitlines())
         self.assertIn("query_doctype=self.doctype", (ROOT / "deploy/frappe-mandant-access.patch").read_text())
 
+    def test_framework_v9_upgrade_repeat_and_exact_rollback(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        (self.root / "apps/frappe/binding.txt").write_text("v9\n")
+        (self.root / "deploy/frappe-mandant-access-v9.patch").write_text(self.git("frappe", "diff", "--", "binding.txt"))
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        self.assertNotEqual(self.install().returncode, 0)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+        (self.root / "apps/suite/second.txt").write_text("original\n")
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("!deploy/frappe-mandant-access-v9.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertEqual(hashlib.sha256((ROOT / "deploy/frappe-mandant-access-v9.patch").read_bytes()).hexdigest(), "bf11cc6d84b66ceba00c9126745bfe276e1634548c23fb81785e59a86d3f9570")
+
     def test_v7_predecessors_are_exact_and_included_in_image(self):
         for app in ("frappe", "suite"):
             filename = f"deploy/{app}-mandant-access-v7.patch"

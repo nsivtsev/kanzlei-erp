@@ -243,3 +243,73 @@ index 5756599..6f1a6f4 100644
  					if is_virtual_doctype(c["doctype"]):
  						continue
  					child_doctype_table = DocType(c["doctype"])
+diff --git a/frappe/model/document.py b/frappe/model/document.py
+--- a/frappe/model/document.py
++++ b/frappe/model/document.py
+@@ -2211,6 +2211,9 @@
+ 
+ def copy_doc(doc: "Document", ignore_no_copy: bool = True) -> "Document":
+ 	"""No_copy fields also get copied."""
++	for hook in frappe.get_hooks("document_copy_guard"):
++		frappe.call(hook, doc=doc)
++
+ 	import copy
+ 	from types import MappingProxyType
+ 
+diff --git a/frappe/public/js/frappe/model/create_new.js b/frappe/public/js/frappe/model/create_new.js
+--- a/frappe/public/js/frappe/model/create_new.js
++++ b/frappe/public/js/frappe/model/create_new.js
+@@ -279,6 +279,7 @@
+ 	},
+ 
+ 	copy_doc: function (doc, from_amend, parent_doc, parentfield) {
++		frappe.model.document_copy_guard?.(doc);
+ 		let no_copy_list = ["name", "amended_from", "amendment_date", "cancel_reason"];
+ 		let newdoc = frappe.model.get_new_doc(doc.doctype, parent_doc, parentfield);
+ 
+diff --git a/frappe/desk/form/assign_to.py b/frappe/desk/form/assign_to.py
+--- a/frappe/desk/form/assign_to.py
++++ b/frappe/desk/form/assign_to.py
+@@ -27,6 +27,9 @@
+ 	"""get assigned to"""
+ 	if not args:
+ 		args = frappe.local.form_dict
++
++	for hook in frappe.get_hooks("assignment_read_guard"):
++		frappe.call(hook, args=args)
+ 
+ 	return frappe.get_all(
+ 		"ToDo",
+@@ -279,6 +282,10 @@
+ 	if assigned_by == allocated_to or not assigned_user.enabled:
+ 		return
+ 
++	for hook in frappe.get_hooks("assignment_notification_override"):
++		if frappe.call(hook, assigned_by=assigned_by, allocated_to=allocated_to, doc_type=doc_type, doc_name=doc_name, action=action) is not None:
++			return
++
+ 	# Search for email address in description -- i.e. assignee
+ 	user_name = frappe.get_cached_value("User", frappe.session.user, "full_name")
+ 	title = get_title(doc_type, doc_name)
+diff --git a/frappe/desk/doctype/notification_log/notification_log.py b/frappe/desk/doctype/notification_log/notification_log.py
+--- a/frappe/desk/doctype/notification_log/notification_log.py
++++ b/frappe/desk/doctype/notification_log/notification_log.py
+@@ -167,6 +167,8 @@
+ 	self_notify_types = get_self_notify_types()
+ 
+ 	for user in _get_user_ids(users):
++		if any(frappe.call(hook, doc=doc, user=user) is False for hook in frappe.get_hooks("notification_delivery_guard")):
++			continue
+ 		if dedupe_on and _notification_exists(doc, user, dedupe_on):
+ 			continue
+ 
+@@ -199,6 +201,9 @@
+ 
+ def send_notification_email(doc: NotificationLog):
+ 	from frappe.utils import get_url_to_form, strip_html
++
++	if any(frappe.call(hook, doc=doc, user=doc.for_user) is False for hook in frappe.get_hooks("notification_delivery_guard")):
++		return
+ 
+ 	user = frappe.db.get_value("User", doc.for_user, fieldname=["email", "language"], as_dict=True)
+ 	if not user:

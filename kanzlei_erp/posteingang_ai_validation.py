@@ -42,9 +42,9 @@ def parse_json(text):
 	return value
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=4)
 def _schema(name):
-	if name not in ("common", "extraction", "support"):
+	if name not in ("common", "extraction", "support", "review"):
 		raise InvalidResult()
 	return parse_json(
 		files("kanzlei_erp").joinpath("posteingang_contracts", "v1", name + ".schema.json").read_text()

@@ -43,6 +43,9 @@ def configure():
 	if frappe.db.table_exists("Mandant Identifier"):
 		frappe.db.add_index("Mandant Identifier", ["identifier_type", "normalized_value", "jurisdiction"], "ap06_identifier")
 
+	if frappe.db.has_column("Task", "kanzlei_incoming_letter"):
+		frappe.db.add_index("Task", ["kanzlei_incoming_letter"], "ap07_task_letter")
+
 	# Frappe Int defaults to NOT NULL/0. A manual action needs SQL NULL to
 	# distinguish it from proposal zero. Schema sync skips Int nullability;
 	# preserve this explicitly and cover it in repeated-migration acceptance.

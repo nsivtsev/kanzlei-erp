@@ -686,3 +686,91 @@ Find another Mandant,Anderen Mandanten suchen
 Refresh Mandant candidates,Mandantenvorschläge aktualisieren
 Save the Customer before verifying an identifier.,Den Mandanten vor der Kennungsprüfung speichern.
 Page {0},Seite {0}
+Check the review parameters.,Prüfen Sie die Angaben zur Prüfung.
+The saved analysis could not be accepted. Human review is required.,Die gespeicherte Analyse ist ungültig. Eine manuelle Prüfung ist erforderlich.
+"Check every review decision, date and required reason.","Prüfen Sie alle Entscheidungen, Daten und erforderlichen Begründungen."
+Apply the latest result or explicitly keep the current review with a reason.,Übernehmen Sie das neueste Ergebnis oder behalten Sie die bisherige Prüfung ausdrücklich mit Begründung bei.
+The assignee must be an active system user with access to this Mandant.,Die zuständige Person muss ein aktiver Systembenutzer mit Zugriff auf diesen Mandanten sein.
+The tasks could not be created. Nothing was confirmed.,Die Aufgaben konnten nicht angelegt werden. Es wurde nichts bestätigt.
+An administrator must resolve every task of the original letter before confirmation.,Vor der Bestätigung muss ein Administrator jede Aufgabe des ursprünglichen Schreibens prüfen.
+A replacement already exists for this letter.,Für dieses Schreiben besteht bereits ein Ersatz.
+This letter was already confirmed with different decisions.,Dieses Schreiben wurde bereits mit anderen Entscheidungen bestätigt.
+The review operation could not finish. Reload and try again.,Die Prüfung konnte nicht abgeschlossen werden. Laden Sie neu und versuchen Sie es erneut.
+Human review,Manuelle Prüfung
+Review incoming letter,Eingangsschreiben prüfen
+Unknown,Unbekannt
+Date requires planning,Termin muss geplant werden
+No tasks will be created.,Es werden keine Aufgaben angelegt.
+Search assignees,Zuständige Personen suchen
+Select assignee,Zuständige Person wählen
+Document date,Dokumentdatum
+Letter type,Art des Schreibens
+Summary,Zusammenfassung
+Action title,Titel der Handlung
+Action description,Beschreibung der Handlung
+Decision,Entscheidung
+Pending,Offen
+Accept action,Handlung übernehmen
+Reject action,Handlung ablehnen
+Rejection reason,Begründung der Ablehnung
+Assignment decision,Entscheidung zur Zuständigkeit
+Assign a person,Person zuweisen
+Leave unassigned with a reason,Mit Begründung unzugewiesen lassen
+Reason for no assignee,Begründung für fehlende Zuständigkeit
+Scheduling decision,Entscheidung zur Terminplanung
+Schedule work,Arbeit terminieren
+Plan the date later with a reason,Termin mit Begründung später planen
+Internal work date,Interner Arbeitstermin
+Reason for no internal date,Begründung für fehlenden internen Termin
+Confirmed external deadline,Bestätigte externe Frist
+External deadline basis,Grundlage der externen Frist
+Proposed deadline,Vorgeschlagene Frist
+Accept proposed external date,Vorgeschlagene externe Frist übernehmen
+matched,Beleg geprüft
+unverified,Beleg nicht verifiziert
+missing,Beleg fehlt
+Reason for no actions,Begründung für keine Handlungen
+Clarification reason,Grund für Klärungsbedarf
+I checked the original and all final decisions,Ich habe das Original und alle endgültigen Entscheidungen geprüft
+Save review,Prüfung speichern
+Needs clarification,Klärung erforderlich
+Confirm letter,Schreiben bestätigen
+Check the original and explicitly confirm the human review.,Prüfen Sie das Original und bestätigen Sie die manuelle Prüfung ausdrücklich.
+Reason for keeping the current review,Begründung für das Beibehalten der bisherigen Prüfung
+Keep the current review instead of the latest result,Bisherige Prüfung statt des neuesten Ergebnisses beibehalten
+Review edits remain in this page. Reopen the review to save them.,Ihre Änderungen bleiben auf dieser Seite. Öffnen Sie die Prüfung erneut zum Speichern.
+Create correction,Korrektur anlegen
+Correction reason,Korrekturgrund
+Reuse original PDF,Ursprüngliche PDF wiederverwenden
+Receipt date is known,Eingangsdatum ist bekannt
+Choose one PDF for the replacement.,Wählen Sie eine PDF für den Ersatz.
+Open original PDF,Original-PDF öffnen
+View confirmed review,Bestätigte Prüfung ansehen
+Apply latest analysis result,Neuestes Analyseergebnis übernehmen
+Save the current review before this operation.,Speichern Sie die bisherige Prüfung vor diesem Vorgang.
+Replace the current review? Its previous version will be preserved in history.,Bisherige Prüfung ersetzen? Die vorherige Version bleibt in der Historie erhalten.
+Add manual action,Manuelle Handlung hinzufügen
+Administrative review is complete.,Die administrative Prüfung ist abgeschlossen.
+Administrative review of the original tasks is required.,Die ursprünglichen Aufgaben müssen administrativ geprüft werden.
+Resolve original task,Ursprüngliche Aufgabe prüfen
+Disposition,Umgang mit ursprünglicher Aufgabe
+cancelled,Storniert
+historical,Als Historie erhalten
+Latest analysis proposal,Neuester Analysevorschlag
+Readable,Lesbar
+Partly readable,Teilweise lesbar
+Unreadable,Nicht lesbar
+Actions proposed,Handlungen vorgeschlagen
+No actions proposed by AI,Keine Handlungen von der KI vorgeschlagen
+Action assessment unknown,Handlungsbedarf unklar
+The Mandant selection changed. Reload the letter before saving the review.,Die Mandantenauswahl wurde geändert. Laden Sie das Schreiben vor dem Speichern der Prüfung neu.
+The analysis result changed. Reload before applying it.,Das Analyseergebnis wurde geändert. Laden Sie es vor der Übernahme neu.
+Explicitly confirm replacement of the current review.,Bestätigen Sie das Ersetzen der bisherigen Prüfung ausdrücklich.
+Posteingang task operation is not permitted,Dieser Vorgang für die Posteingangsaufgabe ist nicht erlaubt.
+Posteingang tasks cannot be duplicated,Posteingangsaufgaben können nicht dupliziert werden.
+Posteingang task assignment,Zuweisung einer Posteingangsaufgabe
+Posteingang task assignment updated,Die Zuweisung einer Posteingangsaufgabe wurde aktualisiert.
+Assignment update,Zuweisung aktualisiert
+Incoming Action ID,ID der Eingangshandlung
+Incoming Action Key,Schlüssel der Eingangshandlung
+Requires planning,Planung erforderlich

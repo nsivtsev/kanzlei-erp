@@ -146,3 +146,35 @@ required_permission_query_conditions.append("kanzlei_erp.mandant_identifiers.req
 required_child_export_permission = ["kanzlei_erp.mandant_identifiers.child_export_permission"]
 
 required_administrator_permission = ["kanzlei_erp.posteingang_permissions.receipt_administrator_permission"]
+
+# Mandatory AP-07 guards compose with existing FiBu/attachment restrictions.
+extend_doctype_class["Task"] = ["kanzlei_erp.posteingang_task_access.TaskGuard"]
+extend_doctype_class["File"].append("kanzlei_erp.posteingang_task_access.TaskFileGuard")
+extend_doctype_class["ToDo"] = ["kanzlei_erp.posteingang_task_access.ToDoGuard"]
+file_access_override.insert(0, "kanzlei_erp.posteingang_task_access.file_access_override")
+required_document_permission.append("kanzlei_erp.posteingang_task_access.required_permission")
+required_permission_query_conditions.append("kanzlei_erp.posteingang_task_access.required_query")
+required_child_export_permission.append("kanzlei_erp.posteingang_task_access.child_export_permission")
+document_copy_guard = ["kanzlei_erp.posteingang_task_access.copy_guard"]
+assignment_notification_override = ["kanzlei_erp.posteingang_task_access.assignment_notification"]
+notification_delivery_guard = ["kanzlei_erp.posteingang_task_access.notification_delivery"]
+assignment_read_guard = ["kanzlei_erp.posteingang_task_access.assignment_read"]
+doc_events["Task"]["validate"].append("kanzlei_erp.posteingang_task_access.validate_task")
+doc_events["Task"]["on_trash"].append("kanzlei_erp.posteingang_task_access.protect_task")
+doc_events["ToDo"]["on_update"] = "kanzlei_erp.posteingang_task_access.update_planning"
+doc_events["ToDo"]["after_insert"] = "kanzlei_erp.posteingang_task_access.update_planning"
+doc_events["ToDo"]["after_delete"] = "kanzlei_erp.posteingang_task_access.update_planning"
+doc_events["ToDo"]["on_trash"] = "kanzlei_erp.posteingang_task_access.validate_related"
+doc_events["ToDo"]["validate"] = [doc_events["ToDo"]["validate"], "kanzlei_erp.posteingang_task_access.validate_todo"]
+for _related in ("File", "Comment", "Communication", "Version", "DocShare"):
+    _existing_related = doc_events.setdefault(_related, {}).get("validate", [])
+    if isinstance(_existing_related, str):
+        _existing_related = [_existing_related]
+    doc_events[_related]["validate"] = [*_existing_related, "kanzlei_erp.posteingang_task_access.validate_related"]
+override_whitelisted_methods.update({
+    "erpnext.projects.doctype.task.task.check_if_child_exists": "kanzlei_erp.posteingang_task_access.check_if_child_exists",
+    "erpnext.projects.doctype.task.task.make_timesheet": "kanzlei_erp.posteingang_task_access.make_timesheet",
+    "frappe.desk.doctype.notification_log.notification_log.get_notification_logs": "kanzlei_erp.posteingang_task_access.get_notification_logs",
+})
+app_include_js.append("posteingang_review.bundle.js")
+app_include_js.append("/assets/kanzlei_erp/js/posteingang_task_guard.js")

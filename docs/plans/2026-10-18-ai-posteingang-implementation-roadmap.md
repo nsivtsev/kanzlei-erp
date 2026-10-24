@@ -8,7 +8,7 @@
 
 **Стек:** Frappe/ERPNext v16, Python по `pyproject.toml`, Frappe jobs, MariaDB, текущий File/S3 слой, Desk JS, Node tests и Bench tests. Suite Drive подключается отдельным расширением.
 
-**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01…AP-06 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-05 серверные, конкурентные и клиентские проверки — PASS; ограничение RU browser upload записано в результатах этапа. Живой Mistral smoke — NOT RUN. AP-06: matching, явный выбор, DE/RU и профильная регрессия — PASS. AP-07…AP-10 ещё не реализованы.
+**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01…AP-07 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-05 серверные, конкурентные и клиентские проверки — PASS; ограничение RU browser upload записано в результатах этапа. Живой Mistral smoke — NOT RUN. AP-06: matching, явный выбор, DE/RU и профильная регрессия — PASS. AP-07: атомарное подтверждение, защищённые Tasks, исправления, DE/RU и расширенная регрессия — PASS (24.10.2026). AP-08…AP-10 ещё не реализованы.
 
 **Проектное решение:** [AI Posteingang](2026-10-18-ai-posteingang-design.md). Все договорённости и ограничения этого документа применяются к каждому этапу.
 
@@ -34,7 +34,7 @@
 | AP-04 | Настройки и адаптер OCR/извлечения Mistral | AP-01, AP-02 | [Завершён 21.10.2026](2026-10-21-ai-posteingang-ap04-implementation.md#результат-исполнения); offline и DE/RU PASS, живой smoke NOT RUN |
 | AP-05 | Фоновая обработка и восстановление после ошибок | AP-03, AP-04 | [Завершён 22.10.2026](2026-10-21-ai-posteingang-ap05-implementation.md#результат-исполнения); DB/RQ/recovery и DE/RU управление проверены, RU повторный выбор файла не проверен |
 | AP-06 | Подбор Mandant по проверяемым признакам | AP-01, AP-02; формат результата AP-04 | [Завершён 22.10.2026](2026-10-22-ai-posteingang-ap06-implementation.md#результат-исполнения); явные verification/selection, права, конкуренция и DE/RU проверены |
-| AP-07 | Подтверждение и защищённое создание Tasks | AP-03, AP-05, AP-06 | Не начат |
+| AP-07 | Подтверждение и защищённое создание Tasks | AP-03, AP-05, AP-06 | Завершён; профильные проверки и DE/RU PASS |
 | AP-08 | Документы манданта и происхождение задачи | AP-07 | Не начат |
 | AP-09 | Очередь и полноценный экран проверки | AP-05, AP-06, AP-07, AP-08 | Не начат |
 | AP-10 | Сквозная приёмка и пилот MVP | AP-01…AP-09 | Не начат |
@@ -220,6 +220,26 @@ Existing File guards медленно обрабатывают большую н
 **Приёмка:** два одновременных подтверждения дают один набор задач; устаревшая ревизия отклоняется. Отозванные права закрывают созданные задачи через все пользовательские пути, включая календарь и ToDo. Письмо и задачи не расходятся после сбоя. Ручные Tasks, повторения и FiBu сохраняют прежнее поведение.
 
 **Проверки:** новые confirmation/task-access тесты, отдельный реальный конкурентный сценарий с двумя DB-сессиями, `test_work_schedule`, затронутые сценарии `test_fibu_package`, `test_fibu_questions`, `test_overview`. Причина расширения — общие Task hooks, фильтры, назначения и транзакционная идемпотентность.
+
+**Фактический результат AP-07 (24.10.2026):** реализованы полный review, явное
+apply/retain, атомарный идемпотентный confirm, защищённые Task/ToDo, нейтральные
+назначения, запрет штатного copy и контролируемая замена с карантином/историей.
+Новые серверные suites: confirmation 17, task_access 19, concurrency 6,
+review_history 2, correction transactions 3 и MemoryS3 2 — PASS. Регрессия AP-02…06,
+Work Schedule, FiBu Package/Questions/Checklist/Workflow, Overview, Mandant Documents,
+Drive security/download и Object Storage — PASS. Проверены независимые DB-сессии,
+старые snapshots, rollback/COMMIT failure и потеря ответа, реальный Redis/RQ с
+перехваченной внешней доставкой почты. Node 30, автономный Linux suite 84,
+AP-01 validator, framework installer 23, Ruff/JSON/CSV/diffcheck/build/wheel — PASS.
+Fresh install и две миграции сохранили данные, секрет и роли; fake flow без Suite — PASS.
+
+В браузере DE/RU пройдены review/confirm, отсутствие действий и планирования,
+retain нового Run, dirty buffer, исправление с Completed Task и подтверждение
+замены обычным оператором. Проверены календарная дата, отзыв Customer доступа,
+карантинный PDF и запрет Duplicate. Исправлен File guard для обычного Suite rename
+с `Path`; затронутые проверки повторены. Реальный Mistral и внешняя доставка email
+не выполнялись; основной сайт, глобальный scheduler, PR/deployment не затронуты.
+Подробные фактические результаты: [AP-07 implementation](2026-10-23-ai-posteingang-ap07-implementation.md#результаты-исполнения).
 
 ## AP-08 — Документы манданта и связь с источником
 

@@ -191,7 +191,7 @@
 | kanzlei_incoming_action_key | Data(64) | null / unique | SHA-256 от letter + action_id, server-only, no_copy |
 | kanzlei_incoming_needs_planning | Check | 0 | server-only первоначально; последующее планирование обычной Task снимает метку по актуальным полям |
 
-Существующие kanzlei_customer/exp_start_date/exp_end_date сохраняются. Внешняя дата и её основание читаются через защищённую Action связь, не дублируются незащищённым сниппетом. Источник/Customer не меняются обычным редактированием; отдельные ограничения FiBu продолжают применяться. Копирование Task не копирует provenance/key и не может получить скрытое содержание: AP-07 проверяет создание копии по актуальным правам, не переносит приватные evidence/вложения. Нельзя использовать канонический Work Schedule occurrence key для Posteingang.
+Существующие kanzlei_customer/exp_start_date/exp_end_date сохраняются. Внешняя дата и её основание читаются через защищённую Action связь, не дублируются незащищённым сниппетом. Источник/Customer не меняются обычным редактированием; отдельные ограничения FiBu продолжают применяться. В MVP AP-07 штатное дублирование Task Posteingang запрещено до удаления no_copy полей, включая UI/Python/API/Project copy; обычные Tasks сохраняют прежнее поведение. Нельзя использовать канонический Work Schedule occurrence key для Posteingang.
 
 ## 3. Форматы, evidence и решения
 
@@ -590,3 +590,64 @@ DE/RU формы показывают кандидатов, основания, 
 и исходную ревизию только при неизвестном исходе; окончательный отказ завершает
 намерение. Поздние ответы не применяются к dirty, заменённой или покинутой форме.
 Строки выводятся как текст, контент/причины/идентификаторы не попадают в browser storage.
+
+## 14. AP-07: review, подтверждение и исправления (2026-10-24)
+
+Review schema v1.0 поставляется в runtime без изменений AP-01. Строгий объект
+document_fields отдельно содержит sender/document_date/letter_type/summary;
+исходные значения и evidence неизменяемы в Run. Полный review содержит все
+серверные action_id/source_index; клиент не назначает provenance/Task links.
+Evidence пересчитывается по OCR применённого Run; ручная цитата без OCR не matched.
+Существующий draft использует hard caps; Settings.max_actions ограничивает новые
+наборы/добавления, без скрытого удаления старых строк.
+
+Сервис posteingang_confirmation предоставляет get_review_state/search_assignees
+и POST apply_result/add_manual_action/save_review/confirm/create_correction/
+correction_disposition. Мутации имеют строгий ввод, user+letter+operation+key Event
+scope, fingerprint без expected_revision; права → replay → revision. Выбор Customer
+остаётся отдельной операцией AP-06; Customer/reason в review должны совпадать с ней.
+
+Применение только текущего успешного Run сохраняет прежний draft в Event, создаёт
+новые UUID и оставляет даты/решения pending/null. Замена требует acknowledge_replace.
+Confirm учитывает последний успешный Run даже после неудачного повторного анализа,
+а также применённый Run при проверке нескольких адресатов. Неприменённый последний
+результат требует retained_result={run,reason}; это явное решение входит в Event
+и semantic fingerprint. Ошибка последующего Run не стирает ранее известный блок.
+
+Confirm требует Needs Review/enabled/Operator/Customer read+write/human_verified;
+каждое действие accept/reject, ноль accepted — отдельная причина no_actions.
+Unassigned и unscheduled требуют отдельных решений/причин. Создание Tasks дополнительно
+проверяет Task create и активных System User assignees с Customer read. Final review,
+Completed, Tasks/ToDo, Action links, Event/receipt атомарны; ошибка откатывает callbacks.
+Task dates — внутренний срок, обе null при его отсутствии; ToDo не получает Today.
+Повтор Completed с тем же semantic payload возвращает receipt даже с новым ключом.
+Task links в receipt повторно фильтруются текущими правами.
+
+Task provenance защищён от save/db_set/import/copy/rename/delete. Дополнительные
+ограничения Customer/quarantine не обходятся DocShare/owner/assignment и дополняют
+FiBu. Они действуют для Task, календаря/поиска/экспорта, ToDo, Notification Log,
+File, Comment, Communication, Version и связанных Task snippets. Рабочие поля Task
+редактируются обычными разрешёнными путями, подтверждённый Action не переписывается.
+Уведомление назначения нейтрально до сериализации в Redis и повторно проверяет
+получателя перед созданием/email; заголовок/Customer/текст/даты туда не копируются.
+
+Исправление требует Manager+Operator+исходный Customer read/write и доступно при
+enabled=0. Приём нового PDF использует AP-03, reuse читает защищённый original и hash.
+Новая Received запись получает собственный File URL/binding: shared aliases старого
+оригинала намеренно пересекают права и не подходят для карантинной замены. Нет
+автозапуска, переноса Customer/Run/решений/назначений/UUID. HTTP correction владеет
+commit-границей: определённый rollback очищает только новые bytes, неизвестный
+успешный COMMIT восстанавливается по durable Event и сохраняет bytes. Недоступная
+после смены Customer замена в replay возвращается как replacement=null.
+
+Manager+Operator разбирает каждую прежнюю Task (cancelled после реальной отмены
+или historical с причиной); Event хранится в обеих Letters, статус перепроверяется
+при confirm замены. После разбора обычный оператор нового Customer может подтвердить
+замену без доступа к закрытым старым сведениям. Quarantine не снимается; Completed
+Task не меняется задним числом. Двусторонние ссылки показываются только при чтении обоих.
+
+Форма использует общий in-memory dirty/revocation контекст AP-05…07: polling не
+перезаписывает review; окончательный отказ доступа очищает панели/буферы и останавливает
+polling. Human checkbox сбрасывается после правок. Документы/причины не сохраняются
+в browser storage. Фреймворк расширен узкими copy/assignment/delivery hooks с точным
+предыдущим patch v9 и проверяемым upgrade/repeat/rollback; runtime monkeypatch не нужен.

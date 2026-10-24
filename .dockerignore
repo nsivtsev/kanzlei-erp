@@ -26,3 +26,4 @@ kanzlei_erp/**/__pycache__/
 kanzlei_erp/**/*.pyc
 kanzlei_erp/public/dist/
 !deploy/frappe-mandant-access-v8.patch
+!deploy/frappe-mandant-access-v9.patch

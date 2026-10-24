@@ -199,7 +199,37 @@ def create_received_letter(*, actor, original, receipt, operation):
 		return _create_received_letter(actor=actor, original=original, receipt=receipt, operation=operation)
 
 
-def _create_received_letter(*, actor, original, receipt, operation):
+def create_correction_letter(*, old_letter, actor, original, receipt, operation):
+	"""Only the administrative correction transaction can use this constructor."""
+	from kanzlei_erp.object_storage import isolated_writes
+	from kanzlei_erp.posteingang_confirmation import _authorized
+	from kanzlei_erp.posteingang_jobs import _locked_letter
+
+	old = _locked_letter(old_letter)
+	_authorized(old, administrative=True)
+	if old.status != "Completed" or old.replacement_letter or old.correction_quarantined:
+		deny()
+	with isolated_writes():
+		return _create_received_letter(actor=actor, original=original, receipt=receipt, operation=operation, correction=True)
+
+
+def _cleanup_correction_file(file):
+	"""Core hash dedup cleanup cannot remove a distinct URL with equal bytes."""
+	from pathlib import Path
+
+	from kanzlei_erp.object_storage import stored
+
+	if frappe.db.exists("File", {"file_url": file.file_url}):
+		return
+	if not stored(file) and str(file.file_url).startswith("/private/files/"):
+		with _creation(file.attached_to_name, file.name):
+			Path(file.get_full_path()).unlink(missing_ok=True)
+	else:
+		with _creation(file.attached_to_name, file.name):
+			file.on_rollback()
+
+
+def _create_received_letter(*, actor, original, receipt, operation, correction=False):
 	"""Trusted server constructor. PDF content validation is provided by AP-03."""
 	from kanzlei_erp.posteingang_permissions import staff
 
@@ -209,7 +239,7 @@ def _create_received_letter(*, actor, original, receipt, operation):
 		or "Posteingang Operator" not in frappe.get_roles(actor)
 	):
 		deny()
-	if not frappe.db.get_single_value("Posteingang Settings", "enabled"):
+	if not correction and not frappe.db.get_single_value("Posteingang Settings", "enabled"):
 		deny()
 	content = original["content"]
 	settings = frappe.get_single("Posteingang Settings")
@@ -236,7 +266,16 @@ def _create_received_letter(*, actor, original, receipt, operation):
 					"attached_to_name": letter_id,
 				}
 			)
+			if correction:
+				# A distinct URL/binding is required: AP-02 intentionally intersects
+				# all Letter permissions for aliases sharing the original URL.
+				stem = original["file_name"].rsplit(".", 1)[0]
+				file.file_name = file_id + "-" + stem[:120] + ".pdf"
+				# ERPAttachmentGuard already forces a fresh write for _creation.
+				# Let insert establish the storage creation capability first.
 			file.insert(ignore_permissions=True, ignore_links=True, set_name=file_id)
+			if correction:
+				frappe.db.after_rollback.add(lambda: _cleanup_correction_file(file))
 			doc = frappe.get_doc(
 				{
 					"doctype": "Incoming Letter",
@@ -279,5 +318,5 @@ def _create_received_letter(*, actor, original, receipt, operation):
 		frappe.db.rollback(save_point=savepoint)
 		if file and file.flags.new_file:
 			with _creation(letter_id, file_id):
-				file.on_rollback()
+				_cleanup_correction_file(file) if correction else file.on_rollback()
 		raise

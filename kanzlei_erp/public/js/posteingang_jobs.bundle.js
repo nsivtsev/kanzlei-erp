@@ -34,14 +34,15 @@
    } finally {this.busy=false;}
   }
   async refresh(frm, isActive = () => true) {
-   if (!isActive() || frm.is_dirty()) return null;
+   if (!isActive() || (frm.is_dirty() || frm.__posteingang_review_dirty)) return null;
+   const doc=frm.doc;
    try {
     const state=await this.transport("get_analysis_state",{letter:frm.doc.name});
     this.stopped=!["Queued","Processing"].includes(state.status);
-    if (!isActive() || frm.is_dirty()) return null;
+    if (!isActive() || frm.doc!==doc || (frm.is_dirty() || frm.__posteingang_review_dirty)) return null;
     if (state.revision !== frm.doc.revision) await frm.reload_doc();
     return state;
-   } catch (error) {this.stopped=true;throw error;}
+   } catch (error) {this.stopped=true;if(error.message==="PERMISSION" && isActive() && frm.doc===doc)frappe.posteingang.revoke_view?.(frm);throw error;}
   }
  }
  async function rpc(operation,args) {
@@ -65,12 +66,13 @@
   frm._analysis_client=context.client;frm._ap05=context;
   const onRoute=()=>frappe.get_route_str() === `Form/Incoming Letter/${frm.doc.name}`;
   const errorMessage=error=>frappe.msgprint(__(messages[error.message] || messages.INTERNAL_ERROR));
+  context.revoke=()=>{for(const text of [...Object.values(label),"Analyze again"])frm.remove_custom_button(__(text));frm.dashboard.set_headline_alert(__(messages.PERMISSION));};
   async function perform(operation,reason) {
-   if (frm.is_dirty()) {frappe.msgprint(__("Reload the form before managing analysis."));return;}
+   if ((frm.is_dirty() || frm.__posteingang_review_dirty)) {frappe.msgprint(__("Reload the form before managing analysis."));return;}
    try {
     await context.client.mutate(operation,frm.doc.name,frm.doc.revision,reason);
     await frm.reload_doc();
-   } catch(error) {errorMessage(error);}
+   } catch(error) {if(error.message==="PERMISSION" && context.active && onRoute())frappe.posteingang.revoke_view?.(frm);errorMessage(error);}
   }
   function draw(state) {
    const signature=JSON.stringify(state);

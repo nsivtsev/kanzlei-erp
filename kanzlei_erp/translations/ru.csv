@@ -706,3 +706,91 @@ Find another Mandant,Найти другого Mandant
 Refresh Mandant candidates,Обновить кандидатов Mandant
 Save the Customer before verifying an identifier.,Сохраните Customer перед подтверждением идентификатора.
 Page {0},Страница {0}
+Check the review parameters.,Проверьте параметры проверки письма.
+The saved analysis could not be accepted. Human review is required.,Сохранённый анализ недопустим. Требуется ручная проверка.
+"Check every review decision, date and required reason.","Проверьте все решения, даты и обязательные причины."
+Apply the latest result or explicitly keep the current review with a reason.,Примените последний результат или явно сохраните текущую проверку с причиной.
+The assignee must be an active system user with access to this Mandant.,Исполнитель должен быть активным системным пользователем с доступом к этому клиенту.
+The tasks could not be created. Nothing was confirmed.,Не удалось создать задачи. Подтверждение не выполнено.
+An administrator must resolve every task of the original letter before confirmation.,До подтверждения администратор должен разобрать каждую задачу исходного письма.
+A replacement already exists for this letter.,Для этого письма уже создана замена.
+This letter was already confirmed with different decisions.,Это письмо уже подтверждено с другими решениями.
+The review operation could not finish. Reload and try again.,Не удалось завершить операцию проверки. Перечитайте форму и повторите попытку.
+Human review,Проверка сотрудником
+Review incoming letter,Проверить входящее письмо
+Unknown,Неизвестно
+Date requires planning,Срок требует планирования
+No tasks will be created.,Задачи не будут созданы.
+Search assignees,Поиск исполнителя
+Select assignee,Выбрать исполнителя
+Document date,Дата документа
+Letter type,Тип письма
+Summary,Краткое содержание
+Action title,Название действия
+Action description,Описание действия
+Decision,Решение
+Pending,Ожидает решения
+Accept action,Принять действие
+Reject action,Отклонить действие
+Rejection reason,Причина отклонения
+Assignment decision,Решение об исполнителе
+Assign a person,Назначить исполнителя
+Leave unassigned with a reason,Оставить без исполнителя с причиной
+Reason for no assignee,Причина отсутствия исполнителя
+Scheduling decision,Решение о планировании
+Schedule work,Назначить срок работы
+Plan the date later with a reason,Запланировать срок позже с причиной
+Internal work date,Внутренний срок работы
+Reason for no internal date,Причина отсутствия внутреннего срока
+Confirmed external deadline,Подтверждённый внешний срок
+External deadline basis,Основание внешнего срока
+Proposed deadline,Предложенный срок
+Accept proposed external date,Принять предложенный внешний срок
+matched,Цитата проверена
+unverified,Цитата не проверена
+missing,Цитата отсутствует
+Reason for no actions,Причина отсутствия действий
+Clarification reason,Причина уточнения
+I checked the original and all final decisions,Я проверил оригинал и все итоговые решения
+Save review,Сохранить проверку
+Needs clarification,Требуется уточнение
+Confirm letter,Подтвердить письмо
+Check the original and explicitly confirm the human review.,Проверьте оригинал и явно подтвердите проверку сотрудником.
+Reason for keeping the current review,Причина сохранения текущей проверки
+Keep the current review instead of the latest result,Сохранить текущую проверку вместо последнего результата
+Review edits remain in this page. Reopen the review to save them.,"Правки остаются на этой странице. Откройте проверку снова, чтобы сохранить их."
+Create correction,Создать исправление
+Correction reason,Причина исправления
+Reuse original PDF,Использовать исходный PDF
+Receipt date is known,Дата получения известна
+Choose one PDF for the replacement.,Выберите один PDF для замены.
+Open original PDF,Открыть исходный PDF
+View confirmed review,Просмотреть подтверждённую проверку
+Apply latest analysis result,Применить последний результат анализа
+Save the current review before this operation.,Сохраните текущую проверку перед этой операцией.
+Replace the current review? Its previous version will be preserved in history.,Заменить текущую проверку? Предыдущая версия сохранится в истории.
+Add manual action,Добавить ручное действие
+Administrative review is complete.,Административный разбор завершён.
+Administrative review of the original tasks is required.,Требуется административный разбор исходных задач.
+Resolve original task,Разобрать исходную задачу
+Disposition,Решение по исходной задаче
+cancelled,Отменена
+historical,Сохранена как история
+Latest analysis proposal,Последнее предложение анализа
+Readable,Читаемое письмо
+Partly readable,Частично читаемое письмо
+Unreadable,Нечитаемое письмо
+Actions proposed,Предложены действия
+No actions proposed by AI,AI не предложил действий
+Action assessment unknown,"Неизвестно, требуются ли действия"
+The Mandant selection changed. Reload the letter before saving the review.,Выбор клиента изменился. Перечитайте письмо перед сохранением проверки.
+The analysis result changed. Reload before applying it.,Результат анализа изменился. Перечитайте его перед применением.
+Explicitly confirm replacement of the current review.,Явно подтвердите замену текущей проверки.
+Posteingang task operation is not permitted,Операция с задачей входящего письма недоступна.
+Posteingang tasks cannot be duplicated,Задачи входящих писем нельзя дублировать.
+Posteingang task assignment,Назначение задачи входящего письма
+Posteingang task assignment updated,Назначение задачи входящего письма изменено.
+Assignment update,Изменение назначения
+Incoming Action ID,ID действия входящего письма
+Incoming Action Key,Ключ действия входящего письма
+Requires planning,Требует планирования
