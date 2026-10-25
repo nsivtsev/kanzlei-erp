@@ -110,5 +110,5 @@
   }
   poll();
  }
- frappe.posteingang = Object.assign(frappe.posteingang || {},{AnalysisClient,attach_analysis:attach});
+ frappe.posteingang = Object.assign(frappe.posteingang || {},{AnalysisClient,attach_analysis:attach,analysis_rpc:rpc,analysis_messages:messages});
 })();

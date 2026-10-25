@@ -85,7 +85,7 @@
   }
   return data.message;
  }
- async function open() {
+ async function open(optionsUI = {}) {
   const options = await rpc("get_intake_options");
   const client = new IntakeClient(send);
   let rows;
@@ -98,6 +98,7 @@
     running = true; render();
     await client.upload(rows, render);
     running = false; render();
+    await optionsUI.onUploaded?.();
     if (frappe.get_route()[0] === "List") cur_list?.refresh();
    }});
   const body = dialog.fields_dict.body.$wrapper;
@@ -133,7 +134,9 @@
      $("<button type='button' class='btn btn-default'></button>").text(__("Open Incoming Letter")).on("click", async () => {
       const current = await rpc("get_intake_result", {request_key: row.key});
       if (current.outcome === "unknown") {row.result = null; row.error = "CANNOT_ACCEPT_FILE"; render(); return;}
-      frappe.set_route("Form", "Incoming Letter", current.letter); dialog.hide();
+      if(optionsUI.onOpen) await optionsUI.onOpen(current.letter);
+      else frappe.set_route("Form", "Incoming Letter", current.letter);
+      dialog.hide();
      }).appendTo(box);
     }
     if (!row.busy && !row.result) $("<button type='button' class='btn btn-link'></button>").text(__("Discard local request")).on("click", () => {client.forget(row.key); rows = rows.filter(r => r !== row); render();}).appendTo(box);
@@ -141,5 +144,5 @@
   }
   dialog.show(); render();
  }
- frappe.posteingang = {IntakeClient, open};
+ frappe.posteingang = Object.assign(frappe.posteingang || {}, {IntakeClient, open});
 })();

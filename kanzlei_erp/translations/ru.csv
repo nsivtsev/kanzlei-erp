@@ -803,3 +803,40 @@ Refresh source,Обновить источник
 This original is quarantined for administrative review.,Этот оригинал заблокирован для административного разбора.
 Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: известная дата получения или время загрузки. Вложения email: дата письма. Другие файлы: дата загрузки. Это не дата бухгалтерского документа.
 Received on,Получено
+PDF inbox,Входящие PDF
+Queue,Очередь
+Queue state,Состояние очереди
+Unfinished letters,Незавершённые письма
+History,История
+Uploaded by,Загрузивший сотрудник
+Me,Я
+Search letters,Поиск писем
+Workspace panels,Панели рабочего экрана
+Choose a letter from the queue.,Выберите письмо из очереди.
+Age in days: {0},Возраст в днях: {0}
+No completed analysis is available.,Завершённого анализа ещё нет.
+Unverified proposed deadline,Непроверенный предложенный срок
+No explicit date,Явная дата не указана
+Explicit dates: {0}; relative deadlines: {1},Явных дат: {0}; относительных сроков: {1}
+Unsaved review,Несохранённая проверка
+Save and continue,Сохранить и перейти
+Discard,Отбросить
+Stay,Остаться
+Original PDF,Исходный PDF
+The letter changed. Your local review has been preserved.,Письмо изменилось. Ваши локальные правки сохранены.
+Compare with saved review,Сравнить с сохранённой проверкой
+Local review,Локальная проверка
+Saved review,Сохранённая проверка
+Discard local review and load saved version,Отбросить локальные правки и загрузить сохранённую версию
+Check and retry the same request,Проверить и повторить тот же запрос
+Resolve the unknown request before another operation.,Сначала выясните результат предыдущего запроса.
+Save or discard the current review before continuing.,Сначала сохраните или отбросьте текущие правки.
+The operation could not finish. Refresh and try again.,Операция не завершена. Обновите данные и повторите попытку.
+Open task,Открыть задачу
+Search,Поиск
+Select,Выбрать
+Explicit date,Явная дата
+Relative deadline,Относительный срок
+No deadline stated,Срок не указан
+Uncertain deadline,Неоднозначный срок
+Sort,Сортировка

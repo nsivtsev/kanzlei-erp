@@ -420,6 +420,11 @@ def _correction_state(doc, *, lock=False):
 def get_review_state(letter=None, **extra):
 	_boundary("get_review_state", extra)
 	doc = _read_letter(letter)
+	return review_projection(doc)
+
+
+def review_projection(doc):
+	"""Read the review within the caller's snapshot; public guards remain outside."""
 	selected = matching._customer(doc.selected_customer)
 	review = _draft(doc)
 	if not selected:

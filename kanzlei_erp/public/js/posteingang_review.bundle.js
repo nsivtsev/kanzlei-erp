@@ -255,5 +255,5 @@
   }
   client.load(frm,active).then(state=>{if(state && active())draw(state);}).catch(failure);
  }
- frappe.posteingang=Object.assign(frappe.posteingang || {},{ReviewClient,attach_review:attach,revoke_view:revoke,correction_form_data:correctionFormData});
+ frappe.posteingang=Object.assign(frappe.posteingang || {},{ReviewClient,attach_review:attach,revoke_view:revoke,correction_form_data:correctionFormData,review_rpc:rpc,review_messages:messages});
 })();

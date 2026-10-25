@@ -711,3 +711,78 @@ code. Внутренние вызовы сохраняют типизирова�
 
 Схемы extraction/review, AP-01 эталоны и модель хранения не изменены. Живой Mistral
 не запускался; fake/синтетические проверки не измеряют качество модели.
+
+
+## 16. AP-09: очередь и рабочий экран (2026-10-25)
+
+Desk Page `/desk/posteingang[/<letter>]` объединяет очередь, PDF и review. Page
+и sidebar требуют активного System User с явно назначенной ролью Posteingang
+Operator. Это не изменяет AP-08: подтверждённая история в Dokumente/Task доступна
+сотруднику с Customer read без Operator. Новые роли пользователям не назначаются.
+DE название Posteingang, RU Входящие PDF используют отдельный ключ PDF inbox.
+
+Модуль posteingang_workspace предоставляет read-only get_queue,
+get_letter_workspace, get_workspace_status и GET/HEAD download_original.
+Строгие параметры не принимают actor/Run/File/URL/storage path. JSON schema_version
+1.0 включает серверного user. Guest разрешён только на уровне диспетчеризации,
+чтобы обязательный Operator guard вернул безопасный 403 внутри error boundary,
+а не development traceback framework. Все четыре операции проверяют Operator
+до чтения предметных данных. Mutations и их транзакционные границы не менялись.
+
+get_queue поддерживает open/history/all/конкретный статус, uploaded_by=all|me,
+query до140 и oldest|newest. Default open/oldest включает шесть незавершённых
+статусов. Страница20, максимум50; cursor версии ap09-v1 привязан к site/user/
+filters, immutable received_at+name и snapshot приёма. Новые загрузки появляются
+после refresh, текущие статусы/права/quarantine перепроверяются при продолжении.
+File metadata допускается только при актуальном original binding/read. Matching
+и deadlines вычисляются только для выдаваемой страницы, без общего кэша и AI.
+Повреждённый Run помечает строку INVALID_RESULT; нет результата не означает
+none_found. Relative даты не вычисляются, предложенная дата явно непроверенная.
+
+Внутренние analysis_projection/matching_projection/review_projection принимают
+загруженный Letter и не создают новых границ транзакции. Существующие публичные
+AP-05…07 wrappers сохраняют guards/ответы. Workspace начинает одну свежую read
+границу и собирает один DB snapshot; независимый writer не смешивает revisions
+и действия разных версий. Original metadata не содержит raw file_url. PDF URLs
+принимают только Letter и снова проверяют Operator/Letter/private File/binding;
+выдача переиспользует AP-02/08 GET/HEAD/Range/no-store/nosniff и storage guards.
+
+Лёгкий status не читает/валидирует OCR. Он возвращает capabilities и visibility_key
+на основании доступного каталога Customer, отфильтрованного receipt/correction,
+ролей и разрешённых операций. Это позволяет убрать candidate/Task references
+после отзыва прав даже без изменения Letter revision. При смене ключа клиент
+обновляет отдельные matching/receipt/correction контейнеры, сохраняя dirty buffer
+и его expected_revision. Явное обновление кандидатов учитывает также изменения
+адресного справочника. Текущая доступность File проверяется status-запросом.
+
+Буфер review и frozen mutation intent хранятся только в памяти. Смена Letter
+с dirty review требует save/discard/stay, включая Back/Forward. Внешняя SPA
+навигация очищает DOM/PDF и timers; возврат заново авторизуется. beforeunload
+предупреждает о dirty/unknown intent. Нет autosave, auto-merge и подстановки новой
+revision старым правкам. Conflict comparison показывает подписанные поля/решения
+без raw JSON. Human/retained confirmation сбрасываются после edits/source change.
+
+Каждый async reply и popup callback привязан к user/Letter/sequence/route.
+Контроллер дополнительно проверяет active/user/mutation target до транспорта;
+после superseded post-mutation reload нет позднего перенаправления к старой
+операции. Busy/unknown intent блокируют новые mutations; explicit replay повторяет
+те же key/payload. Потеря доступа очищает references/buffers/PDF/intents. Polling
+queue15s/status5s приостанавливается вне видимой Page, не перерисовывает dirty editor.
+Существующий AP-03 storage хранит только intake recovery metadata; Page не хранит
+документы/причины/идентификаторы в browser storage. Все данные выводятся как текст.
+
+Рабочий экран использует существующие AP-03…07 mutations, включая correction и
+administrative dispositions; обычное изменение Task status остаётся ERP-операцией.
+Старая форма Incoming Letter продолжает работать. Intake dialog имеет optional
+callbacks обновления очереди/открытия результата; прежние вызовы совместимы.
+Схемы extraction/review и AP-01 эталоны не менялись. AP-09 завершён 25.10.2026:
+workspace17 (с Suite/MemoryS3 и без Suite), независимый snapshot1, профильная
+регрессия, Node49, AP-01 validator/Linux85, две миграции и frontend build — PASS.
+DE/light и RU/dark проверены на 1440/390 px; браузер подтвердил fake→Task/source,
+manual/no-actions без провайдера, смешанную пачку, конфликт двух вкладок,
+correction с выполненной старой Task и подтверждением замены другим оператором.
+Отзыв Customer read очищает PDF/подписи; карантинный исходник не открывается обычному
+оператору. В Dokumente видна Completed-замена и письмо без задач. Время следующей
+попытки показывается только для Run Queued, терминальный результат его не показывает.
+Live Mistral NOT RUN; физическое мобильное устройство и реальный обрыв браузерного
+HTTP-ответа отдельно не проверялись (frozen replay покрыт controller/service tests).

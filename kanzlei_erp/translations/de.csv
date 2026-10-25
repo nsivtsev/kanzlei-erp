@@ -783,3 +783,40 @@ Refresh source,Quelle aktualisieren
 This original is quarantined for administrative review.,Dieses Original ist für die administrative Prüfung gesperrt.
 Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: bekanntes Empfangsdatum oder Uploadzeit. E-Mail-Anhänge: E-Mail-Datum. Andere Dateien: Uploaddatum. Dies ist kein Buchungsbelegdatum.
 Received on,Empfangen am
+PDF inbox,Posteingang
+Queue,Warteschlange
+Queue state,Bearbeitungsstand
+Unfinished letters,Offene Schreiben
+History,Historie
+Uploaded by,Hochgeladen von
+Me,Ich
+Search letters,Schreiben suchen
+Workspace panels,Arbeitsbereiche
+Choose a letter from the queue.,Wählen Sie ein Schreiben aus der Warteschlange.
+Age in days: {0},Alter in Tagen: {0}
+No completed analysis is available.,Keine abgeschlossene Analyse vorhanden.
+Unverified proposed deadline,Ungeprüfter Fristvorschlag
+No explicit date,Kein ausdrückliches Datum
+Explicit dates: {0}; relative deadlines: {1},Ausdrückliche Daten: {0}; relative Fristen: {1}
+Unsaved review,Ungespeicherte Prüfung
+Save and continue,Speichern und fortfahren
+Discard,Verwerfen
+Stay,Bleiben
+Original PDF,Original-PDF
+The letter changed. Your local review has been preserved.,Das Schreiben wurde geändert. Ihre lokale Prüfung bleibt erhalten.
+Compare with saved review,Mit gespeicherter Prüfung vergleichen
+Local review,Lokale Prüfung
+Saved review,Gespeicherte Prüfung
+Discard local review and load saved version,Lokale Prüfung verwerfen und gespeicherte Version laden
+Check and retry the same request,Prüfen und dieselbe Anfrage wiederholen
+Resolve the unknown request before another operation.,Klären Sie zuerst das Ergebnis der vorherigen Anfrage.
+Save or discard the current review before continuing.,Speichern oder verwerfen Sie zuerst die aktuelle Prüfung.
+The operation could not finish. Refresh and try again.,Der Vorgang konnte nicht abgeschlossen werden. Aktualisieren Sie und versuchen Sie es erneut.
+Open task,Aufgabe öffnen
+Search,Suchen
+Select,Auswählen
+Explicit date,Ausdrückliches Datum
+Relative deadline,Relative Frist
+No deadline stated,Keine Frist angegeben
+Uncertain deadline,Unklare Frist
+Sort,Sortierung

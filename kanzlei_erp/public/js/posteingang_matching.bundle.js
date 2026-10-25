@@ -109,6 +109,6 @@
  }
  const invalidate=(frm,cdt,cdn)=>{const row=locals[cdt][cdn];for(const field of ["verified_by","verified_at","verification_source"]) row[field]=null;frm.refresh_field("kanzlei_identifiers");};
  frappe.ui.form.on("Mandant Identifier",{verify_identifier:(frm,cdt,cdn)=>verify(frm,locals[cdt][cdn]),identifier_type:invalidate,raw_value:invalidate,jurisdiction:invalidate,authority:invalidate,other_type:invalidate});
- frappe.posteingang=Object.assign(frappe.posteingang || {},{MatchingClient,attach_matching:attach});
+ frappe.posteingang=Object.assign(frappe.posteingang || {},{MatchingClient,attach_matching:attach,matching_rpc:rpc,matching_messages:messages});
  frappe.mandant_identifiers={attach:attachIdentifiers};
 })();

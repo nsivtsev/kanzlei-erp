@@ -1,0 +1,9 @@
+{
+ "doctype": "Page",
+ "name": "posteingang",
+ "page_name": "posteingang",
+ "module": "Kanzlei ERP",
+ "standard": "Yes",
+ "title": "PDF inbox",
+ "roles": [{"role": "Posteingang Operator"}]
+}

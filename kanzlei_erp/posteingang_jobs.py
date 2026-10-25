@@ -276,6 +276,11 @@ def get_analysis_state(letter=None, **extra):
 	doc = frappe.get_doc("Incoming Letter", letter)
 	if not letter_access(doc) or (not doc.confirmed_customer and not _operator(frappe.session.user)):
 		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
+	return analysis_projection(doc)
+
+
+def analysis_projection(doc):
+	"""Read projection inside the caller's transaction; no boundary or writes."""
 	settings = frappe.get_single("Posteingang Settings")
 	allowed = []
 	if _authorized(doc, frappe.session.user):

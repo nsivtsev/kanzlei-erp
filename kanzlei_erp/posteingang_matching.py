@@ -177,6 +177,11 @@ def _match(extraction):
 def get_matching_state(letter=None, **extra):
 	_boundary("get_matching_state", extra)
 	doc = _read_letter(letter)
+	return matching_projection(doc)
+
+
+def matching_projection(doc):
+	"""Current-permission projection without starting another transaction."""
 	source = _source(doc)
 	matching = _match(source) if source is not None else None
 	selected = _customer(doc.selected_customer)

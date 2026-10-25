@@ -8,7 +8,7 @@
 
 **Стек:** Frappe/ERPNext v16, Python по `pyproject.toml`, Frappe jobs, MariaDB, текущий File/S3 слой, Desk JS, Node tests и Bench tests. Suite Drive подключается отдельным расширением.
 
-**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01…AP-08 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-05 серверные, конкурентные и клиентские проверки — PASS; ограничение RU browser upload записано в результатах этапа. Живой Mistral smoke — NOT RUN. AP-06: matching, явный выбор, DE/RU и профильная регрессия — PASS. AP-07: атомарное подтверждение, защищённые Tasks, исправления, DE/RU и расширенная регрессия — PASS (24.10.2026). AP-08: Dokumente, защищённый источник Task, disk/MemoryS3, DE/RU и профильная регрессия — PASS (25.10.2026). AP-09…AP-10 ещё не реализованы.
+**Ветка:** `feature/ai-posteingang`; исходная точка `homepage@27016ce`. **Статус:** AP-01…AP-09 завершены. Серверная приёмка AP-02 — PASS; визуальная проверка DE/RU пропущена по явному решению владельца 19.10.2026. AP-05 серверные, конкурентные и клиентские проверки — PASS; ограничение RU browser upload записано в результатах этапа. Живой Mistral smoke — NOT RUN. AP-06: matching, явный выбор, DE/RU и профильная регрессия — PASS. AP-07: атомарное подтверждение, защищённые Tasks, исправления, DE/RU и расширенная регрессия — PASS (24.10.2026). AP-08: Dokumente, защищённый источник Task, disk/MemoryS3, DE/RU и профильная регрессия — PASS (25.10.2026). AP-09: единый экран, защищённые проекции, конфликты, исправления, DE/RU 1440/390 и профильная регрессия — PASS (25.10.2026). AP-10 не начат.
 
 **Проектное решение:** [AI Posteingang](2026-10-18-ai-posteingang-design.md). Все договорённости и ограничения этого документа применяются к каждому этапу.
 
@@ -36,7 +36,7 @@
 | AP-06 | Подбор Mandant по проверяемым признакам | AP-01, AP-02; формат результата AP-04 | [Завершён 22.10.2026](2026-10-22-ai-posteingang-ap06-implementation.md#результат-исполнения); явные verification/selection, права, конкуренция и DE/RU проверены |
 | AP-07 | Подтверждение и защищённое создание Tasks | AP-03, AP-05, AP-06 | Завершён; профильные проверки и DE/RU PASS |
 | AP-08 | Документы манданта и происхождение задачи | AP-07 | Завершён 25.10.2026: Dokumente, Task source, PDF/ZIP, disk/MemoryS3, DE/RU — PASS |
-| AP-09 | Очередь и полноценный экран проверки | AP-05, AP-06, AP-07, AP-08 | Не начат |
+| AP-09 | Очередь и полноценный экран проверки | AP-05, AP-06, AP-07, AP-08 | Завершён: workspace, DE/RU 1440/390, конфликты/исправления и профильная приёмка PASS |
 | AP-10 | Сквозная приёмка и пилот MVP | AP-01…AP-09 | Не начат |
 | AP-11 | Дополнительный вход из папки Suite Drive | AP-10 | Отложен |
 | AP-12 | Разделение общего скана на отдельные письма | AP-10; подтверждённая потребность | Отложен |
@@ -305,6 +305,51 @@ release gate. Коммит/PR/deployment не выполнялись. Следу
 **Приёмка:** пользователь загружает письмо, корректирует клиента и действие, подтверждает и видит Task/источник. Состояния загрузки, ошибки, уточнения, неизвестного срока и конфликта понятны. Непривилегированный сотрудник не видит вход и не открывает его по прямому URL.
 
 **Проверки:** `node --test tests/posteingang.test.cjs` и затронутые navigation/portal tests. Один сквозной browser flow на DE и RU; широкий и узкий viewport, поскольку меняются локализация и адаптивность. Отдельно коротко проверить ручной сценарий при недоступном provider и конфликт двух вкладок. Не создавать большой screenshot-отчёт без запроса.
+
+**Результат AP-09 (25.10.2026):** единая Page, очередь и строгие
+read-only projections, protected PDF, review/matching/analysis/intake/correction
+интеграция реализованы. Старые формы/API совместимы. Read helpers собирают один
+snapshot; controller защищает dirty buffer, frozen intent и поздние callbacks.
+Права references обновляются без изменения Letter revision. Новых dependencies,
+DocTypes/Custom Fields, role assignments и AI-вызовов при чтении нет.
+
+**Выполнено:** workspace suite с Suite/MemoryS3 — 17 PASS, без Suite — 17 OK
+(1 S3 SKIP); независимый DB snapshot
+concurrency — 1 PASS. Permissions11/files15/jobs26/matching27/confirmation17/
+review history2/documents23/navigation23 — PASS. Navigation test harness изолирует
+User creation throttle; production throttle не изменён. Node workspace и прежние
+intake/jobs/matching/review/source/navigation — 49 PASS. AP-01 validator (16 PDF /
+18 страниц), Linux autonomous85, frontend build, Ruff, JSON/DE-RU CSV/diff — PASS.
+Две повторные миграции сохраняют Settings, encrypted secret, roles, Letters,
+terminal Runs и Tasks. Реальный HTTP workspace/queue/PDF exact bytes/HEAD/Range/
+attachment/no-store и безопасный Guest/invalid-parameter refusal — PASS.
+
+**Браузер:** DE/light на одноразовом сайте без Suite: queue empty
+state → доступный дубль → новая загрузка AP01-10 → fake Run → явное apply → ручной
+выбор Mandant с причиной → исправление action → assignee → external20.11 с основанием /
+internal18.11 → save → human checkbox → confirm → одна Task TASK-2026-00165 →
+защищённый source с корректными разными датами. Fake Run завершился штатным worker;
+дополнительный ручной process_run вернул STALE_RUN и не повторил обработку.
+
+После разблокировки выполнены manual/no-actions при отключённом провайдере
+(0 Run/Tasks), смешанная пачка invalid+raster PDF, конфликт двух настоящих вкладок
+с сохранением локального буфера/сравнением/явным discard, RU/dark на390/1440 и
+DE/light на1440/390, ввод с клавиатуры и сохранение уточнения. Исправлены перевод
+Sort, доступное имя мобильной upload-кнопки, формат времени и показ retry только
+для Queued (RED→GREEN test).
+
+Manager создал замену с отдельным File и теми же bytes; Completed Task сохранена
+historical с причиной. Обычный оператор подтвердил замену после разбора, без новых
+Run/Tasks. Quarantine закрывает исходник; Customer Dokumente показывает замену и
+письмо без задач. Реальный отзыв Customer read при открытом письме очистил PDF,
+editor и прежние подписи; тестовая share восстановлена. Это браузерная приёмка
+на синтетических данных, без внешнего AI и физических мобильных устройств.
+Потеря HTTP-ответа/смена пользователя покрыты controller/service tests; реальный
+обрыв браузерного ответа отдельно не имитировался.
+
+Основной сайт/общие workers/Redis/scheduler не затрагивались. Live Mistral NOT RUN;
+commit/PR/deployment не выполнялись. AP-09 закрыт; следующий этап — отдельный план
+AP-10 со сквозной приёмкой и условиями пилота.
 
 ## AP-10 — Приёмка и пилот MVP
 
