@@ -187,10 +187,12 @@ def path_guard(path, operation="read"):
 				deny()
 
 
-def response(file):
+def response(file, *, disposition="inline"):
 	"""Authorized GET/HEAD/Range through the app; never mints a bearer URL."""
 	from kanzlei_erp.object_storage import open_file
 
+	if disposition not in {"inline", "attachment"}:
+		frappe.throw(frappe._("Invalid download disposition"), frappe.ValidationError)
 	require_access(file)
 	with open_file(file) as source:
 		# Bounded by v1's 20 MiB. BytesIO lets Werkzeug handle Range and HEAD.
@@ -210,6 +212,7 @@ def response(file):
 			frappe.local.request.environ,
 			mimetype=content_type,
 			download_name=file.file_name,
+			as_attachment=disposition == "attachment",
 			conditional=True,
 			max_age=0,
 			etag=False,

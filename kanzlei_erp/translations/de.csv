@@ -774,3 +774,12 @@ Assignment update,Zuweisung aktualisiert
 Incoming Action ID,ID der Eingangshandlung
 Incoming Action Key,Schlüssel der Eingangshandlung
 Requires planning,Planung erforderlich
+Posteingang,Posteingang
+Uploaded,Hochgeladen
+Posteingang source,Quelle aus dem Posteingang
+External deadline is not confirmed,Externe Frist ist nicht bestätigt
+Open incoming letter,Eingangsschreiben öffnen
+Refresh source,Quelle aktualisieren
+This original is quarantined for administrative review.,Dieses Original ist für die administrative Prüfung gesperrt.
+Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: bekanntes Empfangsdatum oder Uploadzeit. E-Mail-Anhänge: E-Mail-Datum. Andere Dateien: Uploaddatum. Dies ist kein Buchungsbelegdatum.
+Received on,Empfangen am

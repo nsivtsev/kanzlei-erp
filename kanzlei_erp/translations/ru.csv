@@ -794,3 +794,12 @@ Assignment update,Изменение назначения
 Incoming Action ID,ID действия входящего письма
 Incoming Action Key,Ключ действия входящего письма
 Requires planning,Требует планирования
+Posteingang,Входящие письма
+Uploaded,Загружено
+Posteingang source,Источник Posteingang
+External deadline is not confirmed,Внешний срок не подтверждён
+Open incoming letter,Открыть входящее письмо
+Refresh source,Обновить источник
+This original is quarantined for administrative review.,Этот оригинал заблокирован для административного разбора.
+Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: известная дата получения или время загрузки. Вложения email: дата письма. Другие файлы: дата загрузки. Это не дата бухгалтерского документа.
+Received on,Получено

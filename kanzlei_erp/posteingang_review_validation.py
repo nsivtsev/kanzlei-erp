@@ -132,6 +132,35 @@ def _semantics(review, confirm):
 			raise InvalidResult()
 
 
+def _verify_evidence(evidence, texts, page_count):
+	for item in evidence:
+		if type(item["page"]) is not int or item["page"] > page_count:
+			raise InvalidResult()
+		quote = item["quote"]
+		item["verification"] = (
+			"missing" if quote is None else
+			"matched" if item["page"] in texts and normalized(quote) in texts[item["page"]] else
+			"unverified"
+		)
+
+
+def validate_confirmed_action(action, *, pages, page_count):
+	"""Validate one confirmed action without exposing the other review decisions."""
+	result = _object({"action": action})["action"]
+	_nonblank(result)
+	if type(page_count) is not int or not 1 <= page_count <= 50:
+		raise InvalidResult()
+	ref = {"$ref": BASE + "review.schema.json#/properties/actions/items"}
+	raw, canonical, _ = _validators()
+	_check(result, raw.evolve(schema=ref))
+	texts = {} if pages is None or pages == [] else {p["page"]: normalized(p["text"]) for p in validate_pages(pages, page_count)}
+	_verify_evidence(result["evidence"], texts, page_count)
+	_check(result, canonical.evolve(schema=ref))
+	_semantics({"mode": "confirm", "human_verified": True, "selected_customer": "confirmed",
+		"customer_reason": "confirmed", "no_actions_reason": None, "actions": [result]}, True)
+	return result
+
+
 def validate_review(review, document_fields, *, stored_actions, pages, page_count, confirm=False):
 	"""Return independent canonical (review, document_fields), or a safe error.
 
@@ -156,15 +185,7 @@ def validate_review(review, document_fields, *, stored_actions, pages, page_coun
 		page["page"]: normalized(page["text"]) for page in validate_pages(pages, page_count)
 	}
 	for row in result["actions"]:
-		for evidence in row["evidence"]:
-			if type(evidence["page"]) is not int or evidence["page"] > page_count:
-				raise InvalidResult()
-			quote = evidence["quote"]
-			evidence["verification"] = (
-				"missing" if quote is None else
-				"matched" if evidence["page"] in texts and normalized(quote) in texts[evidence["page"]] else
-				"unverified"
-			)
+		_verify_evidence(row["evidence"], texts, page_count)
 	_check(result, canonical_validator)
 	_semantics(result, confirm)
 	return result, fields

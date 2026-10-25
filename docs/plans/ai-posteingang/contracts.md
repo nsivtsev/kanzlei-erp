@@ -651,3 +651,63 @@ Task не меняется задним числом. Двусторонние �
 polling. Human checkbox сбрасывается после правок. Документы/причины не сохраняются
 в browser storage. Фреймворк расширен узкими copy/assignment/delivery hooks с точным
 предыдущим patch v9 и проверяемым upgrade/repeat/rollback; runtime monkeypatch не нужен.
+
+
+## 15. AP-08: Dokumente и источник Task (2026-10-25)
+
+Подтверждённые письма проецируются динамически, без новых сущностей, копий PDF,
+переноса в Drive или записи при чтении. Источник `posteingang` использует только
+`confirmed_customer`, `Completed`, отсутствие карантина и текущий доступ к Letter
+и приватному оригиналу с правильной привязкой. Operator для чтения подтверждённой
+истории не требуется; выключение функции не закрывает историю. Включаются письма
+без Task и ручные письма без Run. Объединение только по File ID.
+
+Основной контекст — Letter; дополнительные Task-контексты требуют текущего чтения
+Task и двусторонней accepted Action→Task связи с совпадающими provenance/key/Customer.
+Скрытые Tasks не участвуют в заголовках, поиске или количестве контекстов.
+`source=task` использует доступный Task-контекст, `source=posteingang` — письмо.
+Искусственная связь с FiBu Package не создаётся. Карантинный оригинал не возвращается
+в Dokumente даже через альтернативный контекст; административный источник доступен
+только через Task по политике AP-07.
+
+Известная `received_date` определяет `document_date` и `date_kind=received`.
+Технический ключ сортировки — начало календарного дня; UI показывает только дату
+без timezone-конвертации и подпись «Получено» / «Empfangen am». При неизвестной дате
+используются `received_at`, `date_kind=uploaded`, «Загружено» / «Hochgeladen».
+Дата документа Letter не подменяет получение. Старые `email`/`file` источники сохраняют
+семантику дат. Newest/oldest и File ID tie-breaker сохранены. Snapshot допускает только
+`confirmed_at <= snapshot`; каждый запрос заново проверяет права и карантин.
+Fingerprint курсора включает `ap08-v1`; старый курсор требует обновить список.
+Поиск охватывает имя файла, Letter ID, подтверждённые sender/letter_type и доступные
+Task titles; OCR, полный текст и история не индексируются.
+
+`posteingang_documents.get_task_source(task)` возвращает schema_version 1.0 и
+`available=false` для обычной читаемой Task. Для источника возвращаются только
+Letter name/status/quarantined/document_date/received metadata, Action UUID,
+подтверждённый external_date/basis/evidence, File ID/name/page_count и Task-only
+preview/download URLs. Клиент не задаёт Letter/Action/File/Customer/URL/actor.
+`download_task_source(task, disposition)` принимает GET/HEAD и inline|attachment.
+Перед метаданными и байтами проверяются active System User, обычные Task/FiBu/AP-07
+права, provenance/key, confirmed Customer, accepted Action и created_task, Letter/File
+права и private binding. Повреждённая связь не запускает поиск другого источника.
+
+Evidence пересчитывается общим review helper по валидному applied Succeeded Run
+с hard caps AP-01. Невалидный applied Run или сохранённый Action даёт INVALID_RESULT.
+Без OCR ручная цитата остаётся unverified/missing; похожая цитата не matched.
+Внешний срок не дублируется в Task; внутренний срок и AI-предложение не подменяют его.
+Task-панель не сохраняет и не перезагружает рабочие поля, игнорирует поздние успешные
+и ошибочные ответы, очищает источник при отказе и выводит значения как текст.
+Browser storage не используется.
+
+Общий PDF helper сохраняет inline по умолчанию, добавляя внутренний disposition.
+Выдача использует защищённый open_file, GET/HEAD/Range, bounded original,
+private/no-store, nosniff и закрытие потока, без публичных/presigned URL.
+Download/ZIP Dokumente повторно строят текущий граф доступа. ZIP сохраняет лимиты
+100 файлов/100 MiB, дедупликацию File ID и безопасные имена коллизий; ошибка любого
+потока отклоняет архив целиком. Новые Task endpoints и существующие документные
+HTTP endpoints используют локальную безопасную границу ошибок: статический текст
+без содержимого/пути/traceback даже в development mode, HTTP 403/417/500 и безопасный
+code. Внутренние вызовы сохраняют типизированные исключения.
+
+Схемы extraction/review, AP-01 эталоны и модель хранения не изменены. Живой Mistral
+не запускался; fake/синтетические проверки не измеряют качество модели.

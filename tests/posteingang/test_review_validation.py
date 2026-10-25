@@ -52,6 +52,16 @@ class ReviewValidationTests(unittest.TestCase):
 
 		self.assertEqual(schema("review"), json.loads((ROOT / "docs/plans/ai-posteingang/schemas/review.schema.json").read_text()))
 
+	def test_confirmed_action_projection_recomputes_evidence_and_checks_dates(self):
+		action = copy.deepcopy(self.review["actions"][0])
+		action["evidence"] = [{"page": 1, "quote": "Ｆｉｎａｎｚａｍｔ   Beispiel", "verification": "unverified"}]  # noqa: RUF001 -- intentional NFKC fixture
+		pages = [{"page": 1, "text": "Finanzamt Beispiel"}]
+		checked = self.v.validate_confirmed_action(action, pages=pages, page_count=1)
+		self.assertEqual(checked["evidence"][0]["verification"], "matched")
+		action["external_date"] = "2026-02-31"
+		with self.assertRaises(self.v.InvalidResult):
+			self.v.validate_confirmed_action(action, pages=pages, page_count=1)
+
 	def test_cannot_drop_add_or_forge_actions(self):
 		for mutate in (lambda r: r.update(actions=[]), lambda r: r["actions"][0].update(action_id=str(uuid4())), lambda r: r["actions"][0].update(source_index=1), lambda r: r["actions"].append(copy.deepcopy(r["actions"][0]))):
 			original = copy.deepcopy(self.review)

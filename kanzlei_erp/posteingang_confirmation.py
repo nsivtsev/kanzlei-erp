@@ -190,7 +190,8 @@ def _latest_successful(doc):
 def _pages(doc):
 	if not doc.applied_run:
 		return None
-	_source(doc, doc.applied_run)
+	if _source(doc, doc.applied_run) is None:
+		workflow.fail("INVALID_RESULT")
 	try:
 		return validate_pages(_object(frappe.db.get_value("Incoming Letter Run", doc.applied_run, "ocr_pages_json"))["pages"], doc.page_count)
 	except (InvalidResult, KeyError, TypeError):
