@@ -56,8 +56,10 @@ class ContractTests(unittest.TestCase):
 
     def test_entire_dataset_is_valid(self):
         result = self.validator.validate_dataset(self.dataset)
-        self.assertEqual(result["cases"], 16)
-        self.assertEqual(result["splits"], {"development": 12, "holdout": 4})
+        manifest = self.read("manifest.json")
+        self.assertEqual(result["cases"], len(manifest["cases"]))
+        self.assertEqual(result["splits"]["development"], 12)
+        self.assertGreaterEqual(result["splits"]["holdout"], 4)
 
     def test_dataset_revision_does_not_require_schema_revision(self):
         manifest = self.read("manifest.json")
@@ -287,7 +289,7 @@ class ContractTests(unittest.TestCase):
 
     def test_variants_cannot_cross_evaluation_split(self):
         manifest = self.read("manifest.json")
-        manifest["cases"][-1]["split"] = "holdout"
+        next(case for case in manifest["cases"] if case["case_id"] == "AP01-16")["split"] = "holdout"
         self.write("manifest.json", manifest)
         self.invalid("source family")
 

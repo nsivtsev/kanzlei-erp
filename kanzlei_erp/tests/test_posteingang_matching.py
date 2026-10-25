@@ -157,7 +157,7 @@ class TestPosteingangMatching(PosteingangTestCase):
 		doc.reload()
 		return doc
 
-	def test_all_sixteen_fixture_candidate_sets(self):
+	def test_all_fixture_candidate_sets(self):
 		from kanzlei_erp.tests.test_posteingang_ai import FIXTURES
 
 		catalog = json.loads((FIXTURES / "catalog.json").read_text())
@@ -182,10 +182,10 @@ class TestPosteingangMatching(PosteingangTestCase):
 				state = self.matching.get_matching_state(doc.name)
 				actual = {c["customer"] for c in state["matching"]["candidates"]}
 				self.assertEqual(actual, {customers[k] for k in case["expected"]["candidate_customers"]})
-				expected_ambiguity = "multiple_addressees" if case["case_id"] == "AP01-06" else "multiple_matches" if len(actual) > 1 else "none" if actual else "not_found"
+				expected_ambiguity = "multiple_addressees" if "multiple_customers" in case["tags"] else "multiple_matches" if len(case["expected"]["candidate_customers"]) > 1 else "none" if case["expected"]["candidate_customers"] else "not_found"
 				self.assertEqual(state["matching"]["ambiguity"], expected_ambiguity)
 				self.assertEqual((frappe.db.get_value("Incoming Letter", doc.name, "revision"), frappe.db.count("Task"), frappe.db.count("Incoming Letter Event")), before)
-				if case["case_id"] == "AP01-06":
+				if "multiple_customers" in case["tags"]:
 					self.assertEqual(state["matching"]["ambiguity"], "multiple_addressees")
 					with self.assertRaisesRegex(frappe.ValidationError, "MULTIPLE_ADDRESSEES"):
 						self.matching.select_customer(doc.name, customers["SYN-CUSTOMER-A"], "reason", doc.revision, "multi")

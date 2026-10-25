@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "dataset_version": "1.0",
+  "dataset_version": "1.1",
   "synthetic": true,
   "catalog": "catalog.json",
   "sources": "sources.json",
@@ -640,6 +640,1093 @@
         "replacement"
       ],
       "annotations": "annotations/AP01-16.json"
+    },
+    {
+      "case_id": "AP01-17",
+      "description": "Liefervertrag vorlegen",
+      "source_family": "independent-pilot-AP01-17",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-17.pdf",
+      "sha256": "72c3402bf8f213930f9ceb3ad3b1aca2281232e9441332c69d9cea15ddbb7670",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-17.json",
+      "ocr": "ocr/AP01-17.json",
+      "extraction": "extraction/AP01-17.json",
+      "review": "reviews/AP01-17.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "9b843501-d909-55be-8240-35317f7e3bbb",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-01",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-17.json"
+    },
+    {
+      "case_id": "AP01-18",
+      "description": "Rechnungsübersicht erstellen",
+      "source_family": "independent-pilot-AP01-18",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-18.pdf",
+      "sha256": "ddca7084e84e6cc36df868968122378a3a9da8a4e192816eae6f9cd0a5983564",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-18.json",
+      "ocr": "ocr/AP01-18.json",
+      "extraction": "extraction/AP01-18.json",
+      "review": "reviews/AP01-18.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "25fbb743-906d-5b89-92da-bd558e2ce467",
+            "customer": "SYN-CUSTOMER-C",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-03",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-18.json"
+    },
+    {
+      "case_id": "AP01-19",
+      "description": "Inventarliste abgleichen",
+      "source_family": "independent-pilot-AP01-19",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-19.pdf",
+      "sha256": "f2cee0eb3d779aa0c02ae292d810245f8d1889c41e89732f31507e6ee86a8686",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-19.json",
+      "ocr": "ocr/AP01-19.json",
+      "extraction": "extraction/AP01-19.json",
+      "review": "reviews/AP01-19.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "f391c503-3d76-5164-a362-1b2f047990f4",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-07",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-19.json"
+    },
+    {
+      "case_id": "AP01-20",
+      "description": "Zahlungsnachweis einreichen",
+      "source_family": "independent-pilot-AP01-20",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-20.pdf",
+      "sha256": "35fe4a45641dfc3d2a045620e0f337c765f11b5ee783d1d67ccaa76a85a93202",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-20.json",
+      "ocr": "ocr/AP01-20.json",
+      "extraction": "extraction/AP01-20.json",
+      "review": "reviews/AP01-20.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "3c6daeca-6848-5c4b-a2ad-2936c42a090d",
+            "customer": "SYN-CUSTOMER-C",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-10",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-20.json"
+    },
+    {
+      "case_id": "AP01-21",
+      "description": "Bankauszug ergänzen",
+      "source_family": "independent-pilot-AP01-21",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-21.pdf",
+      "sha256": "7ea96719e4939114d89b6d40cb70048263f84b78b5640adfdbff877eb483ba7f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-21.json",
+      "ocr": "ocr/AP01-21.json",
+      "extraction": "extraction/AP01-21.json",
+      "review": "reviews/AP01-21.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "bd12e981-6835-59f7-b816-fd2623888fd4",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-14",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-21.json"
+    },
+    {
+      "case_id": "AP01-22",
+      "description": "Registerauszug senden",
+      "source_family": "independent-pilot-AP01-22",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-22.pdf",
+      "sha256": "61b9c75cf0beeea874f372ee5b7377ce7871a9929e7203a25599ac2abe004832",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-22.json",
+      "ocr": "ocr/AP01-22.json",
+      "extraction": "extraction/AP01-22.json",
+      "review": "reviews/AP01-22.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "8cf7f460-4596-5e39-841f-f80aa1909166",
+            "customer": "SYN-CUSTOMER-C",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-16",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-22.json"
+    },
+    {
+      "case_id": "AP01-23",
+      "description": "Lohnliste erläutern",
+      "source_family": "independent-pilot-AP01-23",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-23.pdf",
+      "sha256": "4a0fb889038b05c954999c0e15e14f75a1de29984f2eab458f98a1a4e15e15ad",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-23.json",
+      "ocr": "ocr/AP01-23.json",
+      "extraction": "extraction/AP01-23.json",
+      "review": "reviews/AP01-23.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "af12c753-64f0-50d9-aa0d-6ba68aced04b",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-18",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-23.json"
+    },
+    {
+      "case_id": "AP01-24",
+      "description": "Erklärung unterschreiben",
+      "source_family": "independent-pilot-AP01-24",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-24.pdf",
+      "sha256": "a8c12867490afd2a46f1b4db111bfba4f62e5d1c17abcee82a7f216473604027",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-24.json",
+      "ocr": "ocr/AP01-24.json",
+      "extraction": "extraction/AP01-24.json",
+      "review": "reviews/AP01-24.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "6849c2b5-bd7c-598c-b7dc-da2ea3af06a7",
+            "customer": "SYN-CUSTOMER-C",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-21",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-24.json"
+    },
+    {
+      "case_id": "AP01-25",
+      "description": "Zwei getrennte Arbeitsschritte zur Musterprüfung 1",
+      "source_family": "independent-pilot-AP01-25",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-25.pdf",
+      "sha256": "512b542d527f159eb20796f67c71076eef0a3b9f0a63e0d2bda00d589e6a1fe9",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-25.json",
+      "ocr": "ocr/AP01-25.json",
+      "extraction": "extraction/AP01-25.json",
+      "review": "reviews/AP01-25.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "51eeac00-5073-5a14-ada4-0817e82755de",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-02",
+            "needs_planning": false
+          },
+          {
+            "action_id": "5921780c-4a98-5404-8162-017852a0a2d6",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-12",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-25.json"
+    },
+    {
+      "case_id": "AP01-26",
+      "description": "Zwei getrennte Arbeitsschritte zur Musterprüfung 2",
+      "source_family": "independent-pilot-AP01-26",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-26.pdf",
+      "sha256": "7baad70ec414192fff35a9e1d049e1118dd9857a6858e0ade62feb29b9b45a6a",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-26.json",
+      "ocr": "ocr/AP01-26.json",
+      "extraction": "extraction/AP01-26.json",
+      "review": "reviews/AP01-26.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "bf5d7799-20d5-5f6f-939a-850ee21e0955",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-03",
+            "needs_planning": false
+          },
+          {
+            "action_id": "8e18e61d-3a32-5c38-b9a7-b2b95638981b",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-13",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-26.json"
+    },
+    {
+      "case_id": "AP01-27",
+      "description": "Zwei getrennte Arbeitsschritte zur Musterprüfung 3",
+      "source_family": "independent-pilot-AP01-27",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-27.pdf",
+      "sha256": "50c7a50235567c06400e2b2c3eb0e927a56077b62237f48f5e8d3acdd71b61cc",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-27.json",
+      "ocr": "ocr/AP01-27.json",
+      "extraction": "extraction/AP01-27.json",
+      "review": "reviews/AP01-27.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "67e70c28-12c0-59bc-a780-b1a38c187f56",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-04",
+            "needs_planning": false
+          },
+          {
+            "action_id": "890195f3-d3c8-5549-ba47-cfea0980fa06",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-14",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-27.json"
+    },
+    {
+      "case_id": "AP01-28",
+      "description": "Zwei getrennte Arbeitsschritte zur Musterprüfung 4",
+      "source_family": "independent-pilot-AP01-28",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-28.pdf",
+      "sha256": "53ac83f8ba3cf03225e84031ef990a0e07a8fba899b2a9ff80b87e1aaf081218",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-28.json",
+      "ocr": "ocr/AP01-28.json",
+      "extraction": "extraction/AP01-28.json",
+      "review": "reviews/AP01-28.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "62a58ed1-871f-5be8-847a-1f50ce4e506e",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-05",
+            "needs_planning": false
+          },
+          {
+            "action_id": "277e5622-4762-5da5-aa82-40e14bfc1705",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-15",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "explicit_date"
+      ],
+      "annotations": "annotations/AP01-28.json"
+    },
+    {
+      "case_id": "AP01-29",
+      "description": "Relativer Termin mit ausdrücklich genanntem Bezug 1",
+      "source_family": "independent-pilot-AP01-29",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-29.pdf",
+      "sha256": "30e41a82e83a13354fc1889035a67847b3ce48feee3b55fc19a70d9d6b96ed01",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-29.json",
+      "ocr": "ocr/AP01-29.json",
+      "extraction": "extraction/AP01-29.json",
+      "review": "reviews/AP01-29.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "0b47c7ac-46c9-559d-a93f-f8743075d59b",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": null,
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "relative"
+      ],
+      "annotations": "annotations/AP01-29.json"
+    },
+    {
+      "case_id": "AP01-30",
+      "description": "Relativer Termin mit ausdrücklich genanntem Bezug 2",
+      "source_family": "independent-pilot-AP01-30",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-30.pdf",
+      "sha256": "0e4a9e45856a6bc834dd2c1e4748368c278dac26bddcc5e85377cc02bfb39e90",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-30.json",
+      "ocr": "ocr/AP01-30.json",
+      "extraction": "extraction/AP01-30.json",
+      "review": "reviews/AP01-30.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "cef19f57-f53b-5b77-bddb-18b9277fe959",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": null,
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "relative"
+      ],
+      "annotations": "annotations/AP01-30.json"
+    },
+    {
+      "case_id": "AP01-31",
+      "description": "Relativer Termin mit ausdrücklich genanntem Bezug 3",
+      "source_family": "independent-pilot-AP01-31",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-31.pdf",
+      "sha256": "22ccfdc74e9afa857ebe1d01bf555267c804aaf3266d3ee8dade6d0bf92355c4",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-31.json",
+      "ocr": "ocr/AP01-31.json",
+      "extraction": "extraction/AP01-31.json",
+      "review": "reviews/AP01-31.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "5c4ec346-cd4b-5f88-b4f9-ab529282e19c",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": null,
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "relative"
+      ],
+      "annotations": "annotations/AP01-31.json"
+    },
+    {
+      "case_id": "AP01-32",
+      "description": "Arbeitsauftrag ohne Termin 1",
+      "source_family": "independent-pilot-AP01-32",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-32.pdf",
+      "sha256": "42a4f4ee895e0d6e6620b254824985a85f7d71ed5a1c4adad12c830f382b89fe",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-32.json",
+      "ocr": "ocr/AP01-32.json",
+      "extraction": "extraction/AP01-32.json",
+      "review": "reviews/AP01-32.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "4709831d-da61-5305-8cc8-f585475a3399",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": null,
+            "exp_end_date": null,
+            "external_date": null,
+            "needs_planning": true
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "not_found",
+        "unscheduled"
+      ],
+      "annotations": "annotations/AP01-32.json"
+    },
+    {
+      "case_id": "AP01-33",
+      "description": "Arbeitsauftrag ohne Termin 2",
+      "source_family": "independent-pilot-AP01-33",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-33.pdf",
+      "sha256": "d160237948dd72711f9f53f18e6a4007ec831528a6f1ed02062f4423f7ad7024",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-33.json",
+      "ocr": "ocr/AP01-33.json",
+      "extraction": "extraction/AP01-33.json",
+      "review": "reviews/AP01-33.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "8ab1623d-fd38-517c-8e9a-e4f1645017ae",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": null,
+            "exp_end_date": null,
+            "external_date": null,
+            "needs_planning": true
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "not_found",
+        "unscheduled"
+      ],
+      "annotations": "annotations/AP01-33.json"
+    },
+    {
+      "case_id": "AP01-34",
+      "description": "Widersprüchliche Terminkorrektur 1",
+      "source_family": "independent-pilot-AP01-34",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-34.pdf",
+      "sha256": "7ee7456916190944fff5b89f725c79b4a39b8d27cbe730cf4c91c77e4a269947",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-34.json",
+      "ocr": "ocr/AP01-34.json",
+      "extraction": "extraction/AP01-34.json",
+      "review": "reviews/AP01-34.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "uncertain"
+      ],
+      "annotations": "annotations/AP01-34.json"
+    },
+    {
+      "case_id": "AP01-35",
+      "description": "Widersprüchliche Terminkorrektur 2",
+      "source_family": "independent-pilot-AP01-35",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-35.pdf",
+      "sha256": "e3097962d3d386223ebe919e3ffc8ade26eedac2943bf686a4282145fb16dfeb",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-35.json",
+      "ocr": "ocr/AP01-35.json",
+      "extraction": "extraction/AP01-35.json",
+      "review": "reviews/AP01-35.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "uncertain"
+      ],
+      "annotations": "annotations/AP01-35.json"
+    },
+    {
+      "case_id": "AP01-36",
+      "description": "Unbekannter Adressat ohne Katalogtreffer",
+      "source_family": "independent-pilot-AP01-36",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-36.pdf",
+      "sha256": "85381b418385b8207049ee94aa15a9fff4b34a891dedee067eeb859bd0b8f12f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-36.json",
+      "ocr": "ocr/AP01-36.json",
+      "extraction": "extraction/AP01-36.json",
+      "review": "reviews/AP01-36.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "unknown_customer"
+      ],
+      "annotations": "annotations/AP01-36.json"
+    },
+    {
+      "case_id": "AP01-37",
+      "description": "Gemeinsame Referenz bei zwei zugänglichen Kunden",
+      "source_family": "independent-pilot-AP01-37",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-37.pdf",
+      "sha256": "1b9e11db4e9d233726037c09106a0704b862e071cd6be7c09ca86dc9c0168e7d",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-37.json",
+      "ocr": "ocr/AP01-37.json",
+      "extraction": "extraction/AP01-37.json",
+      "review": "reviews/AP01-37.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-B",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A",
+          "SYN-CUSTOMER-B"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "ambiguous_customer"
+      ],
+      "annotations": "annotations/AP01-37.json"
+    },
+    {
+      "case_id": "AP01-38",
+      "description": "Zwei eigenständige Mandanten in einer Sammelanfrage",
+      "source_family": "independent-pilot-AP01-38",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-38.pdf",
+      "sha256": "2b25487f27403d67b4acb06394d089ea2d99537a40526b1a55ce88ab2af7575c",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-38.json",
+      "ocr": "ocr/AP01-38.json",
+      "extraction": "extraction/AP01-38.json",
+      "review": "reviews/AP01-38.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A",
+          "SYN-CUSTOMER-C"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_customers"
+      ],
+      "annotations": "annotations/AP01-38.json"
+    },
+    {
+      "case_id": "AP01-39",
+      "description": "Absichtlich schlechter Bildscan mit echter Goldpflicht",
+      "source_family": "independent-pilot-AP01-39",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-39.pdf",
+      "sha256": "63fa37f221126e3ebd555b9c869b80ab01c36178137acc879cb7d50817ff6a6f",
+      "page_count": 1,
+      "generation": "raster",
+      "source_text": "texts/AP01-39.json",
+      "ocr": "ocr/AP01-39.json",
+      "extraction": "extraction/AP01-39.json",
+      "review": "reviews/AP01-39.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "poor_scan",
+        "unreadable"
+      ],
+      "annotations": "annotations/AP01-39.json"
+    },
+    {
+      "case_id": "AP01-40",
+      "description": "Teilweise lesbares Anschreiben und zwei getrennte Anlagen",
+      "source_family": "independent-pilot-AP01-40",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-40.pdf",
+      "sha256": "acc34e98369fb9b4fff816e5fdfc29907a9a239d12198ca372227617b4f732d4",
+      "page_count": 3,
+      "generation": "text",
+      "source_text": "texts/AP01-40.json",
+      "ocr": "ocr/AP01-40.json",
+      "extraction": "extraction/AP01-40.json",
+      "review": "reviews/AP01-40.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "6ebd7b98-888f-5a10-a0ca-28963d5be3ae",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-22",
+            "needs_planning": false
+          },
+          {
+            "action_id": "66874586-6a87-5b2d-a9ec-76e4bf4ebee3",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": null,
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "partial",
+        "multi_page",
+        "explicit_date",
+        "relative"
+      ],
+      "annotations": "annotations/AP01-40.json"
+    },
+    {
+      "case_id": "AP01-41",
+      "description": "Reine synthetische Empfangsbestätigung",
+      "source_family": "independent-pilot-AP01-41",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-41.pdf",
+      "sha256": "3e3e400162907f0ca1984c30eba9ef89b12bcdd0d11a3b0fc33343a0b95a718b",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-41.json",
+      "ocr": "ocr/AP01-41.json",
+      "extraction": "extraction/AP01-41.json",
+      "review": "reviews/AP01-41.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "no_actions",
+        "informational"
+      ],
+      "annotations": "annotations/AP01-41.json"
+    },
+    {
+      "case_id": "AP01-42",
+      "description": "Fremde Anweisung und Absendernummer ohne Adressatenbeweis",
+      "source_family": "independent-pilot-AP01-42",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-42.pdf",
+      "sha256": "5aa3b555088bb1609dacd00de00ce50bfde3bd93ef060cc9f54f8211917ec375",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-42.json",
+      "ocr": "ocr/AP01-42.json",
+      "extraction": "extraction/AP01-42.json",
+      "review": "reviews/AP01-42.json",
+      "received_date_known": true,
+      "received_date": "2026-10-26",
+      "allowed_customers": [
+        "SYN-CUSTOMER-A",
+        "SYN-CUSTOMER-C"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-A"
+        ],
+        "status": "Completed",
+        "tasks": [
+          {
+            "action_id": "f7205cb6-99b9-5e97-a8bd-9f5b550d4a76",
+            "customer": "SYN-CUSTOMER-A",
+            "assigned_to": "operator-a@example.invalid",
+            "exp_start_date": "2026-11-15",
+            "exp_end_date": "2026-11-15",
+            "external_date": "2026-12-28",
+            "needs_planning": false
+          }
+        ],
+        "replaces_case": null
+      },
+      "tags": [
+        "prompt_injection",
+        "sender_identifier",
+        "name_address"
+      ],
+      "annotations": "annotations/AP01-42.json"
     }
   ]
 }

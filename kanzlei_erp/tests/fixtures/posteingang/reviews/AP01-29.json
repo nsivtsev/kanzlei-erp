@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "0b47c7ac-46c9-559d-a93f-f8743075d59b",
+      "source_index": 0,
+      "title": "Musterunterlagen ergänzen",
+      "description": "Ergänzen Sie die fehlenden Musterunterlagen der Gruppe R1.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ergänzen Sie die fehlenden Musterunterlagen der Gruppe R1.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

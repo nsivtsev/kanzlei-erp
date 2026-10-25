@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timings.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "assignment_plan_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "pre_registered_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "participant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "case_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "assisted"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          }
+        },
+        "required": [
+          "participant",
+          "case_id",
+          "mode",
+          "group"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 5000
+    },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "participant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "case_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "active_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "total_seconds": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "participant",
+          "case_id",
+          "started_at",
+          "active_seconds",
+          "total_seconds"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 5000
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "assignment_plan_hash",
+    "pre_registered_at",
+    "assignments",
+    "samples"
+  ],
+  "additionalProperties": false
+}

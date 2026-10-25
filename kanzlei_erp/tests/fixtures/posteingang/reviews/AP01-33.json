@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "8ab1623d-fd38-517c-8e9a-e4f1645017ae",
+      "source_index": 0,
+      "title": "Musterkonto abstimmen",
+      "description": "Stimmen Sie das künstliche Verrechnungskonto K2 ab.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": null,
+      "scheduling_decision": "unscheduled",
+      "scheduling_reason": "Arbeitsplanung wird im synthetischen Fall nachgeholt.",
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Stimmen Sie das künstliche Verrechnungskonto K2 ab.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

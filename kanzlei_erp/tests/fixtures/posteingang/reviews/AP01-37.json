@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": "Synthetischer Sonderfall benötigt eine ausdrückliche Klärung.",
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "3b2d61ff-0b9e-5517-a65e-dacda8e74161",
+      "source_index": 0,
+      "title": "Fiktive Sachverhaltsfrage beantworten",
+      "description": "Beantworten Sie die Sachverhaltsfrage zur Musterbuchung B-27.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": "2026-12-11",
+      "external_date_basis": "Spätester Eingang: 11.12.2026.",
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Beantworten Sie die Sachverhaltsfrage zur Musterbuchung B-27.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-38",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Prüfstelle Musterbezirk 22",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Prüfstelle Musterbezirk 22"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-25",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 25.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": {
+        "value": "Beispielbetrieb Gamma GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Gamma GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 9, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 9, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0009",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0009"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-A",
+    "SYN-CUSTOMER-C"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    },
+    {
+      "customer": "SYN-CUSTOMER-C",
+      "kind": "exact_identifier",
+      "recipient_index": 1,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-38-obligation-1",
+      "title": "Musterprotokoll abstimmen",
+      "description": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-15",
+        "wording": "Spätester Eingang: 15.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Spätester Eingang: 15.12.2026."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Prüfstelle Musterbezirk 10",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Prüfstelle Musterbezirk 10",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-25",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 25.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Unterlagenbitte",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Unterlagenbitte",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Zwei getrennte Arbeitsschritte zur Musterprüfung 2",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Prüfen Sie die fiktive Beleggruppe 2 auf fehlende Zuordnungen.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Beleggruppe 2 prüfen",
+      "description": "Prüfen Sie die fiktive Beleggruppe 2 auf fehlende Zuordnungen.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Prüfen Sie die fiktive Beleggruppe 2 auf fehlende Zuordnungen.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-03",
+        "wording": "Spätester Eingang: 03.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Spätester Eingang: 03.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Rückmeldung 2 senden",
+      "description": "Senden Sie anschließend eine getrennte Rückmeldung zur Musterprüfung 2.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Senden Sie anschließend eine getrennte Rückmeldung zur Musterprüfung 2.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-13",
+        "wording": "Spätester Eingang: 13.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Spätester Eingang: 13.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

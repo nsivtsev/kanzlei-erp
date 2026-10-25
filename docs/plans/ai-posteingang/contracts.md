@@ -786,3 +786,49 @@ correction с выполненной старой Task и подтвержден
 попытки показывается только для Run Queued, терминальный результат его не показывает.
 Live Mistral NOT RUN; физическое мобильное устройство и реальный обрыв браузерного
 HTTP-ответа отдельно не проверялись (frozen replay покрыт controller/service tests).
+
+## AP-10A — синтетическая оценка и автономная приёмка (25.10.2026)
+
+Dataset `1.1` расширен до 42 писем: прежние 12 development, 4 прежних holdout и
+26 новых holdout. Версии extraction/review остаются `1.0`; исходные 16 документов
+и индивидуальные JSON сохраняются побайтно по `evaluation/original-baseline.json`.
+Профиль `evaluation/ap10-v1.json` требует точные split/family counts, классы
+неопределённости и минимум 15 explicit gold actions holdout (фактически 25).
+`gold-facts.json` фиксирует существенные факты отдельно от предложений провайдера.
+Независимая человеческая проверка gold пока `pending_independent_review`.
+
+Инструменты `scripts/posteingang_evaluation.py` и `evaluate-posteingang.py`
+работают автономно. Строгие observations/judgments/timings/billing имеют собственную
+версию `1.0`, локальные схемы, запрет лишних/дублированных ключей, non-finite чисел
+и неверных дат. One-to-one смысловые соответствия задаёт проверяющий. Пропущенные
+и ошибочные результаты остаются в denominators; duplicate proposals — FP.
+Сопоставленная relative gold deadline не получает дату даже при ошибочном enum
+модели. Цитата считается проверенной только на своей OCR-странице после
+NFKC/whitespace; это не доказывает верность OCR относительно PDF. Coverage считает
+существенные gold facts, а не только возвращённые моделью поля.
+
+Отчёт разделяет development, все 30 holdout и новые 26; сохраняет дроби, case IDs
+ошибок, hashes и конфигурацию. Pending semantic/gold review, нулевой знаменатель,
+нет timing/billing или safety-сценариев — NOT MEASURED, не PASS. Пороги AP-01
+не снижаются. У времени — предварительная регистрация и минимум два участника с
+ротацией; одному участнику не дают одно письмо в двух режимах. Фактические расходы
+требуют отдельного usage/billing, число HTTP-вызовов не выводится из attempt_count.
+CLI exit 0 означает построенный отчёт, `--require-gates` даёт exit 1 без допуска,
+невалидный вход — exit 2. Fake всегда `contract_process / INCOMPLETE` и не открывает
+gate качества Mistral.
+
+Явный Bench collector допускает только отмеченный одноразовый AP-10 site,
+синтетический набор и собственного нового actor. Источник проходит штатный intake;
+чужой duplicate/Run не присваивается измерению. Отдельная RQ-очередь доставляет
+только Run ID, автоматического подтверждения нет. Проверяются реальные snapshot,
+hash, provider, actor, модели и epoch. Journal/fingerprints охватывают dataset,
+gold, конфигурацию и код. Resume завершённого результата не создаёт Run повторно;
+неизвестный исход worker не разрешает скрытую повторную отправку. Live требует
+отдельных флагов/бюджета, выключенных autostart/retries и разрешённых Settings;
+секрет не поступает в CLI, journal или отчёт. Ground truth не идёт в provider input.
+Runtime не импортирует эти инструментальные scripts и test helpers.
+
+AP-10A завершён: Linux161, vertical7, AI20 (1 skip без Suite), matching42,
+collector42/resume и DE fake/RU manual browser проверены. Доказательства и пределы
+проверок — в `docs/acceptance/ai-posteingang.md`. AP-10B: live Mistral NOT RUN,
+независимая разметка, время и расходы NOT MEASURED; AP-10 остаётся открытым.

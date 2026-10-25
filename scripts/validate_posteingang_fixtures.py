@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS = ROOT / "docs/plans/ai-posteingang/schemas"
 FIXTURES = ROOT / "kanzlei_erp/tests/fixtures/posteingang"
 WORKFLOW = ROOT / "docs/plans/ai-posteingang/workflow.json"
+EVALUATION = ROOT / "docs/plans/ai-posteingang/evaluation"
 
 
 class ContractError(ValueError):
@@ -344,12 +345,70 @@ def validate_dataset(directory=FIXTURES):
     return {"cases": len(ids), "pages": sum(c["page_count"] for c in manifest["cases"]), "splits": splits}
 
 
+def validate_pilot(directory=FIXTURES, profile=None):
+    """Add the AP-10 freeze/coverage gate without narrowing the AP-01 validator."""
+    root = Path(directory).resolve()
+    if profile is None or profile == "ap10-v1":
+        profile = read_json(EVALUATION / "ap10-v1.json")
+    require(isinstance(profile, dict) and profile.get("profile") == "ap10-v1", "unknown pilot profile")
+    manifest = read_json(root / "manifest.json")
+    cases = manifest["cases"]
+    require(len(cases) == 42, "pilot requires exactly 42 letters")
+    require(dict(Counter(c["split"] for c in cases)) == {"development": 12, "holdout": 30}, "pilot split must be 12 development / 30 holdout")
+    require(manifest["dataset_version"] == profile["dataset_version"] == "1.1", "pilot dataset version mismatch")
+    baseline = read_json(safe_path(EVALUATION, profile["baseline"]))
+    by_id = {c["case_id"]: c for c in cases}
+    source_by_id = {c["case_id"]: c for c in read_json(safe_path(root, manifest["sources"]))["cases"]}
+    original_ids = set()
+    for original in baseline["cases"]:
+        case = original["manifest"]
+        cid = case["case_id"]
+        original_ids.add(cid)
+        require(by_id.get(cid) == case and source_by_id.get(cid) == original["source"], f"baseline metadata changed: {cid}")
+        for relative, digest in original["files"].items():
+            require(hashlib.sha256(safe_path(root, relative).read_bytes()).hexdigest() == digest, f"baseline bytes changed: {relative}")
+    require(len(original_ids) == 16, "baseline requires 16 original cases")
+    new_cases = [case for case in cases if case["case_id"] not in original_ids]
+    require(len(new_cases) == 26 and all(c["split"] == "holdout" for c in new_cases), "pilot requires 26 new holdout letters")
+    require(set(profile["holdout_history"]["new_cases"]) == {c["case_id"] for c in new_cases}, "new holdout history mismatch")
+    result = validate_dataset(root)
+    holdout = [case for case in cases if case["split"] == "holdout"]
+    tags = {tag for case in holdout for tag in case["tags"]}
+    require(set(profile["required_tags"]) <= tags, "pilot coverage missing required class")
+    actions = [action for case in holdout for action in read_json(safe_path(root, case["annotations"]))["actions"]]
+    require(set(profile["required_deadline_kinds"]) <= {a["deadline"]["kind"] for a in actions}, "pilot coverage missing deadline kind")
+    explicit = sum(a["deadline"]["kind"] == "explicit_date" for a in actions)
+    require(explicit >= max(15, profile["minimum_explicit_holdout_actions"]), "pilot needs at least 15 explicit holdout actions")
+    facts = read_json(safe_path(EVALUATION, profile["facts"]))
+    require(facts["schema_version"] == "1.0" and facts["dataset_version"] == manifest["dataset_version"], "gold fact version mismatch")
+    require(len(facts["cases"]) == len(cases) and {c["case_id"] for c in facts["cases"]} == by_id.keys(), "gold fact case set mismatch")
+    fact_ids = set()
+    for item in facts["cases"]:
+        require(type(item["readable"]) is bool and item["ambiguity"] in ("none", "not_found", "multiple_matches", "multiple_addressees"), "invalid gold fact context")
+        gold = read_json(safe_path(root, by_id[item["case_id"]]["annotations"]))
+        for fact in item["facts"]:
+            require(fact["fact_id"] not in fact_ids, "duplicate gold fact ID")
+            fact_ids.add(fact["fact_id"])
+            require(isinstance(fact["pointer"], str) and fact["pointer"].startswith("/"), "invalid gold fact pointer")
+            target = gold
+            try:
+                for key in fact["pointer"][1:].split("/"):
+                    key = key.replace("~1", "/").replace("~0", "~")
+                    target = target[int(key)] if isinstance(target, list) else target[key]
+            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                raise ContractError("invalid gold fact pointer") from exc
+            require(isinstance(target, dict) and target.get("evidence"), "gold fact needs source evidence")
+        require(item["readable"] or not item["facts"], "unreadable facts cannot enter readable coverage")
+    return {**result, "explicit_holdout_actions": explicit, "new_holdout_cases": len(new_cases), "gold_facts": len(fact_ids)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, default=FIXTURES)
+    parser.add_argument("--pilot-profile", choices=["ap10-v1"])
     args = parser.parse_args()
     try:
-        result = validate_dataset(args.fixtures)
+        result = validate_pilot(args.fixtures, args.pilot_profile) if args.pilot_profile else validate_dataset(args.fixtures)
     except (ContractError, OSError, ValueError) as exc:
         print(f"AP-01 validation failed: {exc}", file=sys.stderr)
         return 1

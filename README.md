@@ -105,6 +105,14 @@ The seed script is safe to rerun and only accepts the `development.localhost` si
 
 **Zeiterfassung** uses ERPNext Timesheet, with a Mandant and time entries. **Rechnungen** (Sales Invoice) and **Zahlungen** (Payment Entry) are available in Einstellungen for administrative use. They are outside the daily FiBu preparation workflow. Configure and verify service items, activity types, rates, billing settings, and applicable calculation/print requirements before using them for Kanzlei billing. This version does not automatically turn completed Tasks into invoices.
 
+## AI Posteingang
+
+**Kanzlei → Posteingang / Входящие PDF** opens `/desk/posteingang`: private PDF intake, analysis or manual review, explicit Mandant selection, and human confirmation. Confirmation creates one atomic set of Tasks/ToDo; the internal work date appears in the Task calendar, while the protected Task source shows the confirmed external deadline and evidence. Completed letters also appear in Customer **Dokumente**, including letters without Tasks.
+
+Assign **Posteingang Operator** explicitly to the active System Users who handle the queue; a sole Steuerberater can hold this role. Customer read/write and Task permissions remain required. System Manager configures Settings and, with Operator and the relevant Customer rights, performs corrections. An analysis proposal never confirms a letter automatically. Feature, external processing and automatic analysis are disabled by default; switching them on does not process old uploads automatically.
+
+See the [employee and operations guide](docs/posteingang.md) for DE/RU actions, manual processing, key rotation, stuck jobs, correction quarantine, and reproducible synthetic evaluation commands. The [AP-10 acceptance report](docs/acceptance/ai-posteingang.md) separates autonomous fake/process readiness from live Mistral quality and pilot approval. Fake results do not establish model quality; actual live evaluation, measured staff time, expenses, and permission for real documents are separate conditions. Enter provider secrets only in Password Settings, never in chat, CLI arguments or git. No automatic history-retention purge is provided.
+
 ## Transactional email
 
 Production service emails use the planned Resend SMTP configuration with sender

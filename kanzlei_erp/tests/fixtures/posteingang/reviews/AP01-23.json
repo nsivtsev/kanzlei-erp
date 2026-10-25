@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "af12c753-64f0-50d9-aa0d-6ba68aced04b",
+      "source_index": 0,
+      "title": "Lohnliste erläutern",
+      "description": "Erläutern Sie die markierte Zeile der fiktiven Lohnliste schriftlich.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-18",
+      "external_date_basis": "Spätester Eingang: 18.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Erläutern Sie die markierte Zeile der fiktiven Lohnliste schriftlich.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}
