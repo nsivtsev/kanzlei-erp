@@ -36,6 +36,12 @@ class VerificationTests(unittest.TestCase):
         install = next(line for line in dockerfile.splitlines() if "bench pip install" in line and "apps/kanzlei_erp" in line)
         self.assertNotIn("--no-deps", install, "Runtime jsonschema must be installed from pyproject.toml")
 
+    def test_patched_framework_copy_guard_is_compiled_and_verified(self):
+        dockerfile = (SCRIPTS.parent / "deploy/Dockerfile").read_text()
+        self.assertIn("bench build --app frappe --production", dockerfile)
+        self.assertIn('assets["desk.bundle.js"]', dockerfile)
+        self.assertIn('"document_copy_guard"', dockerfile)
+
     def test_ci_marks_only_its_disposable_site_for_acceptance(self):
         source = (SCRIPTS / "ci-image.sh").read_text()
         enable = source.index("bench --site ci.localhost set-config posteingang_acceptance_site true")

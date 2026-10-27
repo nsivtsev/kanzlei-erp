@@ -379,3 +379,8 @@ PDF как binary, их frozen bytes/hashes не меняются. Deployment un
 collector guards35, полный AP-10 suite8 на новом локальном ci.localhost,
 pip check/Ruff/bash syntax/diff — PASS. Тестовые переключатели снова выключены;
 полный image build/upgrade/backup-restore выполняет GitHub CI.
+
+Дополнительно production image явно пересобирает Frappe assets после применения
+framework patch и проверяет наличие document_copy_guard в desk bundle. Это
+сохраняет клиентский запрет штатного Duplicate наряду с серверными guards.
+Профильные проверки сборочного контракта: 6 PASS; фактическую сборку проверяет CI.
