@@ -172,6 +172,7 @@ class TestPosteingangAi(PosteingangTestCase):
 		):
 			result = self.ai.analyze_letter(self.doc.name, actor=self.operator.name)
 		self.assertIsInstance(result, self.ai.AnalysisResult)
+		self.assertEqual(result.prompt_version, "ap04-extraction-v3")
 		self.assertEqual(result.extraction["actions"][0]["deadline"]["date"], "2026-11-20")
 		self.assertEqual(session.post.call_count, 2)
 		ocr, chat = session.post.call_args_list

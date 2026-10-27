@@ -308,6 +308,32 @@ class TestPosteingangJobs(PosteingangTestCase):
 		self.jobs.process_run(result["run"])
 		self.assertEqual((self.run_doc(result["run"]).status, self.run_doc(result["run"]).error_code), ("Cancelled", "ANALYSIS_STOPPED"))
 
+	def test_changed_prompt_stops_old_run_before_provider_and_requires_explicit_new_run(self):
+		from kanzlei_erp import posteingang_ai as ai
+
+		frappe.set_user(self.manager.name)
+		settings = frappe.get_single("Posteingang Settings")
+		settings.update({
+			"provider": "mistral", "external_analysis_enabled": 1,
+			"ocr_model": "mistral-ocr-4-1", "extraction_model": "mistral-small-2603",
+			"api_key": "synthetic-prompt-migration-key",
+		})
+		settings.save()
+		frappe.db.commit()
+		frappe.set_user(self.operator.name)
+		queued = self.queue()
+		self.assertEqual(self.run_doc(queued["run"]).prompt_version, ai.PROMPT_VERSION)
+		frappe.db.commit()
+		with patch.object(ai, "PROMPT_VERSION", "new-prompt-revision"), patch.object(ai, "prepare_source", side_effect=AssertionError("must not call provider")):
+			self.jobs.process_run(queued["run"])
+		old = self.run_doc(queued["run"])
+		self.assertEqual((old.status, old.error_code, old.attempt_count), ("Cancelled", "ANALYSIS_STOPPED", 0))
+		frappe.set_user(self.operator.name)
+		revision = frappe.db.get_value("Incoming Letter", self.doc.name, "revision")
+		new = self.queue("explicit-new-prompt", revision=revision)
+		self.assertNotEqual(new["run"], old.name)
+		self.assertEqual(self.run_doc(new["run"]).prompt_version, ai.PROMPT_VERSION)
+
 	def test_recovery_expired_running_requires_explicit_retry(self):
 		result = self.queue()
 		frappe.db.commit()

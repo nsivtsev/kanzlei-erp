@@ -212,6 +212,18 @@ class EvaluationIntegrationTests(unittest.TestCase):
 		self.assertEqual(report["gates"]["gold_review"]["status"], "NOT MEASURED")
 		self.assertEqual(report["verdict"], "INCOMPLETE")
 
+	def test_known_live_prompt_versions_are_evaluable_without_assuming_quality(self):
+		self.obs.update(
+			provider="mistral", models={"ocr": "mistral-ocr-4-1", "extraction": "mistral-small-2603"}
+		)
+		for version in ("ap04-extraction-v1", "ap04-extraction-v2", "ap04-extraction-v3"):
+			with self.subTest(version=version):
+				self.obs["prompt_version"] = version
+				self.assertNotEqual(self.finish()["verdict"], "GO_SYNTHETIC_PILOT")
+		self.obs["prompt_version"] = "unknown-future-prompt"
+		with self.assertRaises(self.e.EvaluationError):
+			self.finish()
+
 	def test_wrong_verified_quote_fails_and_missing_evidence_is_not_removed(self):
 		row = self.observation("AP01-01")
 		row["extraction"]["sender"]["evidence"][0]["quote"] = "NOT ON THE PAGE"

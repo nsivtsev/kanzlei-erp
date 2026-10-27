@@ -551,7 +551,11 @@ def evaluate(manifest_path, observations, judgments, *, timings=None, billing=No
 			),
 			"concrete Mistral models required",
 		)
-		require(observations["prompt_version"] == "ap04-extraction-v1", "unknown live prompt version")
+		require(
+			observations["prompt_version"]
+			in ("ap04-extraction-v1", "ap04-extraction-v2", "ap04-extraction-v3"),
+			"unknown live prompt version",
+		)
 	manifest, gold, facts, data_hash, gold_hash = load_dataset(manifest_path)
 	require(
 		observations["dataset_hash"] == data_hash and observations["gold_hash"] == gold_hash,

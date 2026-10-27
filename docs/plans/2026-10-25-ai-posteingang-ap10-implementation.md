@@ -260,3 +260,22 @@ production/storage прежние Node/build/migration/Suite suites повтор
 Инструкция: `docs/posteingang.md`; доказательства, hashes, реальные метрики и условия
 AP-10B: `docs/acceptance/ai-posteingang.md`. Живой Mistral NOT RUN. Коммит, PR,
 deployment и допуск реальных документов не выполнялись.
+
+### Продолжение AP-10B — 27.10.2026
+
+Пользователь сохранил Mistral key в тестовом Settings и разрешил общий бюджет5 €;
+после первых двух запросов отдельно снял ограничение их количества. Выполнены
+1 OCR и 4 extraction на development AP01-01 с переиспользованием проверенного OCR.
+Первый ответ отклонён правильно: `other` с authority=null. Prompt v3 теперь явно
+описывает неполные идентификаторы и synthetic-маркировку; схемы/gold неизменны.
+Финальный technical smoke PASS: одна страница, одно действие, дата20.11.2026,
+12/12 matched citations. Однако модель всё ещё пропускает неполный номер в warning
+и ошибочно связывает synthetic label с ambiguous_customer. Semantic quality остаётся
+неподтверждённым, tuning на этом одном примере остановлен. Holdout NOT RUN.
+
+Результаты: Linux166 PASS, AI20 OK/skip1, jobs27 PASS; известные prompt v1/v2/v3
+принимаются оценщиком с сохранением provenance, старый Run останавливается до HTTP
+при смене prompt. Настройки восстановлены, ключ сохранён, бизнес-записи не менялись.
+Расчётная стоимость всех вызовов $0.0062029; фактический billing NOT MEASURED.
+Доказательства и оставшиеся ограничения — в acceptance report. Коммит/PR/deployment
+этого продолжения не выполнялись. AP-10B и весь AP-10 остаются открытыми.

@@ -832,3 +832,20 @@ AP-10A завершён: Linux161, vertical7, AI20 (1 skip без Suite), matchi
 collector42/resume и DE fake/RU manual browser проверены. Доказательства и пределы
 проверок — в `docs/acceptance/ai-posteingang.md`. AP-10B: live Mistral NOT RUN,
 независимая разметка, время и расходы NOT MEASURED; AP-10 остаётся открытым.
+
+### Уточнение live adapter — 27.10.2026
+
+Development smoke AP01-01 прошёл OCR и canonical extraction с prompt
+`ap04-extraction-v3` после выявленного отказа v1: `other` без authority недопустим.
+Prompt требует документально подтверждённые authority/other_type либо сохранение
+неполного номера с evidence в incomplete_text; он запрещает считать synthetic
+маркировку признаком плохого скана или неизвестного Customer. Схемы версии1.0 и
+строгая серверная проверка не изменены; автоматического исправления ответа нет.
+Оценщик поддерживает отдельные известные prompt v1/v2/v3 и отвергает неизвестные.
+AP-05 сверяет сохранённую версию prompt до provider call; после смены нужен новый
+явный Run. Ни один старый терминальный Run не переписывается.
+
+Технический smoke не доказывает смысловую точность: v3 сохранил верные действие,
+дату и 12 проверенных цитат, но пропустил неполный номер и выдал ложное предупреждение
+об ambiguous_customer. Эти ограничения зафиксированы в acceptance report. Holdout,
+независимая разметка, timing и billing остаются открыты; весь AP-10 не закрыт.

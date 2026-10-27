@@ -61,6 +61,22 @@ class AiValidationTests(unittest.TestCase):
 	def test_rejects_impossible_date(self):
 		self.invalid(lambda v: v["document_date"].update(value="2026-02-30"))
 
+	def test_other_identifier_without_authority_requires_explicit_incomplete_warning(self):
+		self.raw["recipients"][0]["identifiers"][0]["authority"] = None
+		with self.assertRaises(self.v.InvalidResult):
+			self.v.validate_extraction(self.raw, self.pages, max_actions=30)
+		identifier = self.raw["recipients"][0]["identifiers"].pop()
+		self.raw["warnings"].append(
+			{
+				"code": "incomplete_text",
+				"message": "Mandantenreferenz SYN-0007: authority not stated; identifier incomplete.",
+				"evidence": identifier["evidence"],
+			}
+		)
+		result = self.v.validate_extraction(self.raw, self.pages, max_actions=30)
+		self.assertEqual(result["recipients"][0]["identifiers"], [])
+		self.assertEqual(result["warnings"][-1]["evidence"][0]["verification"], "matched")
+
 	def test_rejects_unknown_fields_enums_and_verification(self):
 		for change in (
 			lambda v: v.update(customer="ERP-ID"),
