@@ -90,11 +90,13 @@ bench --site ci.localhost execute kanzlei_erp.localization.configure_german_lang
 bench --site ci.localhost migrate
 bench --site ci.localhost migrate
 bench --site ci.localhost set-config allow_tests true
+bench --site ci.localhost set-config posteingang_acceptance_site true
 # Only the ephemeral test container receives the framework test dependencies.
 env/bin/python -c '\''import tomllib, subprocess; data=tomllib.load(open("apps/frappe/pyproject.toml", "rb")); deps=data["tool"]["bench"]["dev-dependencies"]; subprocess.run(["bench", "pip", "install", *[name+version for name,version in deps.items()]], check=True)'\''
 env/bin/python /tmp/ci-site.py
 bench --site ci.localhost run-tests --app kanzlei_erp --junit-xml-output /home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml
 env/bin/python -c '\''import re, xml.etree.ElementTree as E; data=open("/home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml").read(); root=E.fromstring("<reports>"+re.sub(r"<\?xml[^>]*\?>", "", data)+"</reports>"); cases=list(root.iter("testcase")); assert any(case.find("skipped") is None for case in cases), "No application tests executed"; assert not list(root.iter("failure")) and not list(root.iter("error")), "Application tests failed"; print(f"Verified {len(cases)} application test results")'\''
+bench --site ci.localhost set-config posteingang_acceptance_site false
 bench --site ci.localhost set-config allow_tests false
 
 '

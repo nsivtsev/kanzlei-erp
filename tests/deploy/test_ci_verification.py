@@ -31,6 +31,19 @@ class VerificationTests(unittest.TestCase):
                 "head_repository": {"full_name": "nsivtsev/kanzlei-erp"},
                 "path": ".github/workflows/ci.yml"}
 
+    def test_app_image_installs_declared_dependencies(self):
+        dockerfile = (SCRIPTS.parent / "deploy/Dockerfile").read_text()
+        install = next(line for line in dockerfile.splitlines() if "bench pip install" in line and "apps/kanzlei_erp" in line)
+        self.assertNotIn("--no-deps", install, "Runtime jsonschema must be installed from pyproject.toml")
+
+    def test_ci_marks_only_its_disposable_site_for_acceptance(self):
+        source = (SCRIPTS / "ci-image.sh").read_text()
+        enable = source.index("bench --site ci.localhost set-config posteingang_acceptance_site true")
+        tests = source.index("bench --site ci.localhost run-tests --app kanzlei_erp")
+        disable = source.index("bench --site ci.localhost set-config posteingang_acceptance_site false")
+        self.assertLess(enable, tests)
+        self.assertLess(tests, disable)
+
     def test_receipt_requires_the_exact_successful_main_run(self):
         module = self.module()
         receipt = self.receipt()

@@ -49,9 +49,10 @@ class CollectionTests(unittest.TestCase):
 
 	def test_main_site_cannot_be_made_eligible_by_marker(self):
 		args = self.args()
-		args.site = "development.localhost"
-		with self.assertRaises(ValueError):
-			self.module.check_invocation(args, {"posteingang_acceptance_site": 1})
+		for site in ("development.localhost", "ci.localhost"):
+			args.site = site
+			with self.assertRaises(ValueError):
+				self.module.check_invocation(args, {"posteingang_acceptance_site": 1})
 
 	def test_live_requires_explicit_external_and_request_limit(self):
 		args = self.args("--provider", "mistral")

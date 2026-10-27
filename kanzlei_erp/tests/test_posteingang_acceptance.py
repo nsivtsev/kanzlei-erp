@@ -1,6 +1,6 @@
 """AP-10 synthetic vertical acceptance; isolated RQ and post-commit transport loss.
 
-These tests deliberately commit, so use only a marked disposable AP-10 site.
+These tests deliberately commit, so use only a marked disposable AP-10 or CI site.
 No production policy is replaced. Cleanup is limited to records created here.
 """
 
@@ -9,13 +9,29 @@ import io
 import json
 import multiprocessing
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import patch
 
 import frappe
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Request
 
-from kanzlei_erp.tests.posteingang_helpers import PosteingangTestCase
+from kanzlei_erp.tests.posteingang_helpers import PosteingangTestCase, acceptance_test_site
+
+
+class TestAcceptanceSiteGuard(TestCase):
+	def test_ci_site_requires_both_explicit_test_flags(self):
+		from kanzlei_erp.tests.posteingang_helpers import acceptance_test_site
+
+		self.assertTrue(acceptance_test_site("ci.localhost", {"allow_tests": True, "posteingang_acceptance_site": True}))
+		self.assertTrue(acceptance_test_site("posteingang-ap10.localhost", {"allow_tests": True, "posteingang_acceptance_site": 1}))
+		for site, config in (
+			("ci.localhost", {"allow_tests": True}),
+			("ci.localhost", {"posteingang_acceptance_site": True}),
+			("production.example", {"allow_tests": True, "posteingang_acceptance_site": True}),
+			("posteingang-ap10.localhost.evil", {"allow_tests": True, "posteingang_acceptance_site": True}),
+		):
+			self.assertFalse(acceptance_test_site(site, config))
 
 
 class LostResponse(ConnectionError):
@@ -24,8 +40,7 @@ class LostResponse(ConnectionError):
 
 class TestPosteingangAcceptance(PosteingangTestCase):
 	def setUp(self):
-		self.assertTrue(frappe.conf.get("posteingang_acceptance_site"), "Marked disposable site required")
-		self.assertTrue(frappe.local.site.startswith("posteingang-ap10"), "AP-10 disposable site required")
+		self.assertTrue(acceptance_test_site(frappe.local.site, frappe.conf), "Marked disposable test site required")
 		delivery = patch("kanzlei_erp.drive_realtime._deliver")
 		delivery.start()
 		self.addCleanup(delivery.stop)

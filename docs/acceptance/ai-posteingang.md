@@ -370,3 +370,12 @@ holdout измерен, человеческая часть отложена; д
 не переносятся в production. Выпуск проходит штатные PR/main CI и digest-based
 deployment; после него проверяются здоровье приложения и поведение выключенной
 функции. Полный AI-сценарий остаётся проверенным на синтетическом одноразовом сайте.
+
+Release preflight: production Dockerfile теперь устанавливает объявленную
+jsonschema-зависимость и проверяет её версию. Новый AP-10 suite допускает только
+явно помеченные локальные test sites, включая ci.localhost при allow_tests=true;
+quality collector по-прежнему отвергает ci.localhost и production. Git отмечает
+PDF как binary, их frozen bytes/hashes не меняются. Deployment unit tests125,
+collector guards35, полный AP-10 suite8 на новом локальном ci.localhost,
+pip check/Ruff/bash syntax/diff — PASS. Тестовые переключатели снова выключены;
+полный image build/upgrade/backup-restore выполняет GitHub CI.

@@ -7,6 +7,16 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 
+def acceptance_test_site(site, config):
+	"""Only explicitly marked local test sites; never a production hostname."""
+	flags = (config.get("allow_tests"), config.get("posteingang_acceptance_site"))
+	return bool(
+		all(type(flag) in (bool, int) and flag == 1 for flag in flags)
+		and isinstance(site, str)
+		and (site == "ci.localhost" or (site.startswith("posteingang-ap10") and site.endswith(".localhost")))
+	)
+
+
 class PosteingangTestCase(FrappeTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")

@@ -20,7 +20,8 @@ COPY --chown=frappe:frappe kanzlei_erp/ apps/kanzlei_erp/kanzlei_erp/
 # Assets must live in the image's baked directory, outside the persistent sites volume.
 RUN ln -sfn /home/frappe/frappe-bench/assets sites/assets \
     && printf '\nkanzlei_erp\n' >> sites/apps.txt \
-    && bench pip install --no-deps -e apps/kanzlei_erp \
+    && bench pip install -e apps/kanzlei_erp \
+    && env/bin/python -c 'from importlib.metadata import version; assert version("jsonschema") == "4.26.0"' \
     && bench build --app kanzlei_erp --production \
     && env/bin/python -c 'import json; from pathlib import Path; assets=json.load(open("assets/assets.json")); assert "kanzlei_navigation.bundle.js" in assets; assert Path("assets/suite/frontend/index.html").is_file()' \
     && env/bin/python -c 'import kanzlei_erp; import sys; assert sys.version_info >= (3, 14)' \
