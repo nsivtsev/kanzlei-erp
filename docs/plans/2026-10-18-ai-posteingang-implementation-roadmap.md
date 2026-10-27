@@ -29,11 +29,11 @@
 | Этап | Результат | Зависит от | Состояние |
 | --- | --- | --- | --- |
 | AP-01 | Контракты, сценарии и размеченный набор примеров | — | Завершён 18.10.2026; [контракт v1.0](ai-posteingang/contracts.md) |
-| AP-02 | Модель входящего письма, приватный источник и права | AP-01 | [Завершён 19.10.2026, серверная приёмка PASS](2026-10-19-ai-posteingang-ap02-implementation.md#8-результат-исполнения-19102026); визуальный DE/RU проход пропущен по решению владельца |
-| AP-03 | Приём PDF и обнаружение точных дублей | AP-02 | [Завершён 20.10.2026](2026-10-20-ai-posteingang-ap03-implementation.md#фактические-результаты), серверная и DE/RU UI приёмка PASS |
-| AP-04 | Настройки и адаптер OCR/извлечения Mistral | AP-01, AP-02 | [Завершён 21.10.2026](2026-10-21-ai-posteingang-ap04-implementation.md#результат-исполнения); offline и DE/RU PASS, живой smoke NOT RUN |
-| AP-05 | Фоновая обработка и восстановление после ошибок | AP-03, AP-04 | [Завершён 22.10.2026](2026-10-21-ai-posteingang-ap05-implementation.md#результат-исполнения); DB/RQ/recovery и DE/RU управление проверены, RU повторный выбор файла не проверен |
-| AP-06 | Подбор Mandant по проверяемым признакам | AP-01, AP-02; формат результата AP-04 | [Завершён 22.10.2026](2026-10-22-ai-posteingang-ap06-implementation.md#результат-исполнения); явные verification/selection, права, конкуренция и DE/RU проверены |
+| AP-02 | Модель входящего письма, приватный источник и права | AP-01 | Завершён 19.10.2026, серверная приёмка PASS; визуальный DE/RU проход пропущен по решению владельца |
+| AP-03 | Приём PDF и обнаружение точных дублей | AP-02 | Завершён 20.10.2026, серверная и DE/RU UI приёмка PASS |
+| AP-04 | Настройки и адаптер OCR/извлечения Mistral | AP-01, AP-02 | Завершён 21.10.2026; offline и DE/RU PASS, живой smoke NOT RUN |
+| AP-05 | Фоновая обработка и восстановление после ошибок | AP-03, AP-04 | Завершён 22.10.2026; DB/RQ/recovery и DE/RU управление проверены, RU повторный выбор файла не проверен |
+| AP-06 | Подбор Mandant по проверяемым признакам | AP-01, AP-02; формат результата AP-04 | Завершён 22.10.2026; явные verification/selection, права, конкуренция и DE/RU проверены |
 | AP-07 | Подтверждение и защищённое создание Tasks | AP-03, AP-05, AP-06 | Завершён; профильные проверки и DE/RU PASS |
 | AP-08 | Документы манданта и происхождение задачи | AP-07 | Завершён 25.10.2026: Dokumente, Task source, PDF/ZIP, disk/MemoryS3, DE/RU — PASS |
 | AP-09 | Очередь и полноценный экран проверки | AP-05, AP-06, AP-07, AP-08 | Завершён: workspace, DE/RU 1440/390, конфликты/исправления и профильная приёмка PASS |
@@ -64,7 +64,7 @@ AP-03 и AP-04 логически независимы после AP-02. AP-06 �
 
 **Проверки:** валидность JSON/дат/ссылок на страницы и визуальная проверка созданных PDF. Ещё не оценивать качество Mistral по fake-ответам.
 
-**Результат 18.10.2026:** [контракт v1.0](ai-posteingang/contracts.md), шесть JSON Schema, таблица переходов, 16 синтетических PDF / 18 страниц (12 development, 4 holdout), независимая смысловая разметка и ожидаемые OCR/extraction/review результаты. Все 64 пары состояний и 11 сценариев повторов/ошибок описаны как спецификация. [План и передача AP-01](2026-10-18-ai-posteingang-ap01-implementation.md).
+**Результат 18.10.2026:** [контракт v1.0](ai-posteingang/contracts.md), шесть JSON Schema, таблица переходов, 16 синтетических PDF / 18 страниц (12 development, 4 holdout), независимая смысловая разметка и ожидаемые OCR/extraction/review результаты. Все 64 пары состояний и 11 сценариев повторов/ошибок описаны как спецификация.
 
 **Фактически выполнено:** автономный validator — PASS; 43 unittest — PASS, включая негативные кейсы, provenance кандидатов, quarantine-сценарий и воспроизводимость SHA-256 всех PDF; Ruff 0.14.0 по конфигурации проекта — PASS; все 18 страниц отрендерены Poppler и визуально проверены. Инструментальные зависимости изолированы от приложения. Runtime permissions/конкурентность/живой Mistral не проверялись и не выдаются за завершённые: это AP-02…AP-10. Пороговые значения пилота зафиксированы до измерений; пилот ещё не запускался.
 
@@ -109,7 +109,7 @@ AP-03 и AP-04 логически независимы после AP-02. AP-06 �
 
 **Проверки:** `test_posteingang_intake`, права AP-02 и затронутые File/S3 случаи. Один короткий браузерный сценарий загрузки и повторной загрузки; DE/RU для новых локализованных сообщений. Новые зависимости парсинга PDF обосновать и проверить в используемой среде.
 
-**Результат 20.10.2026:** [AP-03 завершён](2026-10-20-ai-posteingang-ap03-implementation.md). Добавлены multipart приём, изолированная проверка PDF, закрытые квитанции, replay/дубли под site-scoped locks и минимальный DE/RU диалог в списке/форме. Доступный дубль открывает существующее письмо без изменения даты; недоступный не раскрывается. Неизвестный исход commit не приводит к безусловному удалению оригинала.
+**Результат 20.10.2026:** AP-03 завершён. Добавлены multipart приём, изолированная проверка PDF, закрытые квитанции, replay/дубли под site-scoped locks и минимальный DE/RU диалог в списке/форме. Доступный дубль открывает существующее письмо без изменения даты; недоступный не раскрывается. Неизвестный исход commit не приводит к безусловному удалению оригинала.
 
 **Фактически выполнено:** 20 intake + 5 concurrency/commit runtime tests — PASS; 4 PDF + 3 Node — PASS. Регрессии AP-02 — 41 PASS, Drive security/Mandant Drive/Object Storage — 26/41/19 PASS, patch installer — 21 PASS. Без Suite — 10 PASS/10 ожидаемых skip. Две повторные миграции сохранили контрольные данные, Settings и роли. Реальный HTTP, ровно 20 MiB и превышение, DE/RU смешанная пачка/дубль/восстановление, asset build, Ruff/JSON/CSV/diff — PASS. S3-логика проверена на MemoryS3; live S3 и Mistral не проверялись. AP-04, commit, PR и deployment автоматически не выполнялись.
 
@@ -134,7 +134,7 @@ AP-03 и AP-04 логически независимы после AP-02. AP-06 �
 
 **Результат 21.10.2026:** read-only `prepare_source/recognize/extract/analyze_letter`, общий fake/Mistral контракт, runtime Draft 2020-12 schemas и jsonschema 4.26.0. OCR и extraction разделены; только серверный приватный оригинал/Base64, без публичных URL/Files API, tools, fallback или retries. Версии запроса `mistral-ocr-4-1` / `mistral-small-2603`, prompt `ap04-extraction-v1`. Настройки проверяют конкретные модели и скрывают секрет; ожидаемые validation errors не создают Frappe developer snapshots с serialized key. Никаких записей Run/Action/Event/Task или изменений Letter.
 
-**Приёмка:** AI suite — 20 PASS (disk/MemoryS3); без Suite — 19 PASS, один ожидаемый S3 skip. AP-02 model/permissions/files/setup — 11/11/15/4 PASS; AP-03 intake — 20 PASS. Автономные AP-01/AP-04/PDF tests — 61 PASS в Linux, validator 16 писем PASS. Wheel/resources без docs, Python 3.14 dependency/pip check, две миграции с контролем записей/Settings/секрета/ролей, DE/RU browser, JSON/CSV/Ruff/diff — PASS. Независимое ревью: оставшихся конкретных P1/P2 нет. Живой Mistral smoke — NOT RUN; обычные тесты не измеряют качество модели. Полный CI image build, основной сайт, AP-05, commit/PR/deployment не выполнялись. Подробности и пределы проверки — в [результатах AP-04](2026-10-21-ai-posteingang-ap04-implementation.md#результат-исполнения).
+**Приёмка:** AI suite — 20 PASS (disk/MemoryS3); без Suite — 19 PASS, один ожидаемый S3 skip. AP-02 model/permissions/files/setup — 11/11/15/4 PASS; AP-03 intake — 20 PASS. Автономные AP-01/AP-04/PDF tests — 61 PASS в Linux, validator 16 писем PASS. Wheel/resources без docs, Python 3.14 dependency/pip check, две миграции с контролем записей/Settings/секрета/ролей, DE/RU browser, JSON/CSV/Ruff/diff — PASS. Независимое ревью: оставшихся конкретных P1/P2 нет. Живой Mistral smoke — NOT RUN; обычные тесты не измеряют качество модели. Полный CI image build, основной сайт, AP-05, commit/PR/deployment не выполнялись.
 
 ## AP-05 — Фоновая обработка и восстановление
 
@@ -156,7 +156,7 @@ AP-03 и AP-04 логически независимы после AP-02. AP-06 �
 
 **Результат 22.10.2026:** серверный workflow с Event/revision и идемпотентными POST-операциями; durable Run, configuration epoch, lease, OCR checkpoint, ограниченный retry и recovery. Автозапуск default=0; enqueue только после commit, отказ Redis не отменяет принятый оригинал. Успешный анализ сохраняет предложение в Run и переводит письмо в Needs Review, сохраняя черновик. Форма DE/RU управляет запуском, повтором, ручным переходом и отменой; polling не перезагружает несохранённые правки и покинутую форму.
 
-**Приёмка:** jobs, независимые DB/process concurrency с настоящим Redis/RQ, AP-02/AP-03/AP-04 регрессия, Linux offline suites, Node jobs/intake, Ruff/JSON/CSV/diff и frontend assets — PASS. Две миграции сохраняют записи, терминальные Runs, настройки, секрет и роли; fake job без Suite — PASS. DE upload→автоанализ→Needs Review→повтор и DE/RU ручной переход, отказ доступа и выключение внешнего анализа проверены. Повторный выбор файла на RU остался непроверенным из-за timeout браузерного file chooser; это ограничение автоматизации, не заменённое заявлением о полном UI PASS. Живой Mistral smoke — NOT RUN; основной сайт, общий scheduler/workers/Redis, полный CI image build, commit/PR/deployment не менялись. Число тестов и детали — в [результатах AP-05](2026-10-21-ai-posteingang-ap05-implementation.md#результат-исполнения).
+**Приёмка:** jobs, независимые DB/process concurrency с настоящим Redis/RQ, AP-02/AP-03/AP-04 регрессия, Linux offline suites, Node jobs/intake, Ruff/JSON/CSV/diff и frontend assets — PASS. Две миграции сохраняют записи, терминальные Runs, настройки, секрет и роли; fake job без Suite — PASS. DE upload→автоанализ→Needs Review→повтор и DE/RU ручной переход, отказ доступа и выключение внешнего анализа проверены. Повторный выбор файла на RU остался непроверенным из-за timeout браузерного file chooser; это ограничение автоматизации, не заменённое заявлением о полном UI PASS. Живой Mistral smoke — NOT RUN; основной сайт, общий scheduler/workers/Redis, полный CI image build, commit/PR/deployment не менялись.
 
 ## AP-06 — Подбор манданта
 
@@ -196,8 +196,7 @@ Fresh install, проверки без Suite и две миграции в ка�
 получил узкий Customer read guard. Отрицательные тесты воспроизвели обходы до правки.
 Existing File guards медленно обрабатывают большую накопленную историю; для
 регрессии отработанные fixtures одноразового сайта изолированы между модулями.
-Это не нагрузочная приёмка. Подробности и границы — в
-[результатах AP-06](2026-10-22-ai-posteingang-ap06-implementation.md#результат-исполнения).
+Это не нагрузочная приёмка.
 Живой Mistral — NOT RUN. Основная БД, глобальный scheduler, AP-07 и commit/PR/deployment
 не затрагивались.
 
@@ -239,7 +238,6 @@ retain нового Run, dirty buffer, исправление с Completed Task 
 карантинный PDF и запрет Duplicate. Исправлен File guard для обычного Suite rename
 с `Path`; затронутые проверки повторены. Реальный Mistral и внешняя доставка email
 не выполнялись; основной сайт, глобальный scheduler, PR/deployment не затронуты.
-Подробные фактические результаты: [AP-07 implementation](2026-10-23-ai-posteingang-ap07-implementation.md#результаты-исполнения).
 
 ## AP-08 — Документы манданта и связь с источником
 

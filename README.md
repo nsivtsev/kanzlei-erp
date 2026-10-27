@@ -88,7 +88,7 @@ A daily job creates one in-app **Notification Log / Alert** for each reminder cy
 
 Existing historical questions remain untracked and display **Question management was not previously recorded**. Staff explicitly initialize an open historical question; old requests, answers and decisions are not inferred from Task status. Initialization requires removing any existing assignments or shares for users without period access. Closed legacy records retain their earlier behavior. New copies start in Draft without previous correspondence, decisions, history or sent reminders.
 
-The server module `kanzlei_erp.fibu_questions` exposes `create_question(context_doctype, context_name, values)`, `update_question(name, action, values, expected_modified)` and `get_questions(filters, start, page_length)`. Updates require the current Task `modified` value. Creation supports a stable `creation_key` for safe retries; the UI retains it for the dialog and prevents duplicate submissions. Actions lock the package, optional supplement and Task in that order, reload and recheck access. See the [implementation plan](docs/plans/2026-10-08-bl007-implementation.md) and [acceptance report](docs/reviews/2026-10-08-bl007-verification.md).
+The server module `kanzlei_erp.fibu_questions` exposes `create_question(context_doctype, context_name, values)`, `update_question(name, action, values, expected_modified)` and `get_questions(filters, start, page_length)`. Updates require the current Task `modified` value. Creation supports a stable `creation_key` for safe retries; the UI retains it for the dialog and prevents duplicate submissions. Actions lock the package, optional supplement and Task in that order, reload and recheck access. See the [acceptance report](docs/reviews/2026-10-08-bl007-verification.md).
 
 Projects User and System Manager need **read access to the Mandant** in addition to their FiBu role. Being named responsible or deputy does not grant that access. Configure Customer read permissions during staff onboarding; private files and linked mail keep their original access rules. Package creation, links, list results, direct form access, and Task work context enforce the Mandant boundary on the server.
 
@@ -112,6 +112,8 @@ The seed script is safe to rerun and only accepts the `development.localhost` si
 Assign **Posteingang Operator** explicitly to the active System Users who handle the queue; a sole Steuerberater can hold this role. Customer read/write and Task permissions remain required. System Manager configures Settings and, with Operator and the relevant Customer rights, performs corrections. An analysis proposal never confirms a letter automatically. Feature, external processing and automatic analysis are disabled by default; switching them on does not process old uploads automatically.
 
 See the [employee and operations guide](docs/posteingang.md) for DE/RU actions, manual processing, key rotation, stuck jobs, correction quarantine, and reproducible synthetic evaluation commands. The [AP-10 acceptance report](docs/acceptance/ai-posteingang.md) separates autonomous fake/process readiness from live Mistral quality and pilot approval. Fake results do not establish model quality; actual live evaluation, measured staff time, expenses, and permission for real documents are separate conditions. Enter provider secrets only in Password Settings, never in chat, CLI arguments or git. No automatic history-retention purge is provided.
+
+The [Posteingang roadmap](docs/plans/2026-10-18-ai-posteingang-implementation-roadmap.md) tracks completed stages and remaining work. The [active AP-10 plan](docs/plans/2026-10-25-ai-posteingang-ap10-implementation.md) defines the pilot protocol; [versioned contracts and schemas](docs/plans/ai-posteingang/contracts.md) define the runtime behavior. Completed implementation plans are available in Git history; current instructions, contracts and acceptance results remain in the documentation tree.
 
 ## Transactional email
 
@@ -228,7 +230,7 @@ clear Desk cache. Migration also invalidates Suite's cached user profiles so
 the new `user_type` field is available immediately. A missing/trashed root is
 reported for administrator attention;
 clicking the action never silently creates a replacement. See the
-[folder design](docs/plans/2026-10-12-mandant-drive-design.md).
+[Mandant Drive acceptance report](docs/reviews/2026-10-12-mandant-drive-verification.md).
 
 The [staff navigation verification](docs/reviews/2026-10-14-drive-navigation-verification.md)
 records automated and browser acceptance for BL-046.
