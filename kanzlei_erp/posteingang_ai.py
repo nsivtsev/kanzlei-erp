@@ -30,7 +30,7 @@ from kanzlei_erp.posteingang_ai_validation import (
 OCR_MODEL = "mistral-ocr-4-1"
 EXTRACTION_MODEL = "mistral-small-2603"
 MAX_EXTRACTION_REQUEST_BYTES = 192000
-PROMPT_VERSION = "ap04-extraction-v3"
+PROMPT_VERSION = "ap04-extraction-v6"
 _SOURCE = object()
 _ENDPOINTS = {
 	"ocr": "https://api.mistral.ai/v1/ocr",
@@ -46,6 +46,7 @@ by the document. Never invent an authority, jurisdiction or identifier type, and
 assume that an addressee's identifier was issued by the sender. If the required context
 is missing, omit that identifier from recipients[].identifiers and other_identifiers;
 preserve its original wording and value in an incomplete_text warning with page evidence.
+Do not substitute unknown, not stated, a placeholder, or a guessed sender as authority.
 Keep the recipient's known name/address and all unrelated actions even if its identifier
 is incomplete. Other identifier types may retain null context where the schema allows it.
 Use null for unknown values and [] for absent collections. Never infer unknown receipt dates.
@@ -56,6 +57,9 @@ Explicit deadlines require a real calendar date and the original wording. Relati
 must retain wording and the stated anchor with date=null. Never calculate relative dates,
 legal deadlines, delivery dates or internal work dates. not_found requires null wording/anchor
 and no evidence. uncertain requires wording and date=null.
+When a requested action has no deadline, use exactly
+{"kind":"not_found","date":null,"wording":null,"anchor":null,"evidence":[]}.
+A document date, filename date or receipt date is not that action's deadline.
 Evidence must quote the exact OCR of the stated 1-based page; do not invent citations.
 Use quote=null or no evidence when no supporting quote exists. Do not emit verification.
 Keep human-readable descriptions in the document language and quotes verbatim.
@@ -67,6 +71,12 @@ uncertainty or omissions, not whether the document is real. A SYNTHETISCH/SYNTHE
 test, specimen or fictitious label alone never implies poor_scan, ambiguous_customer
 or unknown_customer. poor_scan requires actual unreadable or damaged content. You do
 not know the ERP catalog; do not guess whether a named addressee exists in it.
+A bare reference such as "Mandantenreferenz: REF-001" has no stated issuing authority;
+the sender's presence elsewhere is not evidence of who issued it. Preserve the reference
+in incomplete_text, not as a fully specified other identifier. Use ambiguous_customer
+or multiple_customers only when the document itself has conflicting or distinct addressees,
+not merely because no catalog lookup has been performed. Synthetic labels do not affect
+readability; readable text remains readable.
 Return one JSON object only, with schema_version=1.0, no prose or markdown fences.
 """
 
@@ -429,6 +439,7 @@ def extract(source, ocr_result):
 					"stream": False,
 					"n": 1,
 					"tool_choice": "none",
+					"reasoning_effort": "none",
 					"max_tokens": 32768,
 					"response_format": {
 						"type": "json_schema",

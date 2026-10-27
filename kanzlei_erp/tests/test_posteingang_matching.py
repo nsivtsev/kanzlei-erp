@@ -190,6 +190,36 @@ class TestPosteingangMatching(PosteingangTestCase):
 					with self.assertRaisesRegex(frappe.ValidationError, "MULTIPLE_ADDRESSEES"):
 						self.matching.select_customer(doc.name, customers["SYN-CUSTOMER-A"], "reason", doc.revision, "multi")
 
+	def test_observable_remediation_candidate_sets(self):
+		from kanzlei_erp.posteingang_ai_validation import validate_extraction
+
+		pack = json.loads(Path(frappe.get_app_path("kanzlei_erp", "tests", "fixtures", "posteingang_remediation.json")).read_text())
+		customers = {}
+		for source in pack["catalog"]["customers"]:
+			frappe.set_user("Administrator")
+			doc = frappe.copy_doc(self.customer)
+			doc.customer_name = source["name"]
+			doc.set("kanzlei_identifiers", [{"identifier_type": i["type"], "raw_value": i["value"], "jurisdiction": i["jurisdiction"], "authority": i["authority"], "other_type": i["other_type"]} for i in source["identifiers"]])
+			doc.insert()
+			for identifier in list(doc.kanzlei_identifiers):
+				doc.reload()
+				self.ids.verify_identifier(doc.name, identifier.name, str(doc.modified), "Explicit synthetic remediation source")
+			customers[source["customer"]] = doc.name
+		for case in pack["cases"]:
+			with self.subTest(case=case["case_id"]):
+				frappe.set_user("Administrator")
+				for key, name in customers.items():
+					frappe.share.remove("Customer", name, self.operator.name)
+					if key in case["allowed_customers"]:
+						frappe.share.add("Customer", name, self.operator.name, read=1, write=1)
+				frappe.clear_cache(user=self.operator.name)
+				frappe.set_user(self.operator.name)
+				before = {d: frappe.db.count(d) for d in ("Incoming Letter", "Incoming Letter Run", "Incoming Letter Event", "Task")}
+				result = self.matching._match(validate_extraction(case["extraction"], case["pages"], max_actions=30))
+				self.assertEqual([c["customer"] for c in result["candidates"]], [customers[k] for k in case["expected"]["candidate_customers"]])
+				self.assertEqual(result["ambiguity"], case["expected"]["ambiguity"])
+				self.assertEqual(before, {d: frappe.db.count(d) for d in before})
+
 	def test_structured_address_ranks_names_and_conflicts_remain_explicit(self):
 		self.verify()
 		doc = self.successful_letter()

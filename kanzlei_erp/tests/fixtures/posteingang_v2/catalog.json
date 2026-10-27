@@ -1,0 +1,227 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "customers": [
+    {
+      "customer": "SYN-CUSTOMER-REGA",
+      "name": "Musterwerk Linde GmbH",
+      "address": "Testweg 12, 00001 Musterstadt",
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000123",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "00000000123",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        },
+        {
+          "type": "other",
+          "value": "REG-0042",
+          "jurisdiction": "TEST-NORD",
+          "authority": "Fiktive Registerstelle Nord",
+          "other_type": "Aktenreferenz",
+          "normalized_value": "REG-0042",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-REGB",
+      "name": "Probebetrieb Tanne GmbH",
+      "address": "Probestrasse 9, 00002 Teststadt",
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000123",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "00000000123",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        },
+        {
+          "type": "other",
+          "value": "REG-0042",
+          "jurisdiction": "TEST-NORD",
+          "authority": "Fiktive Registerstelle Nord",
+          "other_type": "Aktenreferenz",
+          "normalized_value": "REG-0042",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-REGC",
+      "name": "Testatelier Birke GmbH",
+      "address": "Musterplatz 4, 00003 Beispielort",
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000456",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "00000000456",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VA",
+      "name": "Flussbogen Manufaktur GmbH",
+      "address": "Weidenkai 18, 00041 Fiktivhafen",
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "DE000000731",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VB",
+      "name": "Morgenfarn Labor GmbH",
+      "address": "Kristallallee 3, 00042 Probedorf",
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "DE000000732",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VC",
+      "name": "Nele Winter",
+      "address": "Heidebogen 22, 00043 Musterau",
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000733",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "00000000733",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VE",
+      "name": "Küstenrad Reparatur eG",
+      "address": "Speichenhof 8, 00044 Testbucht",
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "BG-KR-734",
+          "jurisdiction": "TEST-KÜSTE",
+          "authority": "Fiktiver Gewerbeverband Küste",
+          "other_type": "Betriebskennzeichen",
+          "normalized_value": "BG-KR-734",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VF",
+      "name": "Silbermoos Medien UG",
+      "address": "Pixelgasse 6, 00045 Beispielhain",
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000734",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "DE000000734",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VG",
+      "name": "Doppelfichte Messebau GmbH",
+      "address": "Pavillonring 11, 00046 Probemarkt",
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000735",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "DE000000735",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "customer": "SYN-CUSTOMER-VH",
+      "name": "Doppelfichte Veranstaltung KG",
+      "address": "Tribünenweg 2, 00047 Testmarkt",
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000735",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "normalized_value": "DE000000735",
+          "verified_by": "v2-operator@example.invalid",
+          "verification_source": "Synthetische Katalogfestlegung; keine echte Identitätsprüfung",
+          "verified_at": "2026-10-27T08:00:00Z"
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "user": "v2-operator@example.invalid",
+      "enabled": true,
+      "user_type": "System User",
+      "customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGB",
+        "SYN-CUSTOMER-REGC",
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ]
+    }
+  ]
+}

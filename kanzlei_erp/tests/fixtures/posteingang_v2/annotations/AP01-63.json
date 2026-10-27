@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-63",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktiver Gutachterausschuss Heidekreis",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktiver Gutachterausschuss Heidekreis"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Nele Winter",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Nele Winter"
+          }
+        ]
+      },
+      "address": {
+        "value": "Heidebogen 22, 00043 Musterau",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Heidebogen 22, 00043 Musterau"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000733",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Steuer-ID des Empfängers: 00000000733"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-VC"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-VC",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-63-obligation-1",
+      "title": "Grundstücksnutzung im Bogen ergänzen",
+      "description": "Bitte füllen Sie den Abschnitt zur tatsächlichen Grundstücksnutzung bis zum 23.11.2026 aus.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte füllen Sie den Abschnitt zur tatsächlichen Grundstücksnutzung bis zum 23.11.2026 aus."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-23",
+        "wording": "Bitte füllen Sie den Abschnitt zur tatsächlichen Grundstücksnutzung bis zum 23.11.2026 aus.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte füllen Sie den Abschnitt zur tatsächlichen Grundstücksnutzung bis zum 23.11.2026 aus."
+          }
+        ]
+      }
+    }
+  ]
+}

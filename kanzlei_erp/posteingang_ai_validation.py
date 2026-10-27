@@ -5,6 +5,7 @@ import json
 import unicodedata
 from functools import lru_cache
 from importlib.resources import files
+from itertools import product
 
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
@@ -198,10 +199,34 @@ def provider_schema():
 			for part in fragment.lstrip("/").split("/"):
 				target = target[part]
 			return expand(target, common if file else current)
-		return {
+		expanded = {
 			key: expand(value, current)
 			for key, value in node.items()
 			if key not in ("$id", "$schema", "$defs", "allOf", "if", "then", "else")
 		}
+		if "allOf" in node:
+			# All v1 conditionals discriminate finite enum fields. Encode their
+			# combinations as structural alternatives instead of silently dropping
+			# the rules (notably explicit_date with null date/wording).
+			rules = node["allOf"]
+			fields = sorted({key for rule in rules for key in rule["if"]["properties"]})
+			choices = [node["properties"][key]["enum"] for key in fields]
+			branches = []
+			for values in product(*choices):
+				assignment = dict(zip(fields, values, strict=True))
+				constraints = {key: {"enum": [value]} for key, value in assignment.items()}
+				valid = True
+				for rule in rules:
+					condition = Draft202012Validator(rule["if"]).is_valid(assignment)
+					consequence = rule.get("then" if condition else "else", {})
+					if not Draft202012Validator(consequence).is_valid(assignment):
+						valid = False
+						break
+					for key, value in consequence.get("properties", {}).items():
+						constraints.setdefault(key, {}).update(expand(value, current))
+				if valid:
+					branches.append({"properties": constraints})
+			expanded["anyOf"] = branches
+		return expanded
 
 	return expand(root, root)

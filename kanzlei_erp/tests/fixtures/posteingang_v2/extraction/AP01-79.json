@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Bauaufsicht Uferland",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Bauaufsicht Uferland",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Nachweis Fluchtweg",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Nachweis Fluchtweg",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Flussbogen Manufaktur GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Flussbogen Manufaktur GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Weidenkai 18, 00041 Fiktivhafen",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Weidenkai 18, 00041 Fiktivhafen",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000731",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "partial",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Geprüften Fluchtweg bestätigen",
+      "description": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-15",
+        "wording": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte reichen Sie die Bestätigung über den geprüften Fluchtweg bis zum 15.12.2026 ein.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "code": "incomplete_text",
+      "message": "Die nicht operative Fußzeile ist im OCR unleserlich; sichtbare Pflicht und Termin sind erhalten.",
+      "evidence": []
+    }
+  ]
+}

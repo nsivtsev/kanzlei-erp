@@ -105,6 +105,25 @@ def identifier_key(identifier):
     return None
 
 
+def audit_identifier_context(gold, source_pages):
+    """Necessary observability check, not a semantic proof of issuing authority.
+
+    Keep frozen AP-01 gold intact. Run this additional audit before accepting a
+    new quality corpus: a non-null context cannot rely on an absent source term.
+    other_type is a semantic label, so literal source equality is not required.
+    """
+    text = normalized("\n".join(page["text"] for page in source_pages)).casefold()
+    issues = []
+    for recipient_index, recipient in enumerate(gold.get("recipients", [])):
+        for index, identifier in enumerate(recipient["identifiers"]):
+            for field in ("authority", "jurisdiction"):
+                value = identifier.get(field)
+                if value and not re.search(r"(?<!\w)" + re.escape(normalized(value).casefold()) + r"(?!\w)", text):
+                    issues.append({"path": f"/recipients/{recipient_index}/identifiers/{index}/{field}",
+                                   "code": "context_absent_from_source"})
+    return issues
+
+
 def validate_annotations(gold, case, source_pages, customers):
     validate_document(gold, "annotations.schema.json")
     require(gold["case_id"] == case["case_id"], "semantic gold case_id mismatch")
@@ -348,6 +367,8 @@ def validate_dataset(directory=FIXTURES):
 def validate_pilot(directory=FIXTURES, profile=None):
     """Add the AP-10 freeze/coverage gate without narrowing the AP-01 validator."""
     root = Path(directory).resolve()
+    if profile == "ap10-medium-v2" or (isinstance(profile, dict) and profile.get("profile") == "ap10-medium-v2"):
+        return validate_pilot_v2(root, profile if isinstance(profile, dict) else None)
     if profile is None or profile == "ap10-v1":
         profile = read_json(EVALUATION / "ap10-v1.json")
     require(isinstance(profile, dict) and profile.get("profile") == "ap10-v1", "unknown pilot profile")
@@ -402,10 +423,67 @@ def validate_pilot(directory=FIXTURES, profile=None):
     return {**result, "explicit_holdout_actions": explicit, "new_holdout_cases": len(new_cases), "gold_facts": len(fact_ids)}
 
 
+def validate_pilot_v2(directory, profile=None):
+    """Separate, observable cohort; original AP-01 gold remains immutable."""
+    root = Path(directory).resolve()
+    profile = profile or read_json(EVALUATION / "ap10-medium-v2.json")
+    manifest = read_json(root / "manifest.json")
+    cases = manifest["cases"]
+    require(profile["profile"] == "ap10-medium-v2" and manifest["dataset_version"] == profile["dataset_version"] == "1.2", "pilot v2 version mismatch")
+    require(len(cases) == 42 and dict(Counter(c["split"] for c in cases)) == {"development": 12, "holdout": 30}, "pilot v2 requires 42 letters / 12 development / 30 holdout")
+    require({c["case_id"] for c in cases} == {f"AP01-{i:02d}" for i in range(43, 85)}, "pilot v2 case IDs differ")
+    result = validate_dataset(root)
+    holdout = [c for c in cases if c["split"] == "holdout"]
+    require({c["case_id"] for c in holdout} == set(profile["holdout_history"]["new_cases"]), "new holdout history mismatch")
+    old = read_json(FIXTURES / "manifest.json")
+    known_families = {c["source_family"] for c in old["cases"]}
+    remediation = FIXTURES.parent / "posteingang_remediation.json"
+    if remediation.exists():
+        known_families.update(c["source_family"] for c in read_json(remediation)["cases"])
+    require(not known_families & {c["source_family"] for c in holdout}, "holdout source family was already used")
+    require(len({c["source_family"] for c in holdout}) == 30, "holdout source families must be distinct")
+    require(not {c["sha256"] for c in old["cases"]} & {c["sha256"] for c in holdout}, "holdout PDF already used")
+    tags = {tag for c in holdout for tag in c["tags"]}
+    require(set(profile["required_tags"]) <= tags, "pilot coverage missing required class")
+    gold = {c["case_id"]: read_json(safe_path(root, c["annotations"])) for c in cases}
+    for case in cases:
+        pages = read_json(safe_path(root, case["source_text"]))["pages"]
+        require(not audit_identifier_context(gold[case["case_id"]], pages), "gold identifier context absent from source")
+    actions = [a for c in holdout for a in gold[c["case_id"]]["actions"]]
+    require(set(profile["required_deadline_kinds"]) <= {a["deadline"]["kind"] for a in actions}, "pilot coverage missing deadline kind")
+    explicit = sum(a["deadline"]["kind"] == "explicit_date" for a in actions)
+    require(explicit >= max(15, profile["minimum_explicit_holdout_actions"]), "pilot needs at least 15 explicit holdout actions")
+    facts = read_json(safe_path(root, profile["facts"]))
+    require(facts["schema_version"] == "1.0" and facts["dataset_version"] == "1.2", "gold fact version mismatch")
+    require(len(facts["cases"]) == len(cases) and {f["case_id"] for f in facts["cases"]} == gold.keys(), "gold fact case set mismatch")
+    ids = set()
+    for item in facts["cases"]:
+        require(type(item["readable"]) is bool and item["ambiguity"] in ("none", "not_found", "multiple_matches", "multiple_addressees"), "invalid gold fact context")
+        require(item["readable"] or not item["facts"], "unreadable facts cannot enter readable coverage")
+        for fact in item["facts"]:
+            require(fact["fact_id"] not in ids, "duplicate gold fact ID")
+            ids.add(fact["fact_id"])
+            require(isinstance(fact["pointer"], str) and fact["pointer"].startswith("/"), "invalid gold fact pointer")
+            target = gold[item["case_id"]]
+            try:
+                for part in fact["pointer"][1:].split("/"):
+                    part = part.replace("~1", "/").replace("~0", "~")
+                    if isinstance(target, list):
+                        require(part.isdecimal() and part.isascii(), "invalid gold fact pointer")
+                        target = target[int(part)]
+                    else:
+                        target = target[part]
+            except (KeyError, IndexError, TypeError, ValueError) as error:
+                raise ContractError("invalid gold fact pointer") from error
+            require(isinstance(target, dict) and target.get("evidence"), "gold fact needs source evidence")
+    return {**result, "explicit_holdout_actions": explicit, "new_holdout_cases": 30, "gold_facts": len(ids)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, default=FIXTURES)
-    parser.add_argument("--pilot-profile", choices=["ap10-v1"])
+    parser.add_argument("--pilot-profile", choices=["ap10-v1", "ap10-medium-v2"])
+    parser.add_argument("--audit-identifier-context", action="store_true", help="Fail if gold assumes authority/jurisdiction absent from source; frozen fixtures are not rewritten")
     args = parser.parse_args()
     try:
         result = validate_pilot(args.fixtures, args.pilot_profile) if args.pilot_profile else validate_dataset(args.fixtures)
@@ -413,6 +491,16 @@ def main():
         print(f"AP-01 validation failed: {exc}", file=sys.stderr)
         return 1
     print(f"Validated {result['cases']} synthetic letters / {result['pages']} pages; splits={result['splits']}. Runtime acceptance is pending AP-02…AP-10.")
+    if args.audit_identifier_context:
+        issues = []
+        manifest = read_json(args.fixtures / "manifest.json")
+        for case in manifest["cases"]:
+            gold = read_json(safe_path(args.fixtures, case["annotations"]))
+            pages = read_json(safe_path(args.fixtures, case["source_text"]))["pages"]
+            issues.extend({"case_id": case["case_id"], **issue} for issue in audit_identifier_context(gold, pages))
+        print(json.dumps({"identifier_context_audit": "FAIL" if issues else "PASS", "issues": issues}, ensure_ascii=False))
+        if issues:
+            return 1
     return 0
 
 

@@ -3,6 +3,8 @@
 **25.10.2026: AP-10A завершён. AP-10B NOT RUN; весь AP-10 остаётся открытым.**
 **Обновление 27.10.2026:** технический live smoke OCR/extraction PASS после
 development-настройки prompt; качество/holdout/время/billing ещё не подтверждены.
+**Последний результат AP-10B:** live holdout v4 выполнен, автоматический verdict
+**NO_GO**. Человеческую проверку и замер времени владелец отложил; весь AP-10 открыт.
 Основа — `feature/ai-posteingang@d79ba0a`; изменения AP-10 пока не закоммичены.
 Production-код, схемы extraction/review, настройки основного сайта и зависимости
 не изменялись. Fake подтверждает контракты и процесс, а не качество Mistral.
@@ -167,3 +169,204 @@ Ruff оказался экспериментальным и повредил ф�
 файлов восстановлены из HEAD, текущие изменения применены заново и перепроверены.
 UI/storage/permission-код не менялся; browser/build/Drive suites не повторялись.
 Коммит, PR и deployment этой диагностической правки не выполнялись.
+
+## AP-10B: live development и holdout — 27.10.2026
+
+Владелец поручил сейчас оценить модель, а независимую человеческую часть выполнить
+позже. Общий разрешённый бюджет остаётся 5 €. Сбор выполнен штатными intake/Run/RQ
+на двух новых отмеченных сайтах без Suite. Основной сайт и общие workers/Redis/
+scheduler не менялись; собственные очереди удалены после сбора.
+
+**Development:** первый полноценный v3-прогон — 4/12 Succeeded, 8/12 INVALID_RESULT.
+Восьми development-письмам отдельно повторили только extraction с сохранённым OCR;
+повторилась причина `other` без authority. Provider projection теряла условие
+if/then, хотя серверный raw validator сохранял его. После RED добавлены две
+структурные anyOf-ветви: обычные типы с прежними nullable-полями и other с
+обязательными authority/other_type. Canonical/raw схемы AP-01 не изменены.
+С prompt/projection v4 повторное extraction на 12 development OCR прошло 12/12.
+Это отдельный tuning-артефакт, не переписанные v3 Runs и не holdout-результаты.
+
+**Holdout:** конфигурация заморожена до первого запроса, после начала не менялась;
+все 30 писем обработаны один раз, без retries. Порог допуска не достигнут.
+
+| Проверка по текущей frozen-разметке | Результат |
+|---|---|
+| Технически принятые extraction | 28/30; AP01-32 и AP01-33 отклонены INVALID_RESULT, не повторялись и не исключались |
+| Top-1 Customer | 24/26 = 92.3%, FAIL при ≥95%; ошибки AP01-32/AP01-33 |
+| Top-3 Customer | 26/28 = 92.9%, FAIL при ≥95%; те же ошибки |
+| Неоднозначность / несколько адресатов | 1/3, FAIL; AP01-04/AP01-37 не дали multiple_matches |
+| Проверка помеченных matched цитат | 380/380 PASS относительно реального OCR. Ещё 5 цитат явно unverified; это не semantic evidence coverage |
+| Полнота / точность действий | NOT MEASURED без смысловых judgments. Даже оптимистический верхний предел полноты по количествам — 32/34 = 94.1%, ниже 95% |
+| Явные даты | Все 25 gold-дат присутствуют в соответствующих письмах как мультимножества; это верхний предел, не подтверждение связи даты с правильным действием |
+| Relative dates / evidence coverage | NOT MEASURED; rejected raw и смысловые соответствия не подменяются нулём нарушений |
+| Независимые gold/judgments, активное время, billing | Отложены / NOT MEASURED по решению владельца |
+
+Новые 26 holdout показаны отдельно: 24/26 технически успешны, Top-1 21/23,
+Top-3 22/24, ambiguity 1/2, matched quotes 329/329. Ошибки остаются в знаменателях.
+Положительные смысловые соответствия агентом не выставлялись; все judgments pending.
+CLI построил отчёт с exit0/NO_GO; `--require-gates` вернул exit1.
+
+**Ограничение gold:** AP01-04/AP01-37 ожидают точное совпадение пользовательского
+идентификатора с контекстом `synthetic_client_reference / Fiktive Beispielstelle /
+SYNTHETIC`. Орган `Fiktive Beispielstelle` отсутствует в OCR этих PDF. Поэтому
+ожидание exact matching требует отдельной проверки разметки/контекста, а не
+передачи каталога в prompt или угадывания органа. Gold задним числом не меняли.
+В development модель также принимала отправителя за орган номера и делала ложные
+предупреждения из synthetic-маркировки: schema PASS не доказывает верность фактов.
+
+| Provenance holdout | Значение |
+|---|---|
+| Сайт / actor | `posteingang-ap10-live-holdout.localhost` / `ap10-live-holdout-20261027@example.invalid` |
+| Run оценки / freeze UTC | `c15801959d88e30e4aef9b6a` / `2026-10-27T12:48:31.436798+00:00` |
+| Модели / prompt | `mistral-ocr-4-1`, `mistral-small-2603` / `ap04-extraction-v4` |
+| Code revision | `5f8748443a77+local.e679ada19b8bd6f2` (изменения v4 ещё не закоммичены) |
+| Dataset / gold hashes | те же `f3fd42…7825` / `0b495b…40d` из AP-10A; dataset1.1 неизменён |
+| Observations SHA-256 | `3c90593f8379cc1895e20d9f73c5dd2d5dc9dc053a67be8e40ce2256514c2d81` |
+
+Игнорируемые артефакты: `artifacts/posteingang-evaluation/ap10b-20261027/`.
+Есть отдельные freezes/execution metadata, первичные development observations,
+development diagnostics v3/v4, holdout observations, pending judgments и отчёт.
+`holdout/automatic-diagnostics.json` содержит только количественные верхние пределы
+и очередь проверки; это не автоматическая смысловая разметка.
+
+Сборщики ограничены 24 и 60 запросами, retries=0. Дополнительно измерены 25 HTTP-
+вызовов adapter-диагностики вместе с предыдущим smoke; их usage даёт около $0.0191
+по опубликованным тарифам. Верхняя тарифная оценка для двух collector-прогонов по
+лимиту request192000 bytes / max_tokens32768 и 46 страницам — $2.2194; суммарный
+консервативный расчёт около $2.24. Это **не фактический billing** и не число запросов,
+выведенное из attempt_count. Реальный счёт/валюта/налоги требуют usage/billing export.
+
+Все три использованных сайта проверены: enabled/external/auto=0, ключи сохранены,
+Completed писем и Tasks нет. На новых сайтах 12 и 30 Letter/Run; созданные оригиналы
+остаются приватными. Реальные документы и deployment не использовались.
+Регрессия: Linux168 PASS, AI20 OK/skip1, targeted jobs prompt guard1 PASS,
+Ruff0.14.0/diff PASS. UI/storage/permissions не менялись; соответствующие старые
+suites повторно не запускались. Коммит/PR/deployment этой работы не выполнялись.
+
+**Дальше:** исправления готовить на development-примерах. Этот live holdout уже
+просмотрен и не должен после tuning выдаваться за новую независимую оценку.
+До повторного допуска нужны проверенная новая/frozen-разметка, корректный протокол
+новой оценки, отложенная человеческая часть и решение владельца. AP-10B не закрыт.
+
+## Исправления после NO_GO — 27.10.2026
+
+Отдельная диагностика AP01-32/AP01-33 на сохранённом OCR воспроизвела нарушение:
+`explicit_date` с `date=null` и `wording=null`. При v4 один повтор прошёл, второй
+снова отказал; это не основание автоматически повторять INVALID_RESULT.
+Provider projection v5 переводит все существующие enum-условия v1 в структурные
+anyOf-альтернативы: identifier context, четыре вида срока, action_assessment и
+unreadable. Canonical/raw/review схемы и серверная строгость не менялись.
+RED: 14 недопустимых сочетаний принимались проекцией; GREEN: они отвергаются,
+все42 исходных эталона принимаются. Оба проблемных письма с v5 дали корректный
+not_found. Исторические Runs/observations/NO_GO не переписаны.
+
+Добавлен отдельный development-набор `posteingang_remediation.json`: 10 новых
+документов с наблюдаемым контекстом, двумя случаями неоднозначности, неполным
+номером, sender ID и всеми видами срока. Набор не является holdout. Новый флаг
+`validate_posteingang_fixtures.py --audit-identifier-context` проверяет наличие
+терминов authority/jurisdiction в source text; старый gold дал ожидаемый FAIL:
+82 отсутствующих значения в39 письмах. Это необходимая проверка наблюдаемости,
+а не доказательство отношения «выдано этим органом». Исходный dataset1.1 не менялся.
+
+| Development-проверка | Результат |
+|---|---|
+| Small v5, исходные12 OCR | schema12/12; выдуманный контекст/ложные warnings ещё встречаются |
+| Small v5, новые10 PDF | schema10/10; проверки количества/видов дат, кандидатов и предупреждений4/10 |
+| Small v5, контроль на том же OCR | те же параметры4096/none, schema10/10, проверки4/10 |
+| Medium3.5 v5, тот же OCR | schema10/10, проверки10/10; оба multiple_matches и неполный номер корректны |
+| Medium3.5 v5, исходные12 OCR | schema12/12; для неполных custom references орган не выдуман |
+
+Сравнение Small/Medium использовало одинаковые OCR/prompt/schema,
+max_tokens4096 и reasoning_effort=none, без tools/retries/fallback. Проверки
+структурных полей не выдаются за смысловую полноту/точность действий. Конкретный
+кандидат следующей оценки — `mistral-medium-3-5`; он выбран только на одноразовом
+`posteingang-ap10-final.localhost`, enabled/external/auto остаются0. Основной сайт
+и defaults приложения не менялись. У модели есть structured outputs; тарифы
+проверены по [официальной странице Medium3.5](https://docs.mistral.ai/models/mistral-medium-3-5-26-04).
+
+Артефакты диагностики, freezes и сравнения — в прежнем игнорируемом каталоге;
+сводка `remediation-summary.json`. Дополнительно68 прямых запросов: 10 OCR и58
+extraction, без автоматических повторов. Тарифная оценка этой работы около$0.213;
+вместе с прежней консервативной оценкой около$2.45, фактический billing NOT MEASURED.
+Ключи сохранены; новые10 оригиналов приватны, Run/Action/Task для них не создавались.
+
+Проверки: Linux173 PASS; AI20 OK/skip1(no Suite S3); новая DB-проверка matching1
+PASS; jobs prompt guard1 PASS; Ruff и diff PASS. UI, permissions, storage и
+зависимости не менялись, их старые suites повторно не запускались.
+
+**Статус:** технический отказ исправлен, более подходящая модель найдена на
+разработочных примерах. Новый frozen holdout с Medium ещё NOT RUN; старый NO_GO
+сохраняется. Следующий независимый прогон требует новой версии наблюдаемого gold
+и новых source families; эти10 примеров нельзя переименовать в holdout. Человеческая
+часть остаётся отложенной. AP-10 и допуск реальных документов не закрыты.
+
+## Новый holdout Medium — 27.10.2026
+
+Dataset1.2 хранится отдельно в `posteingang_v2`: 42 письма /44страницы,
+12 development (включая10 прежних regression cases) и30 новых holdout source
+families /32страницы. Все26 явных сроков включены в denominator, включая плохой
+растровый скан. Source/gold/context audit PASS; все44страницы отрендерены и
+просмотрены до freeze. Старые dataset1.1/gold/NO_GO и их hashes сохранены.
+Gold нового набора — pending_independent_review, не человеческая независимая разметка.
+
+До первого запроса исправлен обнаруженный review дефект fingerprint: hash v2
+теперь связывает именно профиль v2 (RED→GREEN). В адаптере явно установлен
+reasoning_effort=none; текст prompt v5 сохранён, версия исполнения v6 отражает
+изменение HTTP-параметра. Canonical/raw/review схемы v1.0 неизменны.
+
+Freeze UTC `2026-10-27T20:00:09.320296+00:00`, run `8a2404f71c8493accf2ed5a7`;
+сайт `posteingang-ap10-medium-v2.localhost`, без Suite, scheduler выключен.
+Через штатные intake/Run/RQ выполнены60 HTTP200 (32 OCR-страницы +30 extraction):
+`mistral-ocr-4-1` → `mistral-medium-3-5`, prompt/execution v6, max_tokens32768,
+retries0/fallback0. В ходе измерения код/данные/конфигурация не менялись и запросы не повторялись;
+после завершения выключатели восстановлены.
+
+| Автоматически измерено | Результат |
+|---|---|
+| OCR + schema/extraction | 30/30 Succeeded, attempt_count1 |
+| Customer top-1 / top-3 | 27/27 /28/28, PASS |
+| Неоднозначность / несколько адресатов | 2/2, PASS |
+| Отображаемые matched цитаты | 334/334, PASS; ещё3 явно unverified |
+| Количество действий | 32 предложено /32 gold; это верхний предел полноты, не смысловое сопоставление |
+| Значения явных дат по письмам | 26/26 присутствуют; связь даты с правильным действием NOT MEASURED |
+| Медианное время коллектора на письмо | 8.77с; не активное время сотрудника |
+
+Два расхождения с frozen gold сохранены: AP01-64 выбрал document_date18.10 из
+технического футера вместо Ausfertigung27.10; AP01-84 классифицировал «möglichst
+zeitnah» как not_found вместо uncertain. Kind/date-мультимножества совпали в29/30
+письмах. Три unverified: AP01-55 summary, AP01-63 summary, AP01-68 action evidence.
+Это не исправлялось по результатам holdout.
+
+Итог оценщика **INCOMPLETE**: измеренные автоматические пороги PASS, но семантические
+соответствия, gold review, evidence coverage, relative-date semantics, активное
+время, фактический billing и полный runtime-safety пакет остаются NOT MEASURED.
+Все30 judgments pending, без LLM-as-judge. Обычный CLI exit0, --require-gates exit1.
+
+Budget observer резервировал максимум перед каждым вызовом (при неизвестном
+исходе стоимость не освобождается), дополнительный предел$1 не достигнут.
+Usage: 32040 prompt /26353 completion tokens +32 OCR-страницы; тарифная оценка
+$0.3737075, суммарная с прежней консервативной оценкой около$2.83. Это не billing;
+разрешённый владельцем общий бюджет5 € не увеличивался.
+
+Доказательства: игнорируемый `medium-v2-holdout/` в прежнем каталоге artifacts;
+freeze/journal/raw/HTTP usage/observations/pending judgments/report/diagnostics.
+Dataset hash `749928…7fffb`, gold `27c587…25f1`, code `8d2529…b1901`, observations
+file SHA256 `d54f0c…109a`; после завершения все freeze hashes проверены неизменными.
+30 приватных оригиналов,30 Needs Review,30 Succeeded,0 Completed/Task; feature/
+external/auto выключены, ключ сохранён, собственная RQ-очередь удалена.
+
+Проверки до/после подготовки: Linux190 PASS; после финальных изменений targeted
+budget5 /evaluation51 PASS; AI20 OK/skip1, jobs prompt guard1 PASS; Ruff/diff/JSON
+PASS. UI/storage/permissions не менялись. AP-10 остаётся открыт: новый процедурный
+holdout измерен, человеческая часть отложена; допуск реальных документов и релиз
+не выполнялись. Этот holdout уже просмотрен и не становится новым независимым
+после дальнейшего tuning. Коммит/PR/deployment не выполнялись.
+
+## Решение о выпуске кода — 27.10.2026
+
+Владелец поручил сделать коммит и выпустить текущую реализацию. Это решение о
+выпуске кода; AP-10 сохраняет INCOMPLETE и отложенные человеческие метрики.
+Выключенные defaults enabled/external/auto не меняются, тестовый API key и данные
+не переносятся в production. Выпуск проходит штатные PR/main CI и digest-based
+deployment; после него проверяются здоровье приложения и поведение выключенной
+функции. Полный AI-сценарий остаётся проверенным на синтетическом одноразовом сайте.

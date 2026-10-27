@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Kontrollstelle West",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Kontrollstelle West",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Testmitteilung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Testmitteilung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Wir haben die Unterlagen erhalten. Diese Nachricht dient nur Ihrer Information; es besteht kein Handlungsbedarf.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Wir haben die Unterlagen erhalten. Diese Nachricht dient nur Ihrer Information; es besteht kein Handlungsbedarf.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Musterwerk Linde GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Musterwerk Linde GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Testweg 12, 00001 Musterstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Testweg 12, 00001 Musterstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000123",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Steuer-ID des Adressaten: 00000000123",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "none_found",
+  "actions": [],
+  "warnings": []
+}

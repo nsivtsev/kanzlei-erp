@@ -225,6 +225,7 @@ def collect(args):
 		check_run,
 		check_source,
 		code_hash,
+		cohort_manifest,
 		resume_action,
 	)
 
@@ -238,7 +239,7 @@ def collect(args):
 		or not args.actor.endswith("@example.invalid")
 	):
 		raise ValueError("Marked disposable synthetic site required")
-	manifest_path = root / "kanzlei_erp/tests/fixtures/posteingang/manifest.json"
+	manifest_path = cohort_manifest(root, getattr(args, "cohort", "ap10-v1"))
 	manifest, _gold, _facts, dataset_hash, gold_hash = evaluation.load_dataset(manifest_path)
 	cases = [c for c in manifest["cases"] if args.split == "all" or c["split"] == args.split]
 	if len(cases) > args.max_documents:

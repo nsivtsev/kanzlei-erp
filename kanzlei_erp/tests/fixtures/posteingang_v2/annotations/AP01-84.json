@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-84",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Recyclingkoordination Mustertal",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Recyclingkoordination Mustertal"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Flussbogen Manufaktur GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Flussbogen Manufaktur GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Weidenkai 18, 00041 Fiktivhafen",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Weidenkai 18, 00041 Fiktivhafen"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000731"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-VA"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-VA",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-84-obligation-1",
+      "title": "Materialdifferenz erläutern",
+      "description": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah."
+        }
+      ],
+      "deadline": {
+        "kind": "uncertain",
+        "date": null,
+        "wording": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah."
+          }
+        ]
+      }
+    }
+  ]
+}

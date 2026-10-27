@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktives Versorgungswerk Freiberufe",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Versorgungswerk Freiberufe",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Einstufung Folgejahr",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Einstufung Folgejahr",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Nele Winter",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Nele Winter",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Heidebogen 22, 00043 Musterau",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Heidebogen 22, 00043 Musterau",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000733",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Steuer-ID des Empfängers: 00000000733",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Einkommenserklärung übermitteln",
+      "description": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-03",
+        "wording": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Übermitteln Sie die unterschriebene Einkommenserklärung für die Beitragsbemessung bis zum 03.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

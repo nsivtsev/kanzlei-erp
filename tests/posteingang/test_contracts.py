@@ -255,6 +255,25 @@ class ContractTests(unittest.TestCase):
         self.write("manifest.json", manifest)
         self.invalid("candidate provenance")
 
+    def test_identifier_context_audit_rejects_unobservable_gold_context(self):
+        case = next(c for c in self.read("manifest.json")["cases"] if c["case_id"] == "AP01-04")
+        gold = self.read(case["annotations"])
+        pages = self.read(case["source_text"])["pages"]
+        issues = self.validator.audit_identifier_context(gold, pages)
+        self.assertIn({"path": "/recipients/0/identifiers/0/authority", "code": "context_absent_from_source"}, issues)
+        self.assertIn({"path": "/recipients/0/identifiers/0/jurisdiction", "code": "context_absent_from_source"}, issues)
+        pages[0]["text"] += "\nAusstellende Stelle: Fiktive Beispielstelle\nGeltungsbereich: SYNTHETIC"
+        self.assertEqual(self.validator.audit_identifier_context(gold, pages), [])
+
+    def test_identifier_context_audit_does_not_infer_sender_as_authority(self):
+        gold = {"recipients": [{"identifiers": [{"type": "other", "value": "REF-001",
+                 "authority": "Musteramt", "jurisdiction": None}]}]}
+        pages = [{"page": 1, "text": "Absender: Andere Stelle\nReferenz: REF-001"}]
+        self.assertEqual(self.validator.audit_identifier_context(gold, pages), [
+            {"path": "/recipients/0/identifiers/0/authority", "code": "context_absent_from_source"}])
+        gold["recipients"][0]["identifiers"][0].update(type="de_tax_id", authority=None)
+        self.assertEqual(self.validator.audit_identifier_context(gold, pages), [])
+
     def test_typed_identifier_normalization_preserves_zeroes_and_context(self):
         base = {"type": "de_steuernummer", "value": " 00 / 012  ", "jurisdiction": "TEST", "authority": "TEST", "other_type": None}
         key = self.validator.identifier_key(base)

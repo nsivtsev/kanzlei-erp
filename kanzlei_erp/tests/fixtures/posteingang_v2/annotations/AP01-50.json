@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-50",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Kontrollstelle West",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Kontrollstelle West"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Musterwerk Linde GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Musterwerk Linde GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Testweg 12, 00001 Musterstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_tax_id",
+          "value": "00000000123",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Steuer-ID des Adressaten: 00000000123"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-REGA"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-REGA",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-50-obligation-1",
+      "title": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens.",
+      "description": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens."
+        }
+      ],
+      "deadline": {
+        "kind": "relative",
+        "date": null,
+        "wording": "innerhalb von 14 Tagen nach Zugang dieses Schreibens",
+        "anchor": "Zugang dieses Schreibens",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "innerhalb von 14 Tagen nach Zugang dieses Schreibens"
+          }
+        ]
+      }
+    }
+  ]
+}

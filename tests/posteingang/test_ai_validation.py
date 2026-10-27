@@ -152,6 +152,71 @@ class AiValidationTests(unittest.TestCase):
 			self.assertNotIn(forbidden, serialized)
 		self.assertFalse(schema["additionalProperties"])
 
+	def test_provider_projection_requires_context_for_other_identifier(self):
+		from jsonschema import Draft202012Validator
+
+		validator = Draft202012Validator(self.v.provider_schema())
+		self.assertTrue(validator.is_valid(self.raw))
+		for field in ("authority", "other_type"):
+			value = copy.deepcopy(self.raw)
+			value["recipients"][0]["identifiers"][0][field] = None
+			self.assertFalse(validator.is_valid(value), f"other identifier requires {field}")
+		value = copy.deepcopy(self.raw)
+		value["recipients"][0]["identifiers"][0].update(
+			type="de_tax_id", value="00123456789", authority=None, other_type=None
+		)
+		self.assertTrue(validator.is_valid(value))
+
+	def test_provider_projection_enforces_each_deadline_variant(self):
+		from jsonschema import Draft202012Validator, FormatChecker
+
+		validator = Draft202012Validator(self.v.provider_schema(), format_checker=FormatChecker())
+		invalid = (
+			{"kind": "explicit_date", "date": None, "wording": None, "anchor": None, "evidence": []},
+			{"kind": "relative", "date": "2026-11-20", "wording": "binnen 14 Tagen"},
+			{"kind": "relative", "date": None, "wording": None},
+			{"kind": "uncertain", "date": "2026-11-20", "wording": "Datum unklar"},
+			{"kind": "uncertain", "date": None, "wording": None},
+			{"kind": "not_found", "date": "2026-11-20", "wording": None},
+			{"kind": "not_found", "date": None, "wording": "keine Frist"},
+			{"kind": "not_found", "date": None, "wording": None, "anchor": "Zugang"},
+			{"kind": "not_found", "date": None, "wording": None, "anchor": None,
+			 "evidence": [{"page": 1, "quote": "ohne Frist"}]},
+		)
+		for deadline in invalid:
+			value = copy.deepcopy(self.raw)
+			value["actions"][0]["deadline"].update(deadline)
+			with self.subTest(deadline=deadline):
+				self.assertFalse(validator.is_valid(value))
+				with self.assertRaises(self.v.InvalidResult):
+					self.v.validate_extraction(value, self.pages, max_actions=30)
+
+	def test_provider_projection_enforces_action_and_readability_consistency(self):
+		from jsonschema import Draft202012Validator
+
+		validator = Draft202012Validator(self.v.provider_schema())
+		for assessment, readable, actions in (
+			("actions_found", "readable", []),
+			("none_found", "readable", self.raw["actions"]),
+			("unknown", "readable", self.raw["actions"]),
+			("actions_found", "unreadable", self.raw["actions"]),
+			("none_found", "unreadable", []),
+		):
+			value = copy.deepcopy(self.raw)
+			value.update(action_assessment=assessment, readability=readable, actions=actions)
+			with self.subTest(assessment=assessment, readability=readable):
+				self.assertFalse(validator.is_valid(value))
+
+	def test_provider_projection_accepts_every_valid_raw_fixture(self):
+		from jsonschema import Draft202012Validator
+
+		validator = Draft202012Validator(self.v.provider_schema())
+		manifest = json.loads((FIXTURES / "manifest.json").read_text())
+		for case in manifest["cases"]:
+			with self.subTest(case=case["case_id"]):
+				value = json.loads((FIXTURES / case["extraction"]).read_text())
+				self.assertTrue(validator.is_valid(raw_result(value)))
+
 	def test_no_remote_schema_resolution(self):
 		with self.assertRaises(self.v.InvalidResult):
 			self.v.validate_extraction({"$ref": "https://example.invalid/secret"}, self.pages, max_actions=30)

@@ -266,19 +266,29 @@ def verified(evidence, pages):
 	)
 
 
+def dataset_profile(manifest):
+	profiles = {"1.1": "ap10-v1.json", "1.2": "ap10-medium-v2.json"}
+	version = manifest.get("dataset_version")
+	require(version in profiles, "unknown dataset profile")
+	return read(SCHEMAS / profiles[version])
+
+
 def load_dataset(manifest_path):
 	"""Freeze every manifest dependency, including gold and the catalog, before collection."""
 	manifest_path = Path(manifest_path).resolve()
 	root, manifest = manifest_path.parent, read(manifest_path)
+	profile = dataset_profile(manifest)
 	import validate_posteingang_fixtures as contracts
 
 	try:
 		contracts.validate_dataset(root)
-		contracts.validate_pilot(root)
+		contracts.validate_pilot(root, profile)
 	except (contracts.ContractError, OSError, ValueError) as error:
 		raise EvaluationError("invalid pilot dataset") from error
 	require(manifest["synthetic"] is True, "only synthetic evaluation is supported")
 	paths = {manifest["catalog"], manifest["sources"], manifest["scenarios"]}
+	if profile.get("facts_in_dataset"):
+		paths.add(profile["facts"])
 	paths.update(
 		case[key]
 		for case in manifest["cases"]
@@ -287,14 +297,13 @@ def load_dataset(manifest_path):
 	artifacts = {
 		path: hashlib.sha256(safe_path(root, path).read_bytes()).hexdigest() for path in sorted(paths)
 	}
-	facts = read(SCHEMAS / "gold-facts.json")
+	facts = read(safe_path(root if profile.get("facts_in_dataset") else SCHEMAS, profile["facts"]))
 	gold = {case["case_id"]: read(safe_path(root, case["annotations"])) for case in manifest["cases"]}
 	require(len(gold) == len(manifest["cases"]), "duplicate dataset case")
 	schema_hashes = {
 		p.name: hashlib.sha256(p.read_bytes()).hexdigest()
 		for p in sorted(contracts.SCHEMAS.glob("*.schema.json"))
 	}
-	profile = read(SCHEMAS / "ap10-v1.json")
 	schema_hashes["pilot_profile"] = digest(profile)
 	schema_hashes["original_baseline"] = digest(read(SCHEMAS / profile["baseline"]))
 	dataset_hash = digest(
@@ -553,7 +562,14 @@ def evaluate(manifest_path, observations, judgments, *, timings=None, billing=No
 		)
 		require(
 			observations["prompt_version"]
-			in ("ap04-extraction-v1", "ap04-extraction-v2", "ap04-extraction-v3"),
+			in (
+				"ap04-extraction-v1",
+				"ap04-extraction-v2",
+				"ap04-extraction-v3",
+				"ap04-extraction-v4",
+				"ap04-extraction-v5",
+				"ap04-extraction-v6",
+			),
 			"unknown live prompt version",
 		)
 	manifest, gold, facts, data_hash, gold_hash = load_dataset(manifest_path)
@@ -572,7 +588,8 @@ def evaluate(manifest_path, observations, judgments, *, timings=None, billing=No
 	judged = unique_cases(judgments["cases"], allowed)
 	fact_cases = unique_cases(facts["cases"], allowed)
 	require(fact_cases.keys() == allowed, "gold fact coverage incomplete")
-	new_cases = set(read(SCHEMAS / "ap10-v1.json")["holdout_history"]["new_cases"])
+	profile = dataset_profile(manifest)
+	new_cases = set(profile["holdout_history"]["new_cases"])
 	groups = {
 		name: score_group([c for c in manifest["cases"] if predicate(c)], gold, fact_cases, obs, judged)
 		for name, predicate in [
@@ -647,7 +664,7 @@ def evaluate(manifest_path, observations, judgments, *, timings=None, billing=No
 		)
 		scenario_ids = [r["id"] for r in safety["scenarios"]]
 		require(len(scenario_ids) == len(set(scenario_ids)), "duplicate safety scenario")
-		required_scenarios = set(read(SCHEMAS / "ap10-v1.json")["required_safety_scenarios"])
+		required_scenarios = set(profile["required_safety_scenarios"])
 		failures = [
 			r["id"]
 			for r in safety["scenarios"]

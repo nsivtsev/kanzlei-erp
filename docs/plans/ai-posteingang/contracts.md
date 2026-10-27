@@ -849,3 +849,55 @@ AP-05 сверяет сохранённую версию prompt до provider ca
 дату и 12 проверенных цитат, но пропустил неполный номер и выдал ложное предупреждение
 об ambiguous_customer. Эти ограничения зафиксированы в acceptance report. Holdout,
 независимая разметка, timing и billing остаются открыты; весь AP-10 не закрыт.
+
+### Provider projection v4 и live holdout — 27.10.2026
+
+Development выявил, что структурная проекция допускала other identifier с null
+authority, хотя полный raw-контракт запрещает его. Provider projection теперь
+выражает это существующее правило двумя anyOf-ветвями: три стандартных типа с
+прежними nullable-полями и other с authority/other_type из then-ветви исходной
+схемы. Локальные canonical/raw JSON Schema v1.0 и серверный отказ не ослаблены.
+Все42 raw fixtures допустимы; неизвестный контекст other отвергается уже provider
+grammar. Prompt/execution provenance повышена до `ap04-extraction-v4`; оценщик
+поддерживает известные v1–v4 отдельно, неизвестные версии отвергает.
+
+Фактическая модельная оценка: development v4 extraction12/12 на сохранённом OCR,
+frozen holdout28/30 с автоматическим NO_GO; два INVALID_RESULT и пропущенная
+неоднозначность остаются в denominators. Gold1.1 не менялся, его независимую
+проверку и timing владелец отложил. Custom-context expectations AP01-04/AP01-37
+требуют проверки: ожидаемый орган не указан в PDF. История Runs не переписана,
+автоподтверждения/Tasks не было, внешняя обработка снова выключена. Подробные
+hashes, ограничения метрик и billing NOT MEASURED — в acceptance report.
+
+### Исправление provider projection v5 — 27.10.2026
+
+Проекция транслирует существующие enum-discriminated if/then/else в anyOf для
+идентификаторов, deadline.kind и согласованности actions/readability. Условия
+берутся из неизменённого raw-контракта; локальная полная валидация и календарные
+даты остаются обязательными. `explicit_date` с null date/wording не допускается;
+`not_found` требует null date/wording/anchor и пустое evidence. Версия исполнения
+`ap04-extraction-v5`; старый Run требует нового явного запуска, как в AP-05.
+
+Новый development regression corpus хранится отдельно от frozen dataset1.1.
+Опциональный audit identifier context выявляет отсутствующие в source text
+термины authority/jurisdiction, не переписывает gold и не доказывает семантическую
+принадлежность номера. Подбор AP-06 и его права не менялись. По development-сравнению
+следующим кандидатом выбран Mistral Medium3.5 (`mistral-medium-3-5`), без fallback и
+автоматической замены существующих Settings. Независимая оценка этой конфигурации
+ещё не выполнена; прошедшие регрессии не отменяют исторический NO_GO.
+
+### Отдельный quality cohort1.2 и исполнение v6 — 27.10.2026
+
+v6 явно передаёт reasoning_effort=none; системный prompt v5 и схемы v1.0 сохранены.
+Инструментальный collector принимает только два фиксированных cohort IDs; v2
+выбирает отдельный manifest, gold facts и профиль, включает их в fingerprint.
+Произвольный источник/путь от клиента не добавлен. Legacy hashes1.1 не изменились.
+Бюджетный observer — только тестовый инструмент: резерв до HTTP, charge по usage
+либо полный резерв при неизвестном исходе, без retries/fallback и без изменения
+production payload. RQ по-прежнему получает только production identifiers.
+
+Новый30-case holdout Medium через реальные Run/RQ завершён30/30; top-1/top-3,
+ambiguity и matched-quote gates PASS. Полный verdict INCOMPLETE, человеческие
+judgments pending; количество действий и мультимножество дат не заменяют смысловое
+сопоставление. Сохраняются расхождения document_date AP01-64 и deadline.kind AP01-84.
+Фактические freeze hashes, usage, состояния и ограничения — в acceptance report.

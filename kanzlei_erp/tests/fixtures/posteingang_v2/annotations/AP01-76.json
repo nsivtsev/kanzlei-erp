@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-76",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktiver Einkauf Werkhallen",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Von: Fiktiver Einkauf Werkhallen"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Flussbogen Manufaktur GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Flussbogen Manufaktur GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Weidenkai 18, 00041 Fiktivhafen",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Weidenkai 18, 00041 Fiktivhafen"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000731"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-VA"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-VA",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-76-obligation-1",
+      "title": "Sicherheitsdatenblatt hochladen",
+      "description": "Bitte laden Sie das aktuelle Sicherheitsdatenblatt für den Reiniger bis zum 10.12.2026 hoch.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte laden Sie das aktuelle Sicherheitsdatenblatt für den Reiniger bis zum 10.12.2026 hoch."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-10",
+        "wording": "Bitte laden Sie das aktuelle Sicherheitsdatenblatt für den Reiniger bis zum 10.12.2026 hoch.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte laden Sie das aktuelle Sicherheitsdatenblatt für den Reiniger bis zum 10.12.2026 hoch."
+          }
+        ]
+      }
+    }
+  ]
+}

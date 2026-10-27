@@ -37,6 +37,16 @@ class CollectionTests(unittest.TestCase):
 			self.module.check_invocation(args, {})
 		self.module.check_invocation(args, {"posteingang_acceptance_site": 1})
 
+	def test_new_cohort_is_explicit_and_has_a_fixed_manifest(self):
+		args = self.args("--cohort", "ap10-medium-v2", "--provider", "mistral", "--allow-external", "--max-requests", "60")
+		self.module.check_invocation(args, {"posteingang_acceptance_site": 1})
+		self.assertEqual(self.module.cohort_manifest(ROOT, args.cohort), ROOT / "kanzlei_erp/tests/fixtures/posteingang_v2/manifest.json")
+		with self.assertRaises(ValueError):
+			self.module.cohort_manifest(ROOT, "../../arbitrary")
+		args.provider = "fake"
+		with self.assertRaises(ValueError):
+			self.module.check_invocation(args, {"posteingang_acceptance_site": 1})
+
 	def test_main_site_cannot_be_made_eligible_by_marker(self):
 		args = self.args()
 		args.site = "development.localhost"

@@ -17,6 +17,12 @@ class EvaluationTests(unittest.TestCase):
 
 		self.e = evaluation
 
+	def test_profile_selection_is_closed_and_preserves_v1(self):
+		self.assertEqual(self.e.dataset_profile({"dataset_version": "1.1"})["profile"], "ap10-v1")
+		self.assertEqual(self.e.dataset_profile({"dataset_version": "1.2"})["profile"], "ap10-medium-v2")
+		with self.assertRaises(self.e.EvaluationError):
+			self.e.dataset_profile({"dataset_version": "../../arbitrary"})
+
 	def test_exact_thresholds_and_empty_denominator(self):
 		self.assertEqual(self.e.ratio(19, 20, "0.95")["status"], "PASS")
 		self.assertEqual(self.e.ratio(18, 20, "0.95")["status"], "FAIL")
@@ -212,11 +218,41 @@ class EvaluationIntegrationTests(unittest.TestCase):
 		self.assertEqual(report["gates"]["gold_review"]["status"], "NOT MEASURED")
 		self.assertEqual(report["verdict"], "INCOMPLETE")
 
+	def test_v2_profile_changes_are_bound_into_dataset_hash(self):
+		from unittest.mock import patch
+
+		path = ROOT / "kanzlei_erp/tests/fixtures/posteingang_v2/manifest.json"
+		manifest, _gold, _facts, before, _gold_hash = self.e.load_dataset(path)
+		profile = self.e.dataset_profile(manifest)
+		profile["minimum_explicit_holdout_actions"] += 1
+		with patch.object(self.e, "dataset_profile", return_value=profile):
+			after = self.e.load_dataset(path)[3]
+		self.assertNotEqual(before, after)
+
+	def test_v2_has_thirty_new_holdout_cases_and_a_distinct_freeze(self):
+		old_hash = self.obs["dataset_hash"]
+		self.manifest_path = ROOT / "kanzlei_erp/tests/fixtures/posteingang_v2/manifest.json"
+		self.manifest, self.gold, self.facts, dataset_hash, gold_hash = self.e.load_dataset(self.manifest_path)
+		self.obs.update(dataset_hash=dataset_hash, gold_hash=gold_hash)
+		self.jud["gold_hash"] = gold_hash
+		report = self.finish()
+		self.assertNotEqual(dataset_hash, old_hash)
+		self.assertEqual(report["groups"]["new_holdout"]["cases"], 30)
+		self.assertEqual(report["gates"]["gold_review"]["status"], "NOT MEASURED")
+		self.assertNotEqual(report["verdict"], "GO_SYNTHETIC_PILOT")
+
 	def test_known_live_prompt_versions_are_evaluable_without_assuming_quality(self):
 		self.obs.update(
 			provider="mistral", models={"ocr": "mistral-ocr-4-1", "extraction": "mistral-small-2603"}
 		)
-		for version in ("ap04-extraction-v1", "ap04-extraction-v2", "ap04-extraction-v3"):
+		for version in (
+			"ap04-extraction-v1",
+			"ap04-extraction-v2",
+			"ap04-extraction-v3",
+			"ap04-extraction-v4",
+			"ap04-extraction-v5",
+			"ap04-extraction-v6",
+		):
 			with self.subTest(version=version):
 				self.obs["prompt_version"] = version
 				self.assertNotEqual(self.finish()["verdict"], "GO_SYNTHETIC_PILOT")

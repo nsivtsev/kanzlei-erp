@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": null,
+    "evidence": []
+  },
+  "document_date": {
+    "value": null,
+    "evidence": []
+  },
+  "letter_type": {
+    "value": null,
+    "evidence": []
+  },
+  "summary": {
+    "value": null,
+    "evidence": []
+  },
+  "recipients": [],
+  "other_identifiers": [],
+  "readability": "unreadable",
+  "action_assessment": "unknown",
+  "actions": [],
+  "warnings": [
+    {
+      "code": "poor_scan",
+      "message": "Raster-only Testscan ohne zuverlässig lesbare Zeichen; manuelle Sichtprüfung erforderlich.",
+      "evidence": []
+    }
+  ]
+}

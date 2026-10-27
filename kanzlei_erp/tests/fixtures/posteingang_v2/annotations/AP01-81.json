@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-81",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktiver Mehrwegpool Fichtenhain",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktiver Mehrwegpool Fichtenhain"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Küstenrad Reparatur eG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Küstenrad Reparatur eG"
+          }
+        ]
+      },
+      "address": {
+        "value": "Speichenhof 8, 00044 Testbucht",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Speichenhof 8, 00044 Testbucht"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "BG-KR-734",
+          "jurisdiction": "TEST-KÜSTE",
+          "authority": "Fiktiver Gewerbeverband Küste",
+          "other_type": "Betriebskennzeichen",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betriebskennzeichen des Empfängers: BG-KR-734"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-VE"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-VE",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-81-obligation-1",
+      "title": "Rückgabe der Leihkisten bestätigen",
+      "description": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs."
+        }
+      ],
+      "deadline": {
+        "kind": "relative",
+        "date": null,
+        "wording": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+        "anchor": "Übergabe des Rücknahmebelegs",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs."
+          }
+        ]
+      }
+    }
+  ]
+}

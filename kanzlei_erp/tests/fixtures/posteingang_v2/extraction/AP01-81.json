@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktiver Mehrwegpool Fichtenhain",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktiver Mehrwegpool Fichtenhain",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Rückmeldung Leihkisten",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Rückmeldung Leihkisten",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Küstenrad Reparatur eG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Küstenrad Reparatur eG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Speichenhof 8, 00044 Testbucht",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Speichenhof 8, 00044 Testbucht",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "BG-KR-734",
+          "jurisdiction": "TEST-KÜSTE",
+          "authority": "Fiktiver Gewerbeverband Küste",
+          "other_type": "Betriebskennzeichen",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betriebskennzeichen des Empfängers: BG-KR-734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Rückgabe der Leihkisten bestätigen",
+      "description": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "relative",
+        "date": null,
+        "wording": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+        "anchor": "Übergabe des Rücknahmebelegs",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bestätigen Sie die Rückgabe der Leihkisten innerhalb von sieben Kalendertagen nach Übergabe des Rücknahmebelegs.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

@@ -76,8 +76,9 @@ def render_case(case, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=FIXTURES)
+    parser.add_argument("--sources", type=Path, default=FIXTURES / "sources.json")
     args = parser.parse_args()
-    sources = json.loads((FIXTURES / "sources.json").read_text())
+    sources = json.loads(args.sources.read_text())
     if sources.get("synthetic") is not True:
         parser.error("only explicitly synthetic source specifications are accepted")
     for case in sources["cases"]:

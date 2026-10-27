@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "draft",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "0811dc2d-ad21-57c3-908a-c11b5a6794e8",
+      "source_index": 0,
+      "title": "Endverbleibserklärung senden",
+      "description": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": "2026-11-30",
+      "external_date_basis": "Datum ausdrücklich im synthetischen Quelltext; unabhängige Prüfung ausstehend.",
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ def parser():
 	result.add_argument("--actor", required=True)
 	result.add_argument("--provider", choices=("fake", "mistral"), default="fake")
 	result.add_argument("--split", choices=("development", "holdout", "all"), default="development")
+	result.add_argument("--cohort", choices=("ap10-v1", "ap10-medium-v2"), default="ap10-v1")
 	result.add_argument("--output", type=Path, required=True)
 	result.add_argument("--resume", action="store_true")
 	result.add_argument("--allow-external", action="store_true")
@@ -21,7 +22,18 @@ def parser():
 	return result
 
 
+def cohort_manifest(root, cohort):
+	paths = {"ap10-v1": "posteingang", "ap10-medium-v2": "posteingang_v2"}
+	if cohort not in paths:
+		raise ValueError("Unknown fixed synthetic cohort")
+	return Path(root) / "kanzlei_erp/tests/fixtures" / paths[cohort] / "manifest.json"
+
+
 def check_invocation(args, config):
+	cohort = getattr(args, "cohort", "ap10-v1")
+	cohort_manifest(Path(), cohort)
+	if cohort == "ap10-medium-v2" and args.provider != "mistral":
+		raise ValueError("New quality cohort requires explicit Mistral selection")
 	if (
 		not config.get("posteingang_acceptance_site")
 		or not args.site.startswith("posteingang-ap10")
@@ -108,6 +120,7 @@ def code_hash(root):
 			"scripts/run_posteingang_evaluation.py",
 			"scripts/evaluate-posteingang.py",
 			"scripts/posteingang_evaluation.py",
+			"scripts/posteingang_evaluation_budget.py",
 		)
 	]
 	content = {

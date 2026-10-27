@@ -87,3 +87,59 @@ class PilotDatasetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MediumV2DatasetTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("medium_v2_validator", ROOT / "scripts/validate_posteingang_fixtures.py")
+        cls.validator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.validator)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.dataset = Path(self.temp.name) / "fixtures"
+        shutil.copytree(ROOT / "kanzlei_erp/tests/fixtures/posteingang_v2", self.dataset)
+        self.profile = json.loads((ROOT / "docs/plans/ai-posteingang/evaluation/ap10-medium-v2.json").read_text())
+
+    def test_v2_generator_uses_explicit_sources(self):
+        import subprocess
+        import sys
+        output = Path(self.temp.name) / "rendered"
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/generate_posteingang_fixtures.py"), "--sources", str(self.dataset / "sources.json"), "--output", str(output)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import hashlib
+        manifest = json.loads((self.dataset / "manifest.json").read_text())
+        for case in manifest["cases"]:
+            with self.subTest(case=case["case_id"]):
+                self.assertEqual(hashlib.sha256((output / case["pdf"]).read_bytes()).hexdigest(), case["sha256"])
+
+    def test_v2_counts_observable_context_and_new_holdout(self):
+        result = self.validator.validate_pilot(self.dataset, self.profile)
+        self.assertEqual(result["cases"], 42)
+        self.assertEqual(result["new_holdout_cases"], 30)
+        self.assertGreaterEqual(result["explicit_holdout_actions"], 15)
+
+    def test_v2_rejects_unobservable_gold_context(self):
+        case = json.loads((self.dataset / "manifest.json").read_text())["cases"][0]
+        path = self.dataset / case["annotations"]
+        gold = json.loads(path.read_text())
+        gold["recipients"][0]["identifiers"][0]["authority"] = "Unstated synthetic issuer"
+        path.write_text(json.dumps(gold))
+        with self.assertRaisesRegex(self.validator.ContractError, "context absent"):
+            self.validator.validate_pilot(self.dataset, self.profile)
+
+    def test_v2_rejects_family_already_seen_in_development(self):
+        path = self.dataset / "manifest.json"
+        manifest = json.loads(path.read_text())
+        source_path = self.dataset / "sources.json"
+        sources = json.loads(source_path.read_text())
+        family = json.loads((FIXTURES / "manifest.json").read_text())["cases"][0]["source_family"]
+        case = next(c for c in manifest["cases"] if c["split"] == "holdout")
+        case["source_family"] = family
+        next(c for c in sources["cases"] if c["case_id"] == case["case_id"])["source_family"] = family
+        path.write_text(json.dumps(manifest))
+        source_path.write_text(json.dumps(sources))
+        with self.assertRaisesRegex(self.validator.ContractError, "source family was already used"):
+            self.validator.validate_pilot(self.dataset, self.profile)

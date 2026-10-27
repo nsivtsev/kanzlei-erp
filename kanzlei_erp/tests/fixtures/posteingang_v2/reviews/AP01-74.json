@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": "Synthetischer Entwurf: Identität oder Lesbarkeit vor Bestätigung klären; unabhängige Prüfung ausstehend.",
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "14b2157f-8ddb-5da8-84d4-03e2754cb012",
+      "source_index": 0,
+      "title": "Belegten Standflächenplan senden",
+      "description": "Bitte senden Sie den belegten Flächenplan Ihres Messestands bis zum 08.12.2026.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": "2026-12-08",
+      "external_date_basis": "Datum ausdrücklich im synthetischen Quelltext; unabhängige Prüfung ausstehend.",
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte senden Sie den belegten Flächenplan Ihres Messestands bis zum 08.12.2026.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

@@ -279,3 +279,65 @@ deployment и допуск реальных документов не выпол
 Расчётная стоимость всех вызовов $0.0062029; фактический billing NOT MEASURED.
 Доказательства и оставшиеся ограничения — в acceptance report. Коммит/PR/deployment
 этого продолжения не выполнялись. AP-10B и весь AP-10 остаются открытыми.
+
+### Модельная оценка AP-10B — 27.10.2026
+
+Владелец выбрал сейчас только оценку модели; человеческие judgments/тайминг
+выполняются позже. На новом development-сайте через штатные intake/Run/RQ получены
+4/12 Succeeded при v3. Диагностика восьми невалидных development-ответов показала
+повторный null authority для other. После RED→GREEN provider projection усилили
+структурными anyOf-ветвями существующего правила; canonical/raw схемы AP-01 не меняли.
+V4 extraction на12 сохранённых development OCR — 12/12, старые Runs не менялись.
+
+До первого holdout запроса сохранены hashes/prompt/models/code/configuration.
+30 holdout прошли один раз через отдельный RQ/site с v4: 28 Succeeded,
+AP01-32/AP01-33 INVALID_RESULT. Итоговый автоматический verdict NO_GO:
+Top-1 24/26, Top-3 26/28, ambiguity1/3 ниже порогов. Checked quotes380/380,
+ещё5 unverified. Смысловые метрики NOT MEASURED; даже best-case action recall
+по количествам32/34=94.1% не достигает95%. Ошибки не исключались и не повторялись.
+Gold AP01-04/AP01-37 содержит неуказанный в PDF issuer context; требует проверки,
+но не исправлялся после результата. После tuning этот holdout не независимый новый тест.
+
+Сборщики имели пределы24/60 запросов, retries0, общий бюджет5 €. Фактический billing
+NOT MEASURED; консервативная тарифная оценка всех collector-вызовов и измеренной
+adapter-диагностики около$2.24. Все switches выключены; ключи сохранены, новых
+Completed/Task нет. Linux168, AI20/skip1, targeted jobs1, Ruff/diff PASS.
+Отчёт и артефакты перечислены в docs/acceptance/ai-posteingang.md. Коммит/PR/
+deployment не выполнялись. Модельная часть измерена с NO_GO; весь AP-10 открыт.
+
+### Исправления после live-оценки — 27.10.2026
+
+Воспроизведён explicit_date с null date/wording. После14 отрицательных проверок
+provider projection переводит все enum-условия исходного контракта в anyOf;
+prompt/projection v5. Оба отказавших документа прошли как not_found, старый отчёт
+не менялся. Добавлены10 наблюдаемых development-примеров и опциональный context
+audit gold (исторический набор ожидаемо FAIL, без изменения разметки).
+
+На одинаковом OCR и параметрах4096/none Small прошёл4/10 проверок полей/подбора,
+Medium3.5 —10/10. Medium также прошёл schema12/12 на исходном development OCR и
+не выдумывал issuer неполных custom references. Следующий кандидат — Medium3.5;
+на одноразовом AP10-final он выбран при выключенных feature/external/auto.
+Независимый новый holdout NOT RUN, человеческая часть отложена, AP-10 открыт.
+Linux173, AI20/skip1, matching1, jobs1, Ruff/diff PASS. Подробности и ограничения
+измерений — в acceptance report; коммит и deployment не выполнялись.
+
+### Новый holdout Medium, dataset1.2 — 27.10.2026
+
+По поручению владельца создан отдельный42-case набор:12development /30 новых
+holdout,44страницы; observable-context audit и PDF QA PASS. Новый fixed cohort и
+профиль не меняют старый dataset1.1. Preflight review выявил и через RED→GREEN
+устранил ошибку привязки профиля к hash. Явный reasoning_effort=none повышает
+версию исполнения до v6 при неизменном тексте prompt v5 и JSON Schema v1.0.
+
+До HTTP заморожены dataset/gold/code/configuration/harness. На новом no-Suite
+сайте через intake/Run/RQ выполнено60HTTP200,32OCRстраницы,30Succeeded/attempt1;
+Medium3.5, OCR4.1, retries0, max_tokens32768. Top1 27/27, Top3 28/28, ambiguity2/2,
+matched quotes334/334 PASS;3unverified. 32предложения/32gold и26дат/26gold-дат —
+только количественные пределы. AP01-64 ошибся document_date, AP01-84 deadline.kind;
+после freeze ничего не настраивалось. Итог INCOMPLETE, все judgments pending.
+
+Новый расход по тарифам$0.3737075 при дополнительном budget limit$1; billing
+NOT MEASURED. Обработка снова выключена, ключ сохранён,30Needs Review и0Tasks,
+собственная очередь удалена. Linux190, final evaluation51/budget5, AI20/skip1,
+jobs1, Ruff/diff PASS. Полные доказательства и ограничения — в acceptance report.
+AP-10 открыт; человеческая часть, release/PR/коммит/deployment не выполнялись.
