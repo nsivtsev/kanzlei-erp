@@ -3,14 +3,14 @@ set -euo pipefail
 set +x
 umask 077
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: bash scripts/ci-image.sh LOCAL_IMAGE_TAG [all|application|upgrade]" >&2
+  echo "Usage: bash scripts/ci-image.sh LOCAL_IMAGE_TAG [all|smoke|application|upgrade]" >&2
   exit 1
 fi
 image=$1
 scenario=${2:-all}
 case "$scenario" in
   all) exec python3 "$(dirname "$0")/ci_scenarios.py" "$image" ;;
-  application|upgrade) ;;
+  smoke|application|upgrade) ;;
   *) echo "Unknown CI scenario: $scenario" >&2; exit 1 ;;
 esac
 task_root=$(mktemp -d)
@@ -49,6 +49,35 @@ trap 'exit 130' INT
 "${compose[@]}" config --quiet
 "${compose[@]}" up -d --wait --wait-timeout 180 db redis-cache redis-queue
 "${compose[@]}" run --rm -T configurator
+if [[ $scenario == smoke ]]; then
+  echo "Smoke: fresh install and migration (no application test suite)"
+  # Variables expand only inside the disposable container.
+  # shellcheck disable=SC2016
+  "${compose[@]}" run --rm -T --no-deps -e DB_PASSWORD -e ADMIN_PASSWORD backend bash -euc '
+bench new-site ci.localhost --db-root-password "$DB_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=%
+bench --site ci.localhost install-app erpnext
+bench --site ci.localhost install-app suite
+bench --site ci.localhost install-app kanzlei_erp
+bench --site ci.localhost execute kanzlei_erp.suite_setup.configure
+bench --site ci.localhost migrate
+'
+  echo "Smoke: HTTP, compiled assets and running services"
+  "${compose[@]}" up -d backend frontend websocket queue-short queue-long scheduler
+  python3 - "$task_root" "$image" <<'PY'
+import importlib.util
+from pathlib import Path
+import sys
+
+spec = importlib.util.spec_from_file_location("manage", "deploy/manage.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+compose = module.Compose(Path(sys.argv[1]), Path.cwd(), sys.argv[2], module.Commands())
+module.smoke_check(compose)
+compose.running()
+PY
+  echo "Minimal image smoke passed. Full acceptance was not run."
+  exit 0
+fi
 if [[ $scenario == upgrade ]]; then
   # Variables expand inside this scenario's isolated container.
   # shellcheck disable=SC2016
@@ -90,11 +119,13 @@ bench --site ci.localhost execute kanzlei_erp.localization.configure_german_lang
 bench --site ci.localhost migrate
 bench --site ci.localhost migrate
 bench --site ci.localhost set-config allow_tests true
+bench --site ci.localhost set-config posteingang_acceptance_site true
 # Only the ephemeral test container receives the framework test dependencies.
 env/bin/python -c '\''import tomllib, subprocess; data=tomllib.load(open("apps/frappe/pyproject.toml", "rb")); deps=data["tool"]["bench"]["dev-dependencies"]; subprocess.run(["bench", "pip", "install", *[name+version for name,version in deps.items()]], check=True)'\''
 env/bin/python /tmp/ci-site.py
 bench --site ci.localhost run-tests --app kanzlei_erp --junit-xml-output /home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml
 env/bin/python -c '\''import re, xml.etree.ElementTree as E; data=open("/home/frappe/frappe-bench/sites/ci.localhost/private/test-results.xml").read(); root=E.fromstring("<reports>"+re.sub(r"<\?xml[^>]*\?>", "", data)+"</reports>"); cases=list(root.iter("testcase")); assert any(case.find("skipped") is None for case in cases), "No application tests executed"; assert not list(root.iter("failure")) and not list(root.iter("error")), "Application tests failed"; print(f"Verified {len(cases)} application test results")'\''
+bench --site ci.localhost set-config posteingang_acceptance_site false
 bench --site ci.localhost set-config allow_tests false
 
 '

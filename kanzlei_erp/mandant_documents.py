@@ -16,6 +16,7 @@ from urllib.parse import quote, urlparse
 import frappe
 
 from kanzlei_erp.mandant_drive import CUSTOMER_FOLDER, FILE_CUSTOMER, _staff
+from kanzlei_erp.posteingang_documents import document_endpoint
 
 DOCUMENT_PAGE_SIZE = 50
 DOCUMENT_MAX_PAGE_SIZE = 100
@@ -35,7 +36,7 @@ _FILTER_DEFAULTS = {
 	"sort": "newest",
 }
 _FILTER_VALUES = {
-	"source": {"all", "mandant", "drive", "email", "fibu", "task", "question"},
+	"source": {"all", "mandant", "drive", "email", "fibu", "task", "question", "posteingang"},
 	"direction": {"all", "received", "sent"},
 	"file_group": {"all", "pdf", "image", "spreadsheet", "document", "xml", "archive", "other"},
 	"sort": {"newest", "oldest"},
@@ -324,7 +325,7 @@ def _mail_context_matches(communication, customer, related_names):
 	return ("Customer", customer) in related_names
 
 
-def _collect_documents(customer, filters, permission_cache):
+def _collect_documents(customer, filters, permission_cache, snapshot=None):
 	"""Build the explicitly supported Customer, mail, FiBu, and Task relation graph."""
 	file_contexts = {}
 	package_docs = _documents_by_names(
@@ -367,7 +368,8 @@ def _collect_documents(customer, filters, permission_cache):
 	task_docs = _documents_by_names(
 		"Task",
 		task_names,
-		["name", "subject", "kanzlei_customer", "kanzlei_work_kind", "kanzlei_fibu_package", "kanzlei_fibu_supplement"],
+		["name", "subject", "kanzlei_customer", "kanzlei_work_kind", "kanzlei_fibu_package", "kanzlei_fibu_supplement",
+		 "kanzlei_incoming_letter", "kanzlei_incoming_action_id", "kanzlei_incoming_action_key"],
 	)
 
 	customer_context = _customer_context(customer)
@@ -661,11 +663,21 @@ def _collect_documents(customer, filters, permission_cache):
 	drive_documents = _drive_documents(customer)
 	for name, context in drive_documents.items():
 		_append_context(file_contexts, name, context)
-	return file_contexts, valid_communications, package_docs, checklist_references, drive_documents
+	from kanzlei_erp.posteingang_documents import current_originals
+
+	incoming = current_originals(customer.name, task_docs, snapshot)
+	for name, info in incoming.items():
+		letter = info["letter"]
+		_append_context(file_contexts, name, frappe._dict(source="posteingang", doctype="Incoming Letter", name=letter.name,
+			title=letter.sender or letter.letter_type or letter.name, sender=letter.sender, letter_type=letter.letter_type,
+			direction=None, recipients=None, package=None, package_title=None))
+		for task_name in info["tasks"]:
+			_append_context(file_contexts, name, task_contexts[task_name])
+	return file_contexts, valid_communications, package_docs, checklist_references, drive_documents, incoming
 
 
 def _cursor_fingerprint(customer, filters):
-	serialized = json.dumps([customer, filters], sort_keys=True, separators=(",", ":"))
+	serialized = json.dumps(["ap08-v1", customer, filters], sort_keys=True, separators=(",", ":"))
 	return hashlib.sha256(serialized.encode()).hexdigest()
 
 
@@ -730,11 +742,14 @@ def _matches_query(file, contexts, query):
 	values = [file.file_name or ""]
 	for context in contexts:
 		values.extend((context["title"] or "", context["sender"] or "", context["recipients"] or ""))
+		if context["source"] == "posteingang":
+			values.extend((context["name"], context.get("letter_type") or ""))
 	needle = query.casefold()
 	return any(needle in value.casefold() for value in values)
 
 
 @frappe.whitelist()
+@document_endpoint
 def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE_SIZE):
 	"""Return a permission-checked page of files associated with one Mandant."""
 	if frappe.session.user == "Guest":
@@ -755,7 +770,7 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	state = _decode_cursor(cursor, customer_doc.name, filters)
 	snapshot = frappe.utils.get_datetime(state["snapshot"]) if state else frappe.utils.now_datetime()
 	permission_cache = {}
-	file_contexts, communication_docs, package_docs, checklist_references, drive_documents = _collect_documents(customer_doc, filters, permission_cache)
+	file_contexts, communication_docs, _package_docs, checklist_references, drive_documents, incoming = _collect_documents(customer_doc, filters, permission_cache, snapshot)
 	file_names = sorted(file_contexts)
 	metadata = {}
 	managed_field = frappe.get_meta("File").has_field(FILE_CUSTOMER)
@@ -765,7 +780,7 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 			filters={"name": ["in", chunk], "is_folder": 0},
 			fields=[
 				"name", "file_name", "file_url", "file_size", "is_private", "attached_to_doctype",
-				"attached_to_name", "attached_to_field", "creation", "file_type", "status",
+				"attached_to_name", "attached_to_field", "creation", "file_type",
 				*([FILE_CUSTOMER] if managed_field else []),
 			],
 		):
@@ -775,6 +790,8 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	rows = []
 	for name, file in metadata.items():
 		if file.creation > snapshot or not file_contexts.get(name):
+			continue
+		if file.attached_to_doctype == "Incoming Letter" and name not in incoming:
 			continue
 		if name not in checklist_references and file.get(FILE_CUSTOMER) and name not in drive_documents:
 			continue
@@ -802,6 +819,8 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 			else file.creation
 		)
 		document_date = str(document_date or file.creation)[:19].replace("T", " ")
+		if name in incoming:
+			document_date = incoming[name]["document_date"]
 		if filters["date_from"] and document_date[:10] < filters["date_from"]:
 			continue
 		if filters["date_to"] and document_date[:10] > filters["date_to"]:
@@ -817,7 +836,7 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 				"extension": PurePosixPath((file.file_name or "").replace("\\", "/")).suffix.lstrip("."),
 				"file_size": int(file.file_size) if file.file_size is not None else None,
 				"document_date": document_date,
-				"date_kind": "email" if communication else "file",
+				"date_kind": incoming[name]["date_kind"] if name in incoming else "email" if communication else "file",
 				"storage_kind": "remote" if remote_url else "local",
 				"external_url": remote_url,
 				"can_download": not bool(remote_url),
@@ -847,7 +866,7 @@ def _authorized_files(customer, file_ids):
 	"""Re-evaluate current Customer, relation graph, and File permissions before serving bytes."""
 	customer_doc = _require_customer(customer)
 	permission_cache = {}
-	file_contexts, _, _, _, drive_documents = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
+	file_contexts, _, _, _, drive_documents, incoming = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
 	authorized = {}
 	for file_id in file_ids:
 		if not frappe.db.exists("File", file_id) or file_id not in file_contexts:
@@ -855,6 +874,8 @@ def _authorized_files(customer, file_ids):
 		if not _readable("File", file_id, permission_cache):
 			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
 		file = frappe.get_doc("File", file_id)
+		if file.attached_to_doctype == "Incoming Letter" and file_id not in incoming:
+			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
 		if file.get(FILE_CUSTOMER) and file_id not in drive_documents:
 			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
 		if file.is_folder or _external_url(file) or not file.file_url:
@@ -884,12 +905,17 @@ def _safe_local_path(file):
 
 
 @frappe.whitelist()
+@document_endpoint
 def download_document(customer, file_id, disposition="attachment"):
 	"""Serve an authorized local document without exposing its storage path."""
 	if disposition not in {"inline", "attachment"}:
 		frappe.throw(frappe._("Invalid download disposition"), frappe.ValidationError)
 	_, files = _authorized_files(customer, [file_id])
 	file = files[file_id]
+	if file.attached_to_doctype == "Incoming Letter":
+		from kanzlei_erp.posteingang_documents import pdf_response
+
+		return pdf_response(file, disposition)
 	from kanzlei_erp.object_storage import open_file
 	extension = PurePosixPath((file.file_name or "").replace("\\", "/")).suffix.lstrip(".").casefold()
 	content_type = _INLINE_MIME_TYPES.get(extension) or mimetypes.guess_type(file.file_name or "")[0] or "application/octet-stream"
@@ -920,6 +946,7 @@ def _normalize_file_ids(file_ids):
 
 
 @frappe.whitelist(methods=["POST"])
+@document_endpoint
 def download_documents_zip(customer, file_ids):
 	"""Create a complete, freshly authorized ZIP and reject partial archives."""
 	if frappe.session.user == "Guest":
@@ -950,6 +977,12 @@ def download_documents_zip(customer, file_ids):
 						target.write(chunk)
 		spool.seek(0)
 		content = spool.read()
+	except frappe.SecurityException:
+		raise
+	except frappe.ValidationError:
+		raise
+	except Exception:
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
 	finally:
 		spool.close()
 	customer_name = _safe_archive_names([customer])[0]

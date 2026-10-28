@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "profile": "ap10-v1",
+  "dataset_version": "1.1",
+  "counts": {
+    "cases": 42,
+    "development": 12,
+    "holdout": 30,
+    "new_holdout": 26
+  },
+  "baseline": "original-baseline.json",
+  "facts": "gold-facts.json",
+  "minimum_explicit_holdout_actions": 15,
+  "required_deadline_kinds": [
+    "explicit_date",
+    "relative",
+    "not_found",
+    "uncertain"
+  ],
+  "required_tags": [
+    "no_actions",
+    "poor_scan",
+    "unreadable",
+    "partial",
+    "unknown_customer",
+    "ambiguous_customer",
+    "multiple_customers",
+    "prompt_injection",
+    "sender_identifier",
+    "multi_page"
+  ],
+  "review_status": "pending_independent_review",
+  "holdout_history": {
+    "previously_used_contract_cases": [
+      "AP01-04",
+      "AP01-07",
+      "AP01-11",
+      "AP01-13"
+    ],
+    "new_cases": [
+      "AP01-17",
+      "AP01-18",
+      "AP01-19",
+      "AP01-20",
+      "AP01-21",
+      "AP01-22",
+      "AP01-23",
+      "AP01-24",
+      "AP01-25",
+      "AP01-26",
+      "AP01-27",
+      "AP01-28",
+      "AP01-29",
+      "AP01-30",
+      "AP01-31",
+      "AP01-32",
+      "AP01-33",
+      "AP01-34",
+      "AP01-35",
+      "AP01-36",
+      "AP01-37",
+      "AP01-38",
+      "AP01-39",
+      "AP01-40",
+      "AP01-41",
+      "AP01-42"
+    ],
+    "note": "Public procedural holdout; never claim technical secrecy. No live model evaluation has been run."
+  },
+  "required_safety_scenarios": [
+    "vertical_rq",
+    "lost_post_commit_response",
+    "manual_no_provider",
+    "configuration_stop",
+    "dispatch_recovery",
+    "worker_checkpoint",
+    "correction_quarantine"
+  ]
+}

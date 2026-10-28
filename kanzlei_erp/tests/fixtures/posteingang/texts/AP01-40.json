@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "pages": [
+    {
+      "page": 1,
+      "text": "Fiktive Prüfstelle Musterbezirk 24\nSYNTHETISCHES TESTDOKUMENT - KEINE REALEN MANDANTENDATEN\nAktenzeichen: MUSTER-AP01-40\nDatum: 25.10.2026\nAn: Beispielbetrieb Alpha GmbH\nAnschrift: Musterweg 7, 00000 Beispielstadt\nMandantenreferenz: SYN-0007\nBetreff: Musteranfrage\nDas Anschreiben enthält eine unleserliche Randnotiz [Fragment].\nDie getrennten Arbeitsaufträge stehen in den zwei Anlagen."
+    },
+    {
+      "page": 2,
+      "text": "Anlage 1 zum synthetischen Vorgang AP01-40\nBerichtigen Sie in Anlage eins die fiktive Positionsnummer Z-51.\nSpätester Eingang: 22.12.2026."
+    },
+    {
+      "page": 3,
+      "text": "Anlage 2 zum synthetischen Vorgang AP01-40\nErläutern Sie die künstliche Differenz in Anlage zwei, Position Z-62.\nAntwort innerhalb von sieben Tagen nach der Musterfreigabe."
+    }
+  ]
+}

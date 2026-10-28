@@ -8,6 +8,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
@@ -19,6 +20,26 @@ class ScenarioTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def test_minimal_profile_runs_only_smoke_and_records_failure(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(sys, "argv", ["ci_scenarios.py", "local:test", "--profile", "minimal"]), \
+                    patch.dict(os.environ, {"CI_METRICS_DIR": directory, "CI_SCENARIO_JOBS": "1"}), \
+                    patch.object(module, "run_scenarios", return_value=7) as run:
+                self.assertEqual(module.main(), 7)
+            commands = run.call_args.args[0]
+            self.assertEqual(list(commands), ["smoke"])
+            self.assertEqual(commands["smoke"][-2:], ["local:test", "smoke"])
+
+    def test_full_profile_retains_application_and_upgrade(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(sys, "argv", ["ci_scenarios.py", "local:test", "--profile", "full"]), \
+                    patch.dict(os.environ, {"CI_METRICS_DIR": directory, "CI_SCENARIO_JOBS": "1"}), \
+                    patch.object(module, "run_scenarios", return_value=0) as run:
+                self.assertEqual(module.main(), 0)
+            self.assertEqual(list(run.call_args.args[0]), ["application", "upgrade"])
 
     def test_independent_scenarios_overlap_and_record_results(self):
         module = self.module()

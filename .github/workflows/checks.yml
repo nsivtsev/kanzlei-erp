@@ -1,0 +1,23 @@
+name: Quick checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Deployment tests and shell checks
+        run: |
+          python3 -m unittest discover -s tests/deploy -v
+          bash -n scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/setup-local.sh scripts/fetch-suite.sh
+          shellcheck -x scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/fetch-suite.sh
+          # actionlint 1.7.12 predates GitHub concurrency.queue (May 2026).
+          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color -ignore '^unexpected key "queue" for "concurrency" section\.'

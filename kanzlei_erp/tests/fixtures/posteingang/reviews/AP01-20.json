@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-C",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "3c6daeca-6848-5c4b-a2ad-2936c42a090d",
+      "source_index": 0,
+      "title": "Zahlungsnachweis einreichen",
+      "description": "Reichen Sie den Nachweis zur fiktiven Abschlagszahlung ein.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-10",
+      "external_date_basis": "Spätester Eingang: 10.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Reichen Sie den Nachweis zur fiktiven Abschlagszahlung ein.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

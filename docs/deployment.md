@@ -86,10 +86,20 @@ repository administrators can choose environment reviewers separately.
 
 ## Release
 
-Merge the deployment branch and reviewed application changes into `main`. PRs and
-pushes to `main` run the image build, deployment safety tests, full app tests, HTTP
-and assets checks, and a real database/public/private-files backup and restore.
-Tests create their own Docker project and delete only its disposable volumes.
+Merge the deployment branch and reviewed application changes into `main`. PRs run
+quick deployment safety tests, shell checks and workflow validation (five-minute
+job limit). A push to `main` repeats those checks, builds the exact release image,
+and runs a minimal smoke on a disposable site: install ERPNext, Suite and Kanzlei,
+migrate once, start services and verify HTTP and compiled assets. The image job
+has a twenty-minute limit; its smoke step has a ten-minute limit.
+
+The **Full acceptance (manual)** workflow retains the full app/JavaScript suites,
+Suite upgrade, interrupted installation and database/public/private-files
+backup/restore scenarios. It runs only on explicit workflow dispatch, does not
+publish release candidates and is not a release gate. Both profiles use their own
+Docker projects and delete only their disposable volumes. Production deployment
+still requires a verified image and still takes and verifies a recovery backup
+before migration.
 
 Create an immutable release tag on the reviewed `main` commit:
 
@@ -105,8 +115,11 @@ from `main`. Never move an existing release tag. A normal deployment rejects old
 versions and reassignment of the current version to another image or commit.
 
 CI on `main` publishes the exact tested image as `sha-<full commit SHA>` and uploads
-`verified-image-<SHA>`, containing its immutable digest, platform, successful scenario
-results and CI run/attempt. PRs do not publish images or receive package write access.
+`verified-image-<SHA>`, containing its immutable digest, platform, successful smoke
+result and CI run/attempt. Version 2 receipts name only `deployment` and `smoke`;
+they do not claim full acceptance. Existing version 1 receipts remain valid only
+with all their original mandatory suites. PRs do not build or publish images and
+do not receive package write access.
 A CI rerun pulls the existing SHA image and verifies it again; it never overwrites
 that tag with a different image. Verification receipts are retained for 90 days.
 
@@ -164,7 +177,10 @@ cache; PRs restore it without exporting PR caches. A cache miss produces a norma
 cold build. A cache export failure is a warning; build/test/image identity failures
 block CI. Review cache hit/export diagnostics in the Docker build action summary.
 
-`scripts/ci-image.sh IMAGE [all|application|upgrade]` defaults to all checks. The
+`scripts/ci-image.sh IMAGE [all|smoke|application|upgrade]` defaults to all checks
+for an explicit local/manual invocation. Main CI uses
+`python3 scripts/ci_scenarios.py IMAGE --profile minimal`, selecting only smoke.
+The manual acceptance workflow uses `--profile full`. The
 application scenario covers fresh installation, migrations, app and JavaScript tests,
 HTTP/assets/Drive permissions/realtime, uploads and real backup/restore. The upgrade
 scenario separately covers legacy attachments and interrupted Suite installation.
@@ -173,8 +189,8 @@ A failed scenario cancels its peer and runs cleanup before returning an error.
 Frontend startup waits for backend and websocket endpoints to start, so Nginx does
 not retain a stopped upstream's former IP after a restore.
 
-The repository Actions variable `CI_SCENARIO_JOBS` accepts `1` or `2` and defaults to
-`1`. Both scenarios run on the same runner. Compare the complete run duration and
+For full acceptance, the repository Actions variable `CI_SCENARIO_JOBS` accepts
+`1` or `2` and defaults to `1`. Both scenarios run on the same runner. Compare the complete run duration and
 memory use on standard GitHub runners before setting it to `2`; keep `1` if contention
 increases total runner minutes. Locally, use distinct metrics directories:
 
@@ -187,10 +203,9 @@ Actions summaries and the seven-day `ci-metrics` artifact include build/pull tim
 scenario exit codes and timings, image size and layer count. The main verification
 receipt also includes compressed layer size and publish duration. Stable artifact
 names are replaced on reruns, and receipts must match the latest successful attempt.
-Benchmark targets on warm cache: PR median ≤10 minutes, main including publication
-≤12 minutes, ready-image release ≤7 minutes, and at least 30% fewer runner minutes
-across PR → main → release. Queue time is recorded separately and targets do not
-replace correctness gates with timing-dependent failures.
+Benchmark targets on warm cache: quick PR checks ≤2 minutes, main including image
+publication ≤12 minutes and ready-image release ≤7 minutes. These are targets,
+not measured guarantees. Queue time is recorded separately.
 
 ## What an update does
 

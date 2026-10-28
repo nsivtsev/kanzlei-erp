@@ -49,7 +49,7 @@ for app in "${apps[@]}"; do
   else
     needs_apply+=(1)
     if ! git -C "apps/$app" apply --check "$patch_file" 2>/dev/null; then
-      for version in v6 v5 v4 v3 v2 v1; do
+      for version in v9 v8 v7 v6 v5 v4 v3 v2 v1; do
         candidate="$patch_dir/$app-mandant-access-$version.patch"
         if [[ -f $candidate ]] && git -C "apps/$app" apply --reverse --check "$candidate" 2>/dev/null; then
           previous=$candidate

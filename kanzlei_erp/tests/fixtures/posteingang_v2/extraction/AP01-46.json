@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Kontrollstelle West",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Kontrollstelle West",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Testmitteilung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Testmitteilung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Musterwerk Linde GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Musterwerk Linde GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Testweg 12, 00001 Musterstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Testweg 12, 00001 Musterstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "REG-0042",
+          "jurisdiction": "TEST-NORD",
+          "authority": "Fiktive Registerstelle Nord",
+          "other_type": "Aktenreferenz",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Referenz des Adressaten: REG-0042\nReferenztyp: Aktenreferenz\nAusstellende Stelle der Referenz: Fiktive Registerstelle Nord\nGeltungsbereich der Referenz: TEST-NORD",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+      "description": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-18",
+        "wording": "bis zum 18.11.2026",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "bis zum 18.11.2026",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

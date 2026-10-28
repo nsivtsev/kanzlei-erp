@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Prüfstelle Musterbezirk 22",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Prüfstelle Musterbezirk 22",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-25",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 25.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Unterlagenbitte",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Unterlagenbitte",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Zwei eigenständige Mandanten in einer Sammelanfrage",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": {
+        "value": "Beispielbetrieb Gamma GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Gamma GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 9, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 9, 00000 Beispielstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0009",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0009",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Musterprotokoll abstimmen",
+      "description": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-15",
+        "wording": "Spätester Eingang: 15.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Spätester Eingang: 15.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "code": "multiple_customers",
+      "message": "Synthetischer Sonderfall erfordert ausdrückliche menschliche Prüfung.",
+      "evidence": []
+    }
+  ]
+}

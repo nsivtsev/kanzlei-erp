@@ -21,6 +21,9 @@
 		fibu: __("Accounting"),
 		task: __("Task"),
 		question: __("Question"),
+		posteingang: __("Posteingang"),
+		uploaded: __("Uploaded"),
+		receipt_date: __("Received on"),
 		received: __("Received"),
 		sent: __("Sent"),
 		search: __("Search files, mail subjects, or addresses"),
@@ -57,7 +60,7 @@
 		no_match: __("No documents match these filters."),
 		error: __("Could not load documents. Please try again."),
 		unsaved: __("Save this client before viewing documents."),
-		date_help: __("Email date for email attachments; otherwise the file upload date. This is not an accounting document date."),
+		date_help: __("Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date."),
 		choose_file: __("Choose at least one local file."),
 		zip_limit: __("ZIP supports up to 100 local files and 100 MiB."),
 		pdf: __("PDF"),
@@ -212,6 +215,7 @@
 			this.sourceSelect = this.makeSelect("md-filter", strings.source);
 			for (const [value, label] of [
 				["all", strings.all_sources],
+				["posteingang", strings.posteingang],
 				["mandant", strings.mandant],
 				["drive", strings.drive],
 				["email", strings.email],
@@ -516,7 +520,9 @@
 			fileCell.appendChild(node("small", (item.extension || strings.no_extension).toUpperCase(), "text-muted md-extension"));
 			row.appendChild(fileCell);
 
-			const dateCell = node("td", formatDate(item.document_date));
+			const dateCell = node("td");
+			dateCell.appendChild(node("div", item.date_kind==="received" ? item.document_date.slice(0,10) : formatDate(item.document_date)));
+			if(item.date_kind==="received" || item.date_kind==="uploaded")dateCell.appendChild(node("small",item.date_kind==="received" ? strings.receipt_date : strings.uploaded,"text-muted"));
 			dateCell.title = strings.date_help;
 			row.appendChild(dateCell);
 

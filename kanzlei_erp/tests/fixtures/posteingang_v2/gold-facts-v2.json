@@ -1,0 +1,1452 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "1.2",
+  "review_status": "pending_independent_review",
+  "cases": [
+    {
+      "case_id": "AP01-43",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-43-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-43-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-43-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-43-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-43-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-43-fact-6",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-44",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-44-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-44-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-44-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-44-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-44-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-44-fact-6",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-45",
+      "readable": true,
+      "ambiguity": "multiple_matches",
+      "facts": [
+        {
+          "fact_id": "AP01-45-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-45-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-45-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-45-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-45-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-45-fact-6",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-46",
+      "readable": true,
+      "ambiguity": "multiple_matches",
+      "facts": [
+        {
+          "fact_id": "AP01-46-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-46-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-46-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-46-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-46-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-46-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-46-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-47",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-47-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-47-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-47-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-47-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-47-fact-5",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-48",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-48-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-48-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-48-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-48-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-48-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-48-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-48-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-49",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-49-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-49-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-49-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-49-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-49-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-50",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-50-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-50-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-50-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-50-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-50-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-50-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-50-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-51",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-51-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-51-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-51-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-51-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-51-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-51-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-51-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-52",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-52-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-52-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-52-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-52-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-52-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-52-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-52-fact-7",
+          "pointer": "/actions/0/deadline"
+        },
+        {
+          "fact_id": "AP01-52-fact-8",
+          "pointer": "/actions/1"
+        },
+        {
+          "fact_id": "AP01-52-fact-9",
+          "pointer": "/actions/1/deadline"
+        },
+        {
+          "fact_id": "AP01-52-fact-10",
+          "pointer": "/actions/2"
+        },
+        {
+          "fact_id": "AP01-52-fact-11",
+          "pointer": "/actions/2/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-53",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-53-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-53-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-53-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-53-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-53-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-53-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-53-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-54",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-54-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-54-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-54-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-54-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-54-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-54-fact-6",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-55",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-55-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-55-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-55-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-55-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-55-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-55-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-55-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-56",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-56-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-56-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-56-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-56-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-56-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-56-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-56-fact-7",
+          "pointer": "/actions/0/deadline"
+        },
+        {
+          "fact_id": "AP01-56-fact-8",
+          "pointer": "/actions/1"
+        },
+        {
+          "fact_id": "AP01-56-fact-9",
+          "pointer": "/actions/1/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-57",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-57-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-57-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-57-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-57-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-57-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-57-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-57-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-58",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-58-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-58-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-58-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-58-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-58-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-58-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-58-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-59",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-59-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-59-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-59-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-59-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-59-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-59-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-59-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-60",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-60-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-60-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-60-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-60-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-60-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-60-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-60-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-61",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-61-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-61-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-61-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-61-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-61-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-61-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-61-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-62",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-62-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-62-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-62-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-62-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-62-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-62-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-62-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-63",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-63-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-63-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-63-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-63-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-63-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-63-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-63-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-64",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-64-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-64-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-64-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-64-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-64-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-64-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-64-fact-7",
+          "pointer": "/actions/0/deadline"
+        },
+        {
+          "fact_id": "AP01-64-fact-8",
+          "pointer": "/actions/1"
+        },
+        {
+          "fact_id": "AP01-64-fact-9",
+          "pointer": "/actions/1/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-65",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-65-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-65-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-65-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-65-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-65-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-65-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-65-fact-7",
+          "pointer": "/actions/0/deadline"
+        },
+        {
+          "fact_id": "AP01-65-fact-8",
+          "pointer": "/actions/1"
+        },
+        {
+          "fact_id": "AP01-65-fact-9",
+          "pointer": "/actions/1/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-66",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-66-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-66-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-66-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-66-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-66-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-66-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-66-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-67",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-67-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-67-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-67-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-67-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-67-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-67-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-67-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-68",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-68-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-68-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-68-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-68-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-68-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-68-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-68-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-69",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-69-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-69-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-69-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-69-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-69-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-69-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-69-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-70",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-70-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-70-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-70-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-70-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-70-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-70-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-70-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-71",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-71-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-71-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-71-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-71-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-71-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-72",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-72-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-72-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-72-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-72-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-72-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-73",
+      "readable": true,
+      "ambiguity": "not_found",
+      "facts": [
+        {
+          "fact_id": "AP01-73-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-73-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-73-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-73-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-73-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-73-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-73-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-74",
+      "readable": true,
+      "ambiguity": "multiple_matches",
+      "facts": [
+        {
+          "fact_id": "AP01-74-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-74-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-74-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-74-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-74-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-74-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-74-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-75",
+      "readable": true,
+      "ambiguity": "multiple_addressees",
+      "facts": [
+        {
+          "fact_id": "AP01-75-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-75-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-75-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-75-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-75-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-75-fact-6",
+          "pointer": "/recipients/1/name"
+        },
+        {
+          "fact_id": "AP01-75-fact-7",
+          "pointer": "/recipients/1/address"
+        },
+        {
+          "fact_id": "AP01-75-fact-8",
+          "pointer": "/recipients/1/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-75-fact-9",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-75-fact-10",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-76",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-76-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-76-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-76-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-76-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-76-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-76-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-76-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-77",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-77-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-77-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-77-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-77-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-77-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-77-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-77-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-78",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-78-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-78-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-78-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-78-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-78-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-78-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-78-fact-7",
+          "pointer": "/actions/0/deadline"
+        },
+        {
+          "fact_id": "AP01-78-fact-8",
+          "pointer": "/actions/1"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-79",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-79-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-79-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-79-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-79-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-79-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-79-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-79-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-80",
+      "readable": false,
+      "ambiguity": "none",
+      "facts": []
+    },
+    {
+      "case_id": "AP01-81",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-81-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-81-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-81-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-81-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-81-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-81-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-81-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-82",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-82-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-82-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-82-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-82-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-82-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-82-fact-6",
+          "pointer": "/actions/0"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-83",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-83-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-83-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-83-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-83-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-83-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-83-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-83-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    },
+    {
+      "case_id": "AP01-84",
+      "readable": true,
+      "ambiguity": "none",
+      "facts": [
+        {
+          "fact_id": "AP01-84-fact-1",
+          "pointer": "/sender"
+        },
+        {
+          "fact_id": "AP01-84-fact-2",
+          "pointer": "/document_date"
+        },
+        {
+          "fact_id": "AP01-84-fact-3",
+          "pointer": "/recipients/0/name"
+        },
+        {
+          "fact_id": "AP01-84-fact-4",
+          "pointer": "/recipients/0/address"
+        },
+        {
+          "fact_id": "AP01-84-fact-5",
+          "pointer": "/recipients/0/identifiers/0"
+        },
+        {
+          "fact_id": "AP01-84-fact-6",
+          "pointer": "/actions/0"
+        },
+        {
+          "fact_id": "AP01-84-fact-7",
+          "pointer": "/actions/0/deadline"
+        }
+      ]
+    }
+  ]
+}

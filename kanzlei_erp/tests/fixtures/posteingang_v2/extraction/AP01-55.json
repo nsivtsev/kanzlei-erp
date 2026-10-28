@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Energieausgleichsstelle Tal",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Energieausgleichsstelle Tal",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Schlussabrechnung Stromkostenzuschuss",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Schlussabrechnung Stromkostenzuschuss",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Flussbogen Manufaktur GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Flussbogen Manufaktur GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Weidenkai 18, 00041 Fiktivhafen",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Weidenkai 18, 00041 Fiktivhafen",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000731",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Geförderte Strommengen aufstellen",
+      "description": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-09",
+        "wording": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Übermitteln Sie die getrennte Aufstellung der geförderten Strommengen bis zum 09.11.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

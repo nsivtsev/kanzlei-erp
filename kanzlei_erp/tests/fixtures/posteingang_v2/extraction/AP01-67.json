@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktives Markenamt Waldsee",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Markenamt Waldsee",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Verlängerung Testmarke SILBERMOOS",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Verlängerung Testmarke SILBERMOOS",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Silbermoos Medien UG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Silbermoos Medien UG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Pixelgasse 6, 00045 Beispielhain",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Pixelgasse 6, 00045 Beispielhain",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000734",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Verlängerungsgebühr entrichten",
+      "description": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-01",
+        "wording": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Entrichten Sie die Verlängerungsgebühr für die Testmarke SILBERMOOS bis zum 01.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

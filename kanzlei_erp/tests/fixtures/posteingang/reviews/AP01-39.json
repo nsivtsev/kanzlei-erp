@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": "Synthetischer Sonderfall benötigt eine ausdrückliche Klärung.",
+  "human_verified": false,
+  "actions": []
+}

@@ -2,12 +2,11 @@
 
 import hashlib
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -75,6 +74,54 @@ class TestSuitePatchUpgrade(unittest.TestCase):
         for app in ("frappe", "suite"):
             self.assertEqual((self.root / "apps" / app / "binding.txt").read_text(), "current\n")
             self.assertEqual((self.root / "apps" / app / "unrelated.txt").read_text(), "keep this work\n")
+
+    def test_framework_v7_upgrade_preserves_unrelated_work(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        (self.root / "apps/frappe/binding.txt").write_text("v7\n")
+        previous = self.git("frappe", "diff", "--", "binding.txt")
+        (self.root / "deploy/frappe-mandant-access-v7.patch").write_text(previous)
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "apps/frappe/binding.txt").read_text(), "current\n")
+        self.assertEqual((self.root / "apps/frappe/unrelated.txt").read_text(), "keep this work\n")
+
+    def test_framework_v8_upgrade_and_child_query_context(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        (self.root / "apps/frappe/binding.txt").write_text("v8\n")
+        (self.root / "deploy/frappe-mandant-access-v8.patch").write_text(self.git("frappe", "diff", "--", "binding.txt"))
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "apps/frappe/unrelated.txt").read_text(), "keep this work\n")
+        self.assertIn("!deploy/frappe-mandant-access-v8.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertIn("query_doctype=self.doctype", (ROOT / "deploy/frappe-mandant-access.patch").read_text())
+
+    def test_framework_v9_upgrade_repeat_and_exact_rollback(self):
+        self.git("frappe", "apply", "--reverse", str(self.root / "deploy/frappe-mandant-access-v1.patch"))
+        (self.root / "apps/frappe/binding.txt").write_text("v9\n")
+        (self.root / "deploy/frappe-mandant-access-v9.patch").write_text(self.git("frappe", "diff", "--", "binding.txt"))
+        (self.root / "apps/suite/second.txt").write_text("user edit\n")
+        before = {app: self.git(app, "diff") for app in ("frappe", "suite")}
+        self.assertNotEqual(self.install().returncode, 0)
+        for app in ("frappe", "suite"):
+            self.assertEqual(self.git(app, "diff"), before[app])
+        (self.root / "apps/suite/second.txt").write_text("original\n")
+        for _ in range(2):
+            result = self.install()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("!deploy/frappe-mandant-access-v9.patch", (ROOT / ".dockerignore").read_text().splitlines())
+        self.assertEqual(hashlib.sha256((ROOT / "deploy/frappe-mandant-access-v9.patch").read_bytes()).hexdigest(), "bf11cc6d84b66ceba00c9126745bfe276e1634548c23fb81785e59a86d3f9570")
+
+    def test_v7_predecessors_are_exact_and_included_in_image(self):
+        for app in ("frappe", "suite"):
+            filename = f"deploy/{app}-mandant-access-v7.patch"
+            self.assertIn("!" + filename, (ROOT / ".dockerignore").read_text().splitlines())
+            expected = {
+                "frappe": "8d5be96b61ebbf9bb1c4e84d18dd93773d2c735d177f4831c2d2661d6a97d177",
+                "suite": "741a76bcb8f9992a290e0d8331375521fc5bb38b316a8a436d98a0c0693ed839",
+            }
+            self.assertEqual(hashlib.sha256((ROOT / filename).read_bytes()).hexdigest(), expected[app])
 
     def use_suite_v2(self):
         self.git("suite", "apply", "--reverse", str(self.root / "deploy/suite-mandant-access-v1.patch"))

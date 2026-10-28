@@ -17,9 +17,13 @@
 !deploy/suite-mandant-access-v5.patch
 !deploy/suite-mandant-access-v6.patch
 !deploy/frappe-mandant-access-v6.patch
+!deploy/frappe-mandant-access-v7.patch
+!deploy/suite-mandant-access-v7.patch
 !deploy/frappe-mandant-access-v1.patch
 !scripts/
 !scripts/fetch-suite.sh
 kanzlei_erp/**/__pycache__/
 kanzlei_erp/**/*.pyc
 kanzlei_erp/public/dist/
+!deploy/frappe-mandant-access-v8.patch
+!deploy/frappe-mandant-access-v9.patch

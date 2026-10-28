@@ -1,0 +1,852 @@
+{
+  "schema_version": "1.0",
+  "purpose": "specification_only_not_runtime_acceptance",
+  "transitions": [
+    {
+      "id": "transition-00-00",
+      "from": "Received",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-00-01",
+      "from": "Received",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "allowed": true
+    },
+    {
+      "id": "transition-00-02",
+      "from": "Received",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-00-03",
+      "from": "Received",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": true
+    },
+    {
+      "id": "transition-00-04",
+      "from": "Received",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "allowed": true
+    },
+    {
+      "id": "transition-00-05",
+      "from": "Received",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-00-06",
+      "from": "Received",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-00-07",
+      "from": "Received",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-01-00",
+      "from": "Queued",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-01-01",
+      "from": "Queued",
+      "to": "Queued",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-01-02",
+      "from": "Queued",
+      "to": "Processing",
+      "operation": "start_run",
+      "allowed": true
+    },
+    {
+      "id": "transition-01-03",
+      "from": "Queued",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": true
+    },
+    {
+      "id": "transition-01-04",
+      "from": "Queued",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "allowed": true
+    },
+    {
+      "id": "transition-01-05",
+      "from": "Queued",
+      "to": "Error",
+      "operation": "enqueue_failed",
+      "allowed": true
+    },
+    {
+      "id": "transition-01-06",
+      "from": "Queued",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-01-07",
+      "from": "Queued",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-02-00",
+      "from": "Processing",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-02-01",
+      "from": "Processing",
+      "to": "Queued",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-02-02",
+      "from": "Processing",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-02-03",
+      "from": "Processing",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": true
+    },
+    {
+      "id": "transition-02-04",
+      "from": "Processing",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "allowed": true
+    },
+    {
+      "id": "transition-02-05",
+      "from": "Processing",
+      "to": "Error",
+      "operation": "fail_run",
+      "allowed": true
+    },
+    {
+      "id": "transition-02-06",
+      "from": "Processing",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-02-07",
+      "from": "Processing",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-03-00",
+      "from": "Needs Review",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-03-01",
+      "from": "Needs Review",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "allowed": true
+    },
+    {
+      "id": "transition-03-02",
+      "from": "Needs Review",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-03-03",
+      "from": "Needs Review",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-03-04",
+      "from": "Needs Review",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "allowed": true
+    },
+    {
+      "id": "transition-03-05",
+      "from": "Needs Review",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-03-06",
+      "from": "Needs Review",
+      "to": "Completed",
+      "operation": "confirm",
+      "allowed": true
+    },
+    {
+      "id": "transition-03-07",
+      "from": "Needs Review",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-04-00",
+      "from": "Needs Clarification",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-04-01",
+      "from": "Needs Clarification",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "allowed": true
+    },
+    {
+      "id": "transition-04-02",
+      "from": "Needs Clarification",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-04-03",
+      "from": "Needs Clarification",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": true
+    },
+    {
+      "id": "transition-04-04",
+      "from": "Needs Clarification",
+      "to": "Needs Clarification",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-04-05",
+      "from": "Needs Clarification",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-04-06",
+      "from": "Needs Clarification",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-04-07",
+      "from": "Needs Clarification",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-05-00",
+      "from": "Error",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-05-01",
+      "from": "Error",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "allowed": true
+    },
+    {
+      "id": "transition-05-02",
+      "from": "Error",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-05-03",
+      "from": "Error",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": true
+    },
+    {
+      "id": "transition-05-04",
+      "from": "Error",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "allowed": true
+    },
+    {
+      "id": "transition-05-05",
+      "from": "Error",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-05-06",
+      "from": "Error",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-05-07",
+      "from": "Error",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "allowed": true
+    },
+    {
+      "id": "transition-06-00",
+      "from": "Completed",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-01",
+      "from": "Completed",
+      "to": "Queued",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-02",
+      "from": "Completed",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-03",
+      "from": "Completed",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-04",
+      "from": "Completed",
+      "to": "Needs Clarification",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-05",
+      "from": "Completed",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-06",
+      "from": "Completed",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-06-07",
+      "from": "Completed",
+      "to": "Cancelled",
+      "operation": "create_correction",
+      "allowed": true
+    },
+    {
+      "id": "transition-07-00",
+      "from": "Cancelled",
+      "to": "Received",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-01",
+      "from": "Cancelled",
+      "to": "Queued",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-02",
+      "from": "Cancelled",
+      "to": "Processing",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-03",
+      "from": "Cancelled",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-04",
+      "from": "Cancelled",
+      "to": "Needs Clarification",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-05",
+      "from": "Cancelled",
+      "to": "Error",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-06",
+      "from": "Cancelled",
+      "to": "Completed",
+      "operation": "manual_review",
+      "allowed": false
+    },
+    {
+      "id": "transition-07-07",
+      "from": "Cancelled",
+      "to": "Cancelled",
+      "operation": "manual_review",
+      "allowed": false
+    }
+  ],
+  "operations": [
+    {
+      "id": "upload_retry",
+      "kind": "upload_retry",
+      "owner_stage": "AP-03",
+      "given": {
+        "status": "Received",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "receive",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        },
+        {
+          "operation": "receive",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "OK",
+        "letters_delta": 1,
+        "tasks_delta": 0,
+        "same_result": true,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Received"
+      },
+      "notes": "Один и тот же upload request, в том числе конкурентный, создаёт одну запись."
+    },
+    {
+      "id": "exact_duplicate",
+      "kind": "exact_duplicate",
+      "owner_stage": "AP-03",
+      "given": {
+        "status": "Received",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "exact_duplicate",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "DUPLICATE",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Received"
+      },
+      "notes": "Другой upload key с теми же байтами сообщает только доступный дубль."
+    },
+    {
+      "id": "confirmation_retry",
+      "kind": "confirmation_retry",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Needs Review",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "confirm",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        },
+        {
+          "operation": "confirm",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "OK",
+        "letters_delta": 0,
+        "tasks_delta": 1,
+        "same_result": true,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Completed"
+      },
+      "notes": "Повтор подтверждения возвращает тот же единственный Task."
+    },
+    {
+      "id": "revision_conflict",
+      "kind": "revision_conflict",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Needs Review",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "confirm",
+          "request_key": "request-B",
+          "payload_fingerprint": "payload-B",
+          "expected_revision": 2
+        }
+      ],
+      "expected": {
+        "code": "REVISION_CONFLICT",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Needs Review"
+      },
+      "notes": "Устаревшая вкладка не сохраняет ни одну правку."
+    },
+    {
+      "id": "idempotency_conflict",
+      "kind": "idempotency_conflict",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Needs Review",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "confirm",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        },
+        {
+          "operation": "confirm",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-B",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "IDEMPOTENCY_CONFLICT",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Needs Review"
+      },
+      "notes": "Повторный ключ не допускает изменённый payload."
+    },
+    {
+      "id": "late_run",
+      "kind": "late_run",
+      "owner_stage": "AP-05",
+      "given": {
+        "status": "Needs Review",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": 1,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "late_run",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "STALE_RUN",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Needs Review"
+      },
+      "notes": "Поздний ответ поколения 1 не заменяет ручной черновик поколения 2."
+    },
+    {
+      "id": "permission_revoked",
+      "kind": "permission_revoked",
+      "owner_stage": "AP-02",
+      "given": {
+        "status": "Completed",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": false,
+        "existing_tasks": 1,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "permission_revoked",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "PERMISSION_DENIED",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Completed"
+      },
+      "notes": "Отзыв Customer read запрещает PDF, OCR, историю, Task, ToDo и replay ответа."
+    },
+    {
+      "id": "assignment_rollback",
+      "kind": "assignment_rollback",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Needs Review",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": true
+      },
+      "requests": [
+        {
+          "operation": "assignment_rollback",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "ASSIGNMENT_FAILED",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Needs Review"
+      },
+      "notes": "Ошибка назначения откатывает подтверждение, все Tasks, ToDo и события."
+    },
+    {
+      "id": "completed_retry",
+      "kind": "completed_retry",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Completed",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 1,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "confirm",
+          "request_key": "successful-key",
+          "payload_fingerprint": "saved-payload",
+          "expected_revision": 1
+        }
+      ],
+      "expected": {
+        "code": "OK",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": true,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Completed"
+      },
+      "notes": "Успешный replay проверяется до конфликта старой ревизии, но после текущих прав."
+    },
+    {
+      "id": "correction",
+      "kind": "correction",
+      "owner_stage": "AP-07",
+      "given": {
+        "status": "Completed",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 1,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "create_correction",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        },
+        {
+          "operation": "create_correction",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "OK",
+        "letters_delta": 1,
+        "tasks_delta": 0,
+        "same_result": true,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Cancelled"
+      },
+      "notes": "Manager+operator создаёт одну замену; выполненная Task остаётся Completed, происхождение неизменно, доступ к ошибочному источнику закрыт.",
+      "correction": {
+        "original_task_before": {
+          "name": "SYN-TASK-OLD",
+          "status": "Completed",
+          "customer": "SYN-CUSTOMER-B",
+          "letter": "SYN-LETTER-OLD"
+        },
+        "original_task_after": {
+          "name": "SYN-TASK-OLD",
+          "status": "Completed",
+          "customer": "SYN-CUSTOMER-B",
+          "letter": "SYN-LETTER-OLD"
+        },
+        "replacement_file_is_distinct": true,
+        "action_ids_reused": false,
+        "quarantined": true,
+        "normal_reader_can_read_old_file": false,
+        "normal_assignee_can_read_old_task": false,
+        "dispositions_required_before_confirmation": true
+      }
+    },
+    {
+      "id": "manual_during_run",
+      "kind": "manual_during_run",
+      "owner_stage": "AP-05",
+      "given": {
+        "status": "Processing",
+        "revision": 3,
+        "current_generation": 2,
+        "response_generation": null,
+        "authorized": true,
+        "existing_tasks": 0,
+        "assignment_fails": false
+      },
+      "requests": [
+        {
+          "operation": "manual_during_run",
+          "request_key": "request-A",
+          "payload_fingerprint": "payload-A",
+          "expected_revision": 3
+        }
+      ],
+      "expected": {
+        "code": "OK",
+        "letters_delta": 0,
+        "tasks_delta": 0,
+        "same_result": false,
+        "draft_unchanged": true,
+        "data_disclosed": false,
+        "final_status": "Needs Review"
+      },
+      "notes": "Ручной переход повышает поколение; прежний Run становится неприменимым."
+    }
+  ]
+}

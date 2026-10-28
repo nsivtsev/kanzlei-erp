@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Betriebskrankenkasse Farn",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Betriebskrankenkasse Farn",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Abrechnung Beitragsguthaben",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Abrechnung Beitragsguthaben",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Das Guthaben von 72,00 Test-Euro wird automatisch am 16.11.2026 auf das hinterlegte Konto ausgezahlt.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Das Guthaben von 72,00 Test-Euro wird automatisch am 16.11.2026 auf das hinterlegte Konto ausgezahlt.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Morgenfarn Labor GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Morgenfarn Labor GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Kristallallee 3, 00042 Probedorf",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Kristallallee 3, 00042 Probedorf",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000732",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "none_found",
+  "actions": [],
+  "warnings": []
+}

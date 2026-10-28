@@ -1,0 +1,390 @@
+{
+ "doctype": "DocType",
+ "name": "Incoming Letter",
+ "module": "Kanzlei ERP",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": [
+  "original_file",
+  "content_sha256",
+  "page_count",
+  "source",
+  "received_by",
+  "received_at",
+  "received_date_known",
+  "received_date",
+  "status",
+  "revision",
+  "analysis_generation",
+  "current_run",
+  "applied_run",
+  "sender",
+  "document_date",
+  "letter_type",
+  "summary",
+  "fact_evidence_json",
+  "matching_result_json",
+  "selected_customer",
+  "customer_reason",
+  "confirmed_customer",
+  "review_outcome",
+  "no_actions_reason",
+  "clarification_reason",
+  "actions",
+  "confirmed_by",
+  "confirmed_at",
+  "intake_key",
+  "intake_fingerprint",
+  "confirmation_receipt_json",
+  "replaces_letter",
+  "replacement_letter",
+  "correction_reason",
+  "correction_quarantined",
+  "cancellation_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "original_file",
+   "fieldtype": "Link",
+   "label": "Original File",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "File",
+   "ignore_user_permissions": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "content_sha256",
+   "fieldtype": "Data",
+   "label": "Content Sha256",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 64,
+   "reqd": 1,
+   "search_index": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "page_count",
+   "fieldtype": "Int",
+   "label": "Page Count",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "erp_upload",
+   "default": "erp_upload"
+  },
+  {
+   "fieldname": "received_by",
+   "fieldtype": "Link",
+   "label": "Received By",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User",
+   "ignore_user_permissions": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "received_at",
+   "fieldtype": "Datetime",
+   "label": "Received At",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "received_date_known",
+   "fieldtype": "Check",
+   "label": "Received Date Known",
+   "read_only": 1,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "received_date",
+   "fieldtype": "Date",
+   "label": "Received Date",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "Received\nQueued\nProcessing\nNeeds Review\nNeeds Clarification\nError\nCompleted\nCancelled",
+   "default": "Received",
+   "search_index": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Int",
+   "label": "Revision",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "1",
+   "hidden": 1
+  },
+  {
+   "fieldname": "analysis_generation",
+   "fieldtype": "Int",
+   "label": "Analysis Generation",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "0",
+   "hidden": 1
+  },
+  {
+   "fieldname": "current_run",
+   "fieldtype": "Link",
+   "label": "Current Run",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Run",
+   "ignore_user_permissions": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "applied_run",
+   "fieldtype": "Link",
+   "label": "Applied Run",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Run",
+   "ignore_user_permissions": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "sender",
+   "fieldtype": "Data",
+   "label": "Sender",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 255
+  },
+  {
+   "fieldname": "document_date",
+   "fieldtype": "Date",
+   "label": "Document Date",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "letter_type",
+   "fieldtype": "Data",
+   "label": "Letter Type",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 255
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "fact_evidence_json",
+   "fieldtype": "JSON",
+   "label": "Fact Evidence Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "{}",
+   "hidden": 1
+  },
+  {
+   "fieldname": "matching_result_json",
+   "fieldtype": "JSON",
+   "label": "Matching Result Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "permlevel": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "selected_customer",
+   "fieldtype": "Link",
+   "label": "Selected Customer",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Customer",
+   "ignore_user_permissions": 1,
+   "permlevel": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "customer_reason",
+   "fieldtype": "Small Text",
+   "label": "Customer Reason",
+   "read_only": 1,
+   "no_copy": 1,
+   "permlevel": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "confirmed_customer",
+   "fieldtype": "Link",
+   "label": "Confirmed Customer",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Customer",
+   "ignore_user_permissions": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "review_outcome",
+   "fieldtype": "Select",
+   "label": "Review Outcome",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "pending\nactions\nno_actions",
+   "default": "pending"
+  },
+  {
+   "fieldname": "no_actions_reason",
+   "fieldtype": "Small Text",
+   "label": "No Actions Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "clarification_reason",
+   "fieldtype": "Small Text",
+   "label": "Clarification Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "actions",
+   "fieldtype": "Table",
+   "label": "Actions",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Action",
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "confirmed_by",
+   "fieldtype": "Link",
+   "label": "Confirmed By",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User",
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "confirmed_at",
+   "fieldtype": "Datetime",
+   "label": "Confirmed At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "intake_key",
+   "fieldtype": "Data",
+   "label": "Intake Key",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 64,
+   "reqd": 1,
+   "unique": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "intake_fingerprint",
+   "fieldtype": "Data",
+   "label": "Intake Fingerprint",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 64,
+   "reqd": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "confirmation_receipt_json",
+   "fieldtype": "JSON",
+   "label": "Confirmation Receipt Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "permlevel": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "replaces_letter",
+   "fieldtype": "Link",
+   "label": "Replaces Letter",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter",
+   "ignore_user_permissions": 1,
+   "permlevel": 1,
+   "hidden": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "replacement_letter",
+   "fieldtype": "Link",
+   "label": "Replacement Letter",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter",
+   "ignore_user_permissions": 1,
+   "permlevel": 1,
+   "hidden": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "correction_reason",
+   "fieldtype": "Small Text",
+   "label": "Correction Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "correction_quarantined",
+   "fieldtype": "Check",
+   "label": "Correction Quarantined",
+   "read_only": 1,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "cancellation_reason",
+   "fieldtype": "Small Text",
+   "label": "Cancellation Reason",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "Desk User",
+   "read": 1
+  },
+  {
+   "role": "Posteingang Operator",
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

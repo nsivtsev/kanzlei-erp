@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": "Synthetischer Sonderfall benötigt eine ausdrückliche Klärung.",
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "9c5f47cb-e25e-527c-8960-2d42e87fe80b",
+      "source_index": 0,
+      "title": "Musterprotokoll abstimmen",
+      "description": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": "2026-12-15",
+      "external_date_basis": "Spätester Eingang: 15.12.2026.",
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Stimmen Sie das gemeinsame Musterprotokoll ausdrücklich für beide Betriebe ab.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

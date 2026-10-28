@@ -20,6 +20,7 @@ from urllib.parse import unquote, urlsplit
 
 import frappe
 
+_write_cleanups = ContextVar("kanzlei_isolated_write_cleanups", default=None)
 _configuring = ContextVar("kanzlei_s3_configuration", default=False)
 _binding = ContextVar("kanzlei_s3_binding", default=False)
 S3_URL_PREFIX = "/api/method/suite.drive.api.s3.fetch?path="
@@ -385,6 +386,25 @@ def write_file(file_or_name, content=None, content_type=None, is_private=0):
 	return {"file_name": name, "file_url": url}
 
 
+@contextmanager
+def isolated_writes(*, cleanup_on_error=True):
+	"""Clean only this operation's new blobs when a caught savepoint fails."""
+	callbacks = []
+	parent_callbacks = _write_cleanups.get()
+	token = _write_cleanups.set(callbacks)
+	try:
+		yield callbacks
+	except Exception:
+		if cleanup_on_error:
+			for callback in callbacks:
+				callback()
+		raise
+	finally:
+		if parent_callbacks is not None:
+			parent_callbacks.extend(callbacks)
+		_write_cleanups.reset(token)
+
+
 def track_write(key):
 	"""A filesystem intent survives a DB rollback or process termination."""
 	key = managed_key(key)
@@ -408,6 +428,8 @@ def track_write(key):
 		path.unlink(missing_ok=True)
 
 	frappe.db.after_rollback.add(rolled_back)
+	if (callbacks := _write_cleanups.get()) is not None:
+		callbacks.append(rolled_back)
 
 	# A successful DB commit makes the mapping durable. Aborted inserts that
 	# callers intentionally catch remain in the ledger for the hourly sweep.
@@ -433,6 +455,8 @@ def open_binding(file, range_header=None):
 
 def url_content(url):
 	"""Resolve retained inline-email aliases through current File permissions."""
+	from kanzlei_erp.posteingang_files import path_guard
+	path_guard(url)
 	if not (binding := get_binding(url)):
 		return None
 	from kanzlei_erp.drive_storage import require_storage_access

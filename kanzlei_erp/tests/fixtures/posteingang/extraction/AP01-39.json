@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": null,
+    "evidence": []
+  },
+  "document_date": {
+    "value": null,
+    "evidence": []
+  },
+  "letter_type": {
+    "value": null,
+    "evidence": []
+  },
+  "summary": {
+    "value": null,
+    "evidence": [
+      {
+        "page": 1,
+        "quote": null,
+        "verification": "missing"
+      }
+    ]
+  },
+  "recipients": [],
+  "other_identifiers": [],
+  "readability": "unreadable",
+  "action_assessment": "unknown",
+  "actions": [],
+  "warnings": [
+    {
+      "code": "poor_scan",
+      "message": "Nicht zuverlässig lesbar; manuelle Prüfung erforderlich.",
+      "evidence": []
+    }
+  ]
+}

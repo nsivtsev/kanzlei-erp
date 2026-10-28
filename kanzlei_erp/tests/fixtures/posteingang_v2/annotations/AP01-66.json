@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-66",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Exportprüfstelle Kristall",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Exportprüfstelle Kristall"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Morgenfarn Labor GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Morgenfarn Labor GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Kristallallee 3, 00042 Probedorf",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Kristallallee 3, 00042 Probedorf"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000732"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-VB"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-VB",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-66-obligation-1",
+      "title": "Endverbleibserklärung senden",
+      "description": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-30",
+        "wording": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Senden Sie die unterschriebene Endverbleibserklärung für den Prüfadapter bis zum 30.11.2026."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -47,6 +47,8 @@ def communication_has_permission(doc, ptype, user=None, debug=False):
 
 
 def configure_desk(bootinfo):
+	from kanzlei_erp.posteingang_jobs import _operator
+
 	allowed = {"kanzlei"}
 	if "System Manager" in frappe.get_roles():
 		allowed.add("einstellungen")
@@ -64,6 +66,7 @@ def configure_desk(bootinfo):
 			if item["label"] != "Einstellungen"
 			and (item.get("url") != EMAIL_INBOX_URL or show_mail)
 			and item.get("url") != DRIVE_URL
+			and (item.get("link_to") != "posteingang" or _operator(frappe.session.user))
 		]
 		if (
 			"suite" in frappe.get_installed_apps()

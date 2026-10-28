@@ -1,0 +1,196 @@
+{
+ "doctype": "DocType",
+ "name": "Incoming Letter Action",
+ "module": "Kanzlei ERP",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": [
+  "action_id",
+  "source_run",
+  "source_index",
+  "original_proposal_json",
+  "title",
+  "description",
+  "decision",
+  "assigned_to",
+  "assignment_decision",
+  "assignment_reason",
+  "external_date",
+  "external_date_basis",
+  "internal_date",
+  "scheduling_decision",
+  "scheduling_reason",
+  "rejection_reason",
+  "needs_planning",
+  "evidence_json",
+  "created_task"
+ ],
+ "fields": [
+  {
+   "fieldname": "action_id",
+   "fieldtype": "Data",
+   "label": "Action Id",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 36,
+   "reqd": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_run",
+   "fieldtype": "Link",
+   "label": "Source Run",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Run",
+   "ignore_user_permissions": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_index",
+   "fieldtype": "Int",
+   "label": "Source Index",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "original_proposal_json",
+   "fieldtype": "JSON",
+   "label": "Original Proposal Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140,
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "decision",
+   "fieldtype": "Select",
+   "label": "Decision",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "pending\naccept\nreject",
+   "default": "pending"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User",
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "assignment_decision",
+   "fieldtype": "Select",
+   "label": "Assignment Decision",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "pending\nassigned\nunassigned",
+   "default": "pending"
+  },
+  {
+   "fieldname": "assignment_reason",
+   "fieldtype": "Small Text",
+   "label": "Assignment Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "external_date",
+   "fieldtype": "Date",
+   "label": "External Date",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "external_date_basis",
+   "fieldtype": "Small Text",
+   "label": "External Date Basis",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "internal_date",
+   "fieldtype": "Date",
+   "label": "Internal Date",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "scheduling_decision",
+   "fieldtype": "Select",
+   "label": "Scheduling Decision",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "pending\nscheduled\nunscheduled",
+   "default": "pending"
+  },
+  {
+   "fieldname": "scheduling_reason",
+   "fieldtype": "Small Text",
+   "label": "Scheduling Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "needs_planning",
+   "fieldtype": "Check",
+   "label": "Needs Planning",
+   "read_only": 1,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "evidence_json",
+   "fieldtype": "JSON",
+   "label": "Evidence Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "[]",
+   "hidden": 1
+  },
+  {
+   "fieldname": "created_task",
+   "fieldtype": "Link",
+   "label": "Created Task",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Task",
+   "ignore_user_permissions": 1
+  }
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

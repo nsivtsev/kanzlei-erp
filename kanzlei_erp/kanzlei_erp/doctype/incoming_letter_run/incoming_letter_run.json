@@ -1,0 +1,260 @@
+{
+ "doctype": "DocType",
+ "name": "Incoming Letter Run",
+ "module": "Kanzlei ERP",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": [
+  "letter",
+  "generation",
+  "schema_version",
+  "prompt_version",
+  "provider",
+  "ocr_model",
+  "extraction_model",
+  "status",
+  "queued_at",
+  "started_at",
+  "finished_at",
+  "attempt_count",
+  "error_code",
+  "ocr_pages_json",
+  "result_json",
+  "queued_by",
+  "source_snapshot_json",
+  "configuration_json",
+  "configuration_epoch",
+  "stage",
+  "next_attempt_at",
+  "lease_token",
+  "lease_expires_at",
+  "error_stage",
+  "reused_ocr_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "letter",
+   "fieldtype": "Link",
+   "label": "Letter",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter",
+   "ignore_user_permissions": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "generation",
+   "fieldtype": "Int",
+   "label": "Generation",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "schema_version",
+   "fieldtype": "Data",
+   "label": "Schema Version",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140,
+   "reqd": 1,
+   "default": "1.0"
+  },
+  {
+   "fieldname": "prompt_version",
+   "fieldtype": "Data",
+   "label": "Prompt Version",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140,
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "fake\nmistral",
+   "default": "fake"
+  },
+  {
+   "fieldname": "ocr_model",
+   "fieldtype": "Data",
+   "label": "Ocr Model",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "extraction_model",
+   "fieldtype": "Data",
+   "label": "Extraction Model",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "Queued\nRunning\nSucceeded\nFailed\nCancelled\nSuperseded",
+   "default": "Queued",
+   "search_index": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "queued_at",
+   "fieldtype": "Datetime",
+   "label": "Queued At",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "attempt_count",
+   "fieldtype": "Int",
+   "label": "Attempt Count",
+   "read_only": 1,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "error_code",
+   "fieldtype": "Data",
+   "label": "Error Code",
+   "read_only": 1,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "ocr_pages_json",
+   "fieldtype": "JSON",
+   "label": "Ocr Pages Json",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "result_json",
+   "fieldtype": "JSON",
+   "label": "Result Json",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "queued_by",
+   "fieldtype": "Link",
+   "label": "Queued By",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "User",
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "source_snapshot_json",
+   "fieldtype": "JSON",
+   "label": "Source Snapshot Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "configuration_json",
+   "fieldtype": "JSON",
+   "label": "Configuration Json",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "configuration_epoch",
+   "fieldtype": "Int",
+   "label": "Configuration Epoch",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "label": "Stage",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "pending\nprepare\nocr\nextraction\nfinished"
+  },
+  {
+   "fieldname": "next_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "Next Attempt At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "lease_token",
+   "fieldtype": "Data",
+   "label": "Lease Token",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1,
+   "length": 36
+  },
+  {
+   "fieldname": "lease_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Lease Expires At",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "error_stage",
+   "fieldtype": "Select",
+   "label": "Error Stage",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "\ndispatch\nprepare\nocr\nextraction\nworker"
+  },
+  {
+   "fieldname": "reused_ocr_from",
+   "fieldtype": "Link",
+   "label": "Reused Ocr From",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Incoming Letter Run",
+   "ignore_user_permissions": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "Desk User",
+   "read": 1
+  },
+  {
+   "role": "Posteingang Operator",
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

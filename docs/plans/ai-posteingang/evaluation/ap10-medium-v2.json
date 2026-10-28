@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "profile": "ap10-medium-v2",
+  "dataset_version": "1.2",
+  "counts": {
+    "cases": 42,
+    "development": 12,
+    "holdout": 30,
+    "new_holdout": 30
+  },
+  "baseline": "original-baseline.json",
+  "facts": "gold-facts-v2.json",
+  "minimum_explicit_holdout_actions": 15,
+  "required_deadline_kinds": [
+    "explicit_date",
+    "relative",
+    "not_found",
+    "uncertain"
+  ],
+  "required_tags": [
+    "no_actions",
+    "poor_scan",
+    "unreadable",
+    "partial",
+    "unknown_customer",
+    "ambiguous_customer",
+    "multiple_customers",
+    "prompt_injection",
+    "sender_identifier",
+    "multi_page"
+  ],
+  "review_status": "pending_independent_review",
+  "holdout_history": {
+    "previously_used_contract_cases": [],
+    "new_cases": [
+      "AP01-55",
+      "AP01-56",
+      "AP01-57",
+      "AP01-58",
+      "AP01-59",
+      "AP01-60",
+      "AP01-61",
+      "AP01-62",
+      "AP01-63",
+      "AP01-64",
+      "AP01-65",
+      "AP01-66",
+      "AP01-67",
+      "AP01-68",
+      "AP01-69",
+      "AP01-70",
+      "AP01-71",
+      "AP01-72",
+      "AP01-73",
+      "AP01-74",
+      "AP01-75",
+      "AP01-76",
+      "AP01-77",
+      "AP01-78",
+      "AP01-79",
+      "AP01-80",
+      "AP01-81",
+      "AP01-82",
+      "AP01-83",
+      "AP01-84"
+    ],
+    "note": "New source families, procedural holdout frozen before first Medium request; independent human gold review remains pending."
+  },
+  "required_safety_scenarios": [
+    "vertical_rq",
+    "lost_post_commit_response",
+    "manual_no_provider",
+    "configuration_stop",
+    "dispatch_recovery",
+    "worker_checkpoint",
+    "correction_quarantine"
+  ],
+  "facts_in_dataset": true
+}

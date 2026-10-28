@@ -1,0 +1,1482 @@
+{
+  "schema_version": "1.0",
+  "corpus_version": "remediation-1",
+  "synthetic": true,
+  "purpose": "development_regression",
+  "independent_holdout": false,
+  "note": "New observable development examples. Original AP-01 dataset and frozen live results remain unchanged. Gold is not independently reviewed.",
+  "catalog": {
+    "schema_version": "1.0",
+    "synthetic": true,
+    "customers": [
+      {
+        "customer": "REG-CUSTOMER-A",
+        "name": "Musterwerk Linde GmbH",
+        "address": "Testweg 12, 00001 Musterstadt",
+        "identifiers": [
+          {
+            "type": "de_tax_id",
+            "value": "00000000123",
+            "jurisdiction": null,
+            "authority": null,
+            "other_type": null,
+            "holder_role": "addressee"
+          },
+          {
+            "type": "other",
+            "value": "REG-0042",
+            "jurisdiction": "TEST-NORD",
+            "authority": "Fiktive Registerstelle Nord",
+            "other_type": "Aktenreferenz",
+            "holder_role": "addressee"
+          }
+        ]
+      },
+      {
+        "customer": "REG-CUSTOMER-B",
+        "name": "Probebetrieb Tanne GmbH",
+        "address": "Probestrasse 9, 00002 Teststadt",
+        "identifiers": [
+          {
+            "type": "de_tax_id",
+            "value": "00000000123",
+            "jurisdiction": null,
+            "authority": null,
+            "other_type": null,
+            "holder_role": "addressee"
+          },
+          {
+            "type": "other",
+            "value": "REG-0042",
+            "jurisdiction": "TEST-NORD",
+            "authority": "Fiktive Registerstelle Nord",
+            "other_type": "Aktenreferenz",
+            "holder_role": "addressee"
+          }
+        ]
+      },
+      {
+        "customer": "REG-CUSTOMER-C",
+        "name": "Testatelier Birke GmbH",
+        "address": "Musterplatz 4, 00003 Beispielort",
+        "identifiers": [
+          {
+            "type": "de_tax_id",
+            "value": "00000000456",
+            "jurisdiction": null,
+            "authority": null,
+            "other_type": null,
+            "holder_role": "addressee"
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "REG-01",
+      "source_family": "remediation-REG-01",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nBitte senden Sie uns die aktuelle Anlagenliste."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte senden Sie uns die aktuelle Anlagenliste."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+            "description": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte senden Sie uns die aktuelle Anlagenliste."
+              }
+            ],
+            "deadline": {
+              "kind": "not_found",
+              "date": null,
+              "wording": null,
+              "anchor": null,
+              "evidence": []
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "not_found"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-02",
+      "source_family": "remediation-REG-02",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nDieses Schreiben ist vom 27.10.2026. Ein Abgabetermin ist nicht festgelegt.\nBitte erlaeutern Sie die Buchung TEST-82."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte erlaeutern Sie die Buchung TEST-82.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte erlaeutern Sie die Buchung TEST-82."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte erlaeutern Sie die Buchung TEST-82.",
+            "description": "Bitte erlaeutern Sie die Buchung TEST-82.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte erlaeutern Sie die Buchung TEST-82."
+              }
+            ],
+            "deadline": {
+              "kind": "not_found",
+              "date": null,
+              "wording": null,
+              "anchor": null,
+              "evidence": []
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "not_found"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-03",
+      "source_family": "remediation-REG-03",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nBitte pruefen Sie die beiliegende Kontenliste."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-B"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte pruefen Sie die beiliegende Kontenliste.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte pruefen Sie die beiliegende Kontenliste."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte pruefen Sie die beiliegende Kontenliste.",
+            "description": "Bitte pruefen Sie die beiliegende Kontenliste.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte pruefen Sie die beiliegende Kontenliste."
+              }
+            ],
+            "deadline": {
+              "kind": "not_found",
+              "date": null,
+              "wording": null,
+              "anchor": null,
+              "evidence": []
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A",
+          "REG-CUSTOMER-B"
+        ],
+        "ambiguity": "multiple_matches",
+        "action_count": 1,
+        "deadline_kinds": [
+          "not_found"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-04",
+      "source_family": "remediation-REG-04",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nReferenz des Adressaten: REG-0042\nReferenztyp: Aktenreferenz\nAusstellende Stelle der Referenz: Fiktive Registerstelle Nord\nGeltungsbereich der Referenz: TEST-NORD\nBetreff: Testmitteilung\nBitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-B"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "other",
+                "value": "REG-0042",
+                "jurisdiction": "TEST-NORD",
+                "authority": "Fiktive Registerstelle Nord",
+                "other_type": "Aktenreferenz",
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Referenz des Adressaten: REG-0042\nReferenztyp: Aktenreferenz\nAusstellende Stelle der Referenz: Fiktive Registerstelle Nord\nGeltungsbereich der Referenz: TEST-NORD"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+            "description": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte bestaetigen Sie die Bankverbindung bis zum 18.11.2026."
+              }
+            ],
+            "deadline": {
+              "kind": "explicit_date",
+              "date": "2026-11-18",
+              "wording": "bis zum 18.11.2026",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "bis zum 18.11.2026"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A",
+          "REG-CUSTOMER-B"
+        ],
+        "ambiguity": "multiple_matches",
+        "action_count": 1,
+        "deadline_kinds": [
+          "explicit_date"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-05",
+      "source_family": "remediation-REG-05",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nMandantenreferenz: REG-0042\nBetreff: Testmitteilung\nBitte senden Sie die unterschriebene Vollmacht."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-B"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte senden Sie die unterschriebene Vollmacht.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte senden Sie die unterschriebene Vollmacht."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": []
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte senden Sie die unterschriebene Vollmacht.",
+            "description": "Bitte senden Sie die unterschriebene Vollmacht.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte senden Sie die unterschriebene Vollmacht."
+              }
+            ],
+            "deadline": {
+              "kind": "not_found",
+              "date": null,
+              "wording": null,
+              "anchor": null,
+              "evidence": []
+            }
+          }
+        ],
+        "warnings": [
+          {
+            "code": "incomplete_text",
+            "message": "Mandantenreferenz REG-0042: ausstellende Stelle nicht angegeben.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Mandantenreferenz: REG-0042"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "not_found"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": "REG-0042"
+      }
+    },
+    {
+      "case_id": "REG-06",
+      "source_family": "remediation-REG-06",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nSteuer-ID des Absenders: 00000000456\nBetreff: Testmitteilung\nBitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [
+          {
+            "type": "de_tax_id",
+            "value": "00000000456",
+            "jurisdiction": null,
+            "authority": null,
+            "other_type": null,
+            "holder_role": "sender",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Steuer-ID des Absenders: 00000000456"
+              }
+            ]
+          }
+        ],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein.",
+            "description": "Bitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte reichen Sie den Kassenbericht bis zum 19.11.2026 ein."
+              }
+            ],
+            "deadline": {
+              "kind": "explicit_date",
+              "date": "2026-11-19",
+              "wording": "bis zum 19.11.2026",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "bis zum 19.11.2026"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "explicit_date"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-07",
+      "source_family": "remediation-REG-07",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nWir haben die Unterlagen erhalten. Diese Nachricht dient nur Ihrer Information; es besteht kein Handlungsbedarf."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Wir haben die Unterlagen erhalten. Diese Nachricht dient nur Ihrer Information; es besteht kein Handlungsbedarf.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Wir haben die Unterlagen erhalten. Diese Nachricht dient nur Ihrer Information; es besteht kein Handlungsbedarf."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "none_found",
+        "actions": [],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 0,
+        "deadline_kinds": [],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-08",
+      "source_family": "remediation-REG-08",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nBitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens.",
+            "description": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte antworten Sie innerhalb von 14 Tagen nach Zugang dieses Schreibens."
+              }
+            ],
+            "deadline": {
+              "kind": "relative",
+              "date": null,
+              "wording": "innerhalb von 14 Tagen nach Zugang dieses Schreibens",
+              "anchor": "Zugang dieses Schreibens",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "innerhalb von 14 Tagen nach Zugang dieses Schreibens"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "relative"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-09",
+      "source_family": "remediation-REG-09",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nBitte beantworten Sie die Rueckfrage zum Musterbeleg.\nAntwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Antwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Antwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte beantworten Sie die Rueckfrage zum Musterbeleg.",
+            "description": "Bitte beantworten Sie die Rueckfrage zum Musterbeleg.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte beantworten Sie die Rueckfrage zum Musterbeleg."
+              }
+            ],
+            "deadline": {
+              "kind": "uncertain",
+              "date": null,
+              "wording": "Antwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar.",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Antwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar."
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": [
+          {
+            "code": "uncertain_deadline",
+            "message": "Zwei widerspruechliche Termine.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Antwortfrist: 20.11.2026. Im selben Vorgang wird die Antwortfrist mit 23.11.2026 angegeben; der richtige Termin ist unklar."
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 1,
+        "deadline_kinds": [
+          "uncertain"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    },
+    {
+      "case_id": "REG-10",
+      "source_family": "remediation-REG-10",
+      "split": "development",
+      "pages": [
+        {
+          "page": 1,
+          "text": "Fiktive Kontrollstelle West\nSYNTHETISCHES ENTWICKLUNGSDOKUMENT - KEINE REALEN DATEN\nDatum: 27.10.2026\nAn: Musterwerk Linde GmbH\nAnschrift: Testweg 12, 00001 Musterstadt\nSteuer-ID des Adressaten: 00000000123\nBetreff: Testmitteilung\nBitte senden Sie die Inventarliste bis zum 24.11.2026.\nBitte erlaeutern Sie die Bareinlage bis zum 25.11.2026.\nBitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026."
+        }
+      ],
+      "allowed_customers": [
+        "REG-CUSTOMER-A",
+        "REG-CUSTOMER-C"
+      ],
+      "received_date_known": false,
+      "received_date": null,
+      "extraction": {
+        "schema_version": "1.0",
+        "sender": {
+          "value": "Fiktive Kontrollstelle West",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Fiktive Kontrollstelle West"
+            }
+          ]
+        },
+        "document_date": {
+          "value": "2026-10-27",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Datum: 27.10.2026"
+            }
+          ]
+        },
+        "letter_type": {
+          "value": "Testmitteilung",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betreff: Testmitteilung"
+            }
+          ]
+        },
+        "summary": {
+          "value": "Bitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026.",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Bitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026."
+            }
+          ]
+        },
+        "recipients": [
+          {
+            "name": {
+              "value": "Musterwerk Linde GmbH",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "An: Musterwerk Linde GmbH"
+                }
+              ]
+            },
+            "address": {
+              "value": "Testweg 12, 00001 Musterstadt",
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "Anschrift: Testweg 12, 00001 Musterstadt"
+                }
+              ]
+            },
+            "identifiers": [
+              {
+                "type": "de_tax_id",
+                "value": "00000000123",
+                "jurisdiction": null,
+                "authority": null,
+                "other_type": null,
+                "holder_role": "addressee",
+                "evidence": [
+                  {
+                    "page": 1,
+                    "quote": "Steuer-ID des Adressaten: 00000000123"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "other_identifiers": [],
+        "readability": "readable",
+        "action_assessment": "actions_found",
+        "actions": [
+          {
+            "title": "Bitte senden Sie die Inventarliste bis zum 24.11.2026.",
+            "description": "Bitte senden Sie die Inventarliste bis zum 24.11.2026.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte senden Sie die Inventarliste bis zum 24.11.2026."
+              }
+            ],
+            "deadline": {
+              "kind": "explicit_date",
+              "date": "2026-11-24",
+              "wording": "bis zum 24.11.2026",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "bis zum 24.11.2026"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Bitte erlaeutern Sie die Bareinlage bis zum 25.11.2026.",
+            "description": "Bitte erlaeutern Sie die Bareinlage bis zum 25.11.2026.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte erlaeutern Sie die Bareinlage bis zum 25.11.2026."
+              }
+            ],
+            "deadline": {
+              "kind": "explicit_date",
+              "date": "2026-11-25",
+              "wording": "bis zum 25.11.2026",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "bis zum 25.11.2026"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Bitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026.",
+            "description": "Bitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026.",
+            "evidence": [
+              {
+                "page": 1,
+                "quote": "Bitte bestaetigen Sie den Gesellschafterbestand bis zum 26.11.2026."
+              }
+            ],
+            "deadline": {
+              "kind": "explicit_date",
+              "date": "2026-11-26",
+              "wording": "bis zum 26.11.2026",
+              "anchor": null,
+              "evidence": [
+                {
+                  "page": 1,
+                  "quote": "bis zum 26.11.2026"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": []
+      },
+      "expected": {
+        "candidate_customers": [
+          "REG-CUSTOMER-A"
+        ],
+        "ambiguity": "none",
+        "action_count": 3,
+        "deadline_kinds": [
+          "explicit_date",
+          "explicit_date",
+          "explicit_date"
+        ],
+        "forbidden_warning_codes": [
+          "poor_scan",
+          "unknown_customer",
+          "ambiguous_customer"
+        ],
+        "incomplete_reference": null
+      }
+    }
+  ]
+}

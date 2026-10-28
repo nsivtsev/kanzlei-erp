@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Medienaufsicht Testwald",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Von: Fiktive Medienaufsicht Testwald",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Anfrage redaktionelle Zuständigkeit",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Anfrage redaktionelle Zuständigkeit",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte beschreiben Sie die redaktionelle Zuständigkeit für den barrierefreien Internetauftritt.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte beschreiben Sie die redaktionelle Zuständigkeit für den barrierefreien Internetauftritt.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Silbermoos Medien UG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Silbermoos Medien UG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Pixelgasse 6, 00045 Beispielhain",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Pixelgasse 6, 00045 Beispielhain",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000734",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Redaktionelle Zuständigkeit beschreiben",
+      "description": "Bitte beschreiben Sie die redaktionelle Zuständigkeit für den barrierefreien Internetauftritt.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte beschreiben Sie die redaktionelle Zuständigkeit für den barrierefreien Internetauftritt.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "not_found",
+        "date": null,
+        "wording": null,
+        "anchor": null,
+        "evidence": []
+      }
+    }
+  ],
+  "warnings": []
+}

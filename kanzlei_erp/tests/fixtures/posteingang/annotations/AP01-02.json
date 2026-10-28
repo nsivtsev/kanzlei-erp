@@ -1,0 +1,143 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-02",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktives Finanzamt Beispielstadt",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Finanzamt Beispielstadt"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-18",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 18.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-A"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-02-obligation-1",
+      "title": "Unterlagen einreichen",
+      "description": "Bitte die angeforderten Unterlagen einreichen.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die angeforderten Unterlagen einreichen."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-20",
+        "wording": "Bitte bis zum 20.11.2026 einreichen.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bis zum 20.11.2026 einreichen."
+          }
+        ]
+      }
+    },
+    {
+      "gold_action_id": "AP01-02-obligation-2",
+      "title": "Belege prüfen",
+      "description": "Bitte die Rechnungsbelege prüfen.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die Rechnungsbelege prüfen."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-23",
+        "wording": "Prüfung bis zum 23.11.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Prüfung bis zum 23.11.2026."
+          }
+        ]
+      }
+    },
+    {
+      "gold_action_id": "AP01-02-obligation-3",
+      "title": "Rückfrage beantworten",
+      "description": "Bitte die Rückfrage beantworten.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die Rückfrage beantworten."
+        }
+      ],
+      "deadline": {
+        "kind": "relative",
+        "date": null,
+        "wording": "Antwort innerhalb von zwei Wochen nach Erhalt.",
+        "anchor": "nach Erhalt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Antwort innerhalb von zwei Wochen nach Erhalt."
+          }
+        ]
+      }
+    }
+  ]
+}

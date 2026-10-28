@@ -1,0 +1,394 @@
+{
+  "schema_version": "1.0",
+  "states": [
+    "Received",
+    "Queued",
+    "Processing",
+    "Needs Review",
+    "Needs Clarification",
+    "Error",
+    "Completed",
+    "Cancelled"
+  ],
+  "transitions": [
+    {
+      "from": "Received",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "analysis_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "queue_analysis"
+    },
+    {
+      "from": "Needs Review",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "analysis_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "queue_analysis"
+    },
+    {
+      "from": "Needs Clarification",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "analysis_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "queue_analysis"
+    },
+    {
+      "from": "Error",
+      "to": "Queued",
+      "operation": "queue_analysis",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "analysis_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "queue_analysis"
+    },
+    {
+      "from": "Queued",
+      "to": "Processing",
+      "operation": "start_run",
+      "initiator": "worker",
+      "requires": [
+        "initiator_authorized",
+        "feature_enabled",
+        "analysis_enabled",
+        "current_generation"
+      ],
+      "revision_delta": 1,
+      "generation": "check",
+      "event": "start_run"
+    },
+    {
+      "from": "Queued",
+      "to": "Error",
+      "operation": "enqueue_failed",
+      "initiator": "worker",
+      "requires": [
+        "current_generation"
+      ],
+      "revision_delta": 1,
+      "generation": "check",
+      "event": "enqueue_failed"
+    },
+    {
+      "from": "Processing",
+      "to": "Error",
+      "operation": "fail_run",
+      "initiator": "worker",
+      "requires": [
+        "current_generation"
+      ],
+      "revision_delta": 1,
+      "generation": "check",
+      "event": "fail_run"
+    },
+    {
+      "from": "Processing",
+      "to": "Needs Review",
+      "operation": "stage_result",
+      "initiator": "worker",
+      "requires": [
+        "initiator_authorized",
+        "feature_enabled",
+        "analysis_enabled",
+        "current_generation",
+        "validated_result"
+      ],
+      "revision_delta": 1,
+      "generation": "check",
+      "event": "stage_result"
+    },
+    {
+      "from": "Received",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "manual_review"
+    },
+    {
+      "from": "Queued",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "manual_review"
+    },
+    {
+      "from": "Processing",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "manual_review"
+    },
+    {
+      "from": "Needs Clarification",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "manual_review"
+    },
+    {
+      "from": "Error",
+      "to": "Needs Review",
+      "operation": "manual_review",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "manual_review"
+    },
+    {
+      "from": "Received",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "clarification_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "mark_clarification"
+    },
+    {
+      "from": "Queued",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "clarification_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "mark_clarification"
+    },
+    {
+      "from": "Processing",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "clarification_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "mark_clarification"
+    },
+    {
+      "from": "Needs Review",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "clarification_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "mark_clarification"
+    },
+    {
+      "from": "Error",
+      "to": "Needs Clarification",
+      "operation": "mark_clarification",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "clarification_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "mark_clarification"
+    },
+    {
+      "from": "Received",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Queued",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Processing",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Needs Review",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Needs Clarification",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Error",
+      "to": "Cancelled",
+      "operation": "cancel",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "expected_revision",
+        "cancellation_reason"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "cancel"
+    },
+    {
+      "from": "Needs Review",
+      "to": "Completed",
+      "operation": "confirm",
+      "initiator": "operator",
+      "requires": [
+        "operator",
+        "feature_enabled",
+        "expected_revision",
+        "customer_read_write",
+        "review_complete",
+        "task_create_if_needed",
+        "valid_assignees_if_present"
+      ],
+      "revision_delta": 1,
+      "generation": "preserve",
+      "event": "confirm"
+    },
+    {
+      "from": "Completed",
+      "to": "Cancelled",
+      "operation": "create_correction",
+      "initiator": "operator_manager",
+      "requires": [
+        "operator",
+        "system_manager",
+        "expected_revision",
+        "old_customer_read_write",
+        "correction_reason",
+        "idempotency_key"
+      ],
+      "revision_delta": 1,
+      "generation": "increment",
+      "event": "create_correction"
+    }
+  ]
+}

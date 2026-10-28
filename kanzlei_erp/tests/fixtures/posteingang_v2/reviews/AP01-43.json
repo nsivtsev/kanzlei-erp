@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "draft",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "467cf1e7-3319-5fa4-85f6-cccef0f9508e",
+      "source_index": 0,
+      "title": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+      "description": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte senden Sie uns die aktuelle Anlagenliste.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

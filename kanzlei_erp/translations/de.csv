@@ -538,3 +538,285 @@ Skip to content,Zum Inhalt springen
 Account,Konto
 My profile,Mein Profil
 Sign out,Abmelden
+Incoming Letter,Posteingang
+Incoming Letter Run,Posteingang-Analyse
+Incoming Letter Action,Posteingang-Aktion
+Incoming Letter Event,Posteingang-Verlauf
+Posteingang Settings,Posteingang-Einstellungen
+Posteingang Operator,Posteingang-Bearbeiter
+Original File,Originaldokument
+Page Count,Seitenzahl
+Received By,Erfasst von
+Received At,Erfasst am
+Received Date Known,Empfangsdatum bekannt
+Received Date,Empfangsdatum
+Sender,Absender
+Document Date,Dokumentdatum
+Letter Type,Briefart
+Confirmed Customer,Bestätigter Mandant
+Review Outcome,Prüfergebnis
+No Actions Reason,Begründung: keine Aktionen
+Clarification Reason,Klärungsbedarf
+Confirmed By,Bestätigt von
+Confirmed At,Bestätigt am
+Correction Reason,Korrekturgrund
+Correction Quarantined,Für Korrektur gesperrt
+Cancellation Reason,Abbruchgrund
+External Analysis Enabled,Externe Analyse aktiviert
+Ocr Model,OCR-Modell
+Extraction Model,Extraktionsmodell
+Api Key,API-Schlüssel
+Max File Bytes,Maximale Dateigröße in Bytes
+Max Pages,Maximale Seitenzahl
+Max Actions,Maximale Aktionen
+Max Retries,Maximale Wiederholungen
+Request Timeout Seconds,Zeitlimit in Sekunden
+Assignment Decision,Zuweisungsentscheidung
+Assignment Reason,Zuweisungsbegründung
+External Date,Externe Frist
+External Date Basis,Grundlage der externen Frist
+Internal Date,Interner Termin
+Scheduling Decision,Terminentscheidung
+Scheduling Reason,Terminbegründung
+Rejection Reason,Ablehnungsgrund
+Needs Planning,Planung erforderlich
+Created Task,Erstellte Aufgabe
+Needs Review,Prüfung erforderlich
+Needs Clarification,Klärung erforderlich
+Posteingang operation is not permitted,Diese Posteingang-Aktion ist nicht erlaubt
+Posteingang limit exceeded,Posteingang-Grenzwert überschritten
+Receipt date must be explicit or unknown,Empfangsdatum angeben oder als unbekannt markieren
+Invalid content hash,Ungültiger Dokument-Hash
+Duplicate action identity,Doppelte Aktionskennung
+Invalid action text,Ungültiger Aktionstext
+Upload PDF,PDF hochladen
+Check the receipt date and upload parameters,Eingangsdatum und Upload-Angaben prüfen
+PDF exceeds the allowed size,PDF überschreitet die zulässige Größe
+The file is not a valid PDF,Die Datei ist kein gültiges PDF
+Encrypted PDF files are not accepted,Verschlüsselte PDFs werden nicht angenommen
+PDF exceeds the allowed page count,PDF überschreitet die zulässige Seitenzahl
+PDF validation exceeded its resource limit,PDF-Prüfung hat ihr Ressourcenlimit überschritten
+Intake is busy; retry with the same request,Posteingang ist ausgelastet; dieselbe Anfrage erneut senden
+This request was already used with different data,Diese Anfrage wurde bereits mit anderen Daten verwendet
+This file cannot be accepted,Diese Datei kann nicht angenommen werden
+The result is unknown; check the request before retrying,Ergebnis unbekannt; Anfrage vor erneutem Senden prüfen
+Browser storage is unavailable; PDF upload cannot start,Browserspeicher nicht verfügbar; PDF-Upload kann nicht starten
+Receipt dates are separate from upload dates. Unknown dates stay unknown.,Eingangsdatum und Upload-Datum sind getrennt. Unbekannte Daten bleiben unbekannt.
+New PDF intake is disabled,Annahme neuer PDFs ist deaktiviert
+Receipt date,Eingangsdatum
+Apply date to all unsent files,Datum für alle noch nicht gesendeten Dateien übernehmen
+Recovered upload request,Wiederhergestellte Upload-Anfrage
+Receipt date known,Eingangsdatum bekannt
+Select the original file to retry this request,"Originaldatei wählen, um diese Anfrage erneut zu senden"
+Uploading PDF,PDF wird hochgeladen
+Already uploaded,Bereits hochgeladen
+PDF received,PDF angenommen
+Open Incoming Letter,Eingangsschreiben öffnen
+Discard local request,Lokale Anfrage verwerfen
+Recommended OCR model: mistral-ocr-4-1. Use a concrete version; latest is not allowed.,Empfohlenes OCR-Modell: mistral-ocr-4-1. Eine konkrete Version verwenden; latest ist nicht erlaubt.
+Recommended extraction model: mistral-small-2603. Use a concrete version; latest is not allowed.,Empfohlenes Extraktionsmodell: mistral-small-2603. Eine konkrete Version verwenden; latest ist nicht erlaubt.
+Stored as a server-side secret. Saving settings does not contact Mistral.,Als serverseitiges Geheimnis gespeichert. Beim Speichern wird Mistral nicht aufgerufen.
+Use a concrete versioned Posteingang model,Eine konkrete Modellversion für den Posteingang verwenden
+Mistral analysis requires an API key and both model versions,Für die Mistral-Analyse sind ein API-Schlüssel und beide Modellversionen erforderlich
+OCR returned no readable text; human review is required.,OCR hat keinen lesbaren Text geliefert; eine manuelle Prüfung ist erforderlich.
+Auto Analysis Enabled,Automatische Analyse aktivieren
+Retry Backoff Seconds,Basiswartezeit für Wiederholungen (Sekunden)
+Recovery Interval Seconds,Wiederherstellungsintervall (Sekunden)
+Recovery Batch Size,Anzahl Versuche je Wiederherstellung
+Worker Timeout Seconds,Zeitlimit der Verarbeitung (Sekunden)
+Analyze new uploads automatically after commit. Existing letters require an explicit start.,Neue Uploads nach dem Speichern automatisch analysieren. Bestehende Briefe müssen ausdrücklich gestartet werden.
+Base delay for technical retries; processing starts on a later scheduler tick.,Basiswartezeit für technische Wiederholungen; der tatsächliche Start erfolgt mit einem späteren Scheduler-Lauf.
+Minimum interval between recovery sweeps; the Bench scheduler tick may be longer.,Mindestabstand zwischen Wiederherstellungsläufen; das Bench-Scheduler-Intervall kann länger sein.
+Maximum runs inspected per recovery sweep.,Maximale Anzahl geprüfter Analyseversuche pro Wiederherstellungslauf.
+Worker execution limit; interrupted requests require an explicit retry.,Zeitlimit der Verarbeitung; unterbrochene Anfragen müssen ausdrücklich wiederholt werden.
+Worker timeout is too short for both analysis steps,Das Zeitlimit reicht für die beiden Analyseschritte nicht aus.
+The letter changed. Reload the form before continuing.,Der Brief wurde geändert. Laden Sie das Formular neu.
+Analysis is already in progress.,Die Analyse läuft bereits.
+Analysis stopped. Check access and settings before starting again.,Die Analyse wurde angehalten. Prüfen Sie Zugriff und Einstellungen vor einem erneuten Start.
+Analysis configuration is invalid. Contact a system manager.,Die Analyse ist nicht korrekt eingerichtet. Wenden Sie sich an die Systemverwaltung.
+The analysis service is temporarily unavailable.,Der Analysedienst ist vorübergehend nicht verfügbar.
+The OCR result could not be accepted. Human review is required.,Das OCR-Ergebnis konnte nicht übernommen werden. Eine manuelle Prüfung ist erforderlich.
+The analysis result could not be accepted. Human review is required.,Das Analyseergebnis konnte nicht übernommen werden. Eine manuelle Prüfung ist erforderlich.
+Analysis exceeded an allowed limit. Human review is required.,Die Analyse hat einen Grenzwert überschritten. Eine manuelle Prüfung ist erforderlich.
+The test provider supports synthetic fixture documents only.,Der Testanbieter unterstützt nur die synthetischen Testdokumente.
+Analysis was interrupted. Start again explicitly; a request may already have been processed.,Die Analyse wurde unterbrochen. Starten Sie sie ausdrücklich erneut; eine Anfrage kann bereits verarbeitet worden sein.
+Analysis is waiting for the queue to recover.,Die Analyse wartet auf die Wiederherstellung der Warteschlange.
+Analysis could not finish. Retry explicitly or use human review.,Die Analyse konnte nicht abgeschlossen werden. Wiederholen Sie sie ausdrücklich oder prüfen Sie manuell.
+This operation is not available in the current state.,Diese Aktion ist im aktuellen Zustand nicht verfügbar.
+Check the analysis request parameters.,Prüfen Sie die Parameter der Analyseanfrage.
+Start analysis,Analyse starten
+Analyze again,Erneut analysieren
+Switch to human review,Zur manuellen Prüfung wechseln
+Cancel letter,Brief abbrechen
+Reload the form before managing analysis.,Laden Sie das Formular vor einer Analyseaktion neu.
+Analyze this letter again? Your current review edits will be preserved.,Diesen Brief erneut analysieren? Ihre bisherigen Änderungen bleiben erhalten.
+Next attempt no earlier than,Nächster Versuch frühestens
+Queued,In Warteschlange
+Processing,In Bearbeitung
+Verified Mandant Identifiers,Geprüfte Mandantenkennungen
+Mandant Identifiers,Mandantenkennungen
+Identifier Type,Kennungstyp
+Original Identifier,Ursprüngliche Kennung
+Normalized Identifier,Normalisierte Kennung
+Jurisdiction,Zuständigkeitsbereich
+Authority,Behörde oder Stelle
+Other Identifier Type,Anderer Kennungstyp
+Verification Source,Prüfquelle
+Verified By,Geprüft von
+Verified At,Geprüft am
+Verify identifier,Kennung prüfen
+Mandant selection,Mandantenauswahl
+Check the Mandant selection parameters.,Bitte die Angaben zur Mandantenauswahl prüfen.
+The Customer changed. Reload it before verifying an identifier.,Der Mandant wurde geändert. Vor der Kennungsprüfung bitte neu laden.
+Several addressees require clarification before selecting one Mandant.,Mehrere Adressaten müssen vor der Mandantenauswahl geklärt werden.
+Could not load Mandant candidates. Reload and try again.,Mandantenvorschläge konnten nicht geladen werden. Bitte neu laden und erneut versuchen.
+Selected Mandant,Ausgewählter Mandant
+No completed analysis is available. You can search for a Mandant manually.,Es liegt keine abgeschlossene Analyse vor. Sie können manuell nach einem Mandanten suchen.
+Review the proposed Mandant before selecting it.,Bitte den vorgeschlagenen Mandanten vor der Auswahl prüfen.
+No Mandant candidates found.,Keine Mandantenvorschläge gefunden.
+Several Mandant candidates match. An explicit decision is required.,Mehrere Mandanten passen. Eine ausdrückliche Auswahl ist erforderlich.
+Verified identifier match,Übereinstimmung einer geprüften Kennung
+Matching name,Übereinstimmender Name
+Conflicting identifiers require review.,Widersprüchliche Kennungen müssen geprüft werden.
+The extracted name differs from this Customer.,Der erkannte Name weicht von diesem Mandanten ab.
+Read-only Customer; selection requires write access.,Mandant nur lesbar; die Auswahl erfordert Schreibrechte.
+Select Mandant,Mandant auswählen
+Clear Mandant selection,Mandantenauswahl aufheben
+Find another Mandant,Anderen Mandanten suchen
+Refresh Mandant candidates,Mandantenvorschläge aktualisieren
+Save the Customer before verifying an identifier.,Den Mandanten vor der Kennungsprüfung speichern.
+Page {0},Seite {0}
+Check the review parameters.,Prüfen Sie die Angaben zur Prüfung.
+The saved analysis could not be accepted. Human review is required.,Die gespeicherte Analyse ist ungültig. Eine manuelle Prüfung ist erforderlich.
+"Check every review decision, date and required reason.","Prüfen Sie alle Entscheidungen, Daten und erforderlichen Begründungen."
+Apply the latest result or explicitly keep the current review with a reason.,Übernehmen Sie das neueste Ergebnis oder behalten Sie die bisherige Prüfung ausdrücklich mit Begründung bei.
+The assignee must be an active system user with access to this Mandant.,Die zuständige Person muss ein aktiver Systembenutzer mit Zugriff auf diesen Mandanten sein.
+The tasks could not be created. Nothing was confirmed.,Die Aufgaben konnten nicht angelegt werden. Es wurde nichts bestätigt.
+An administrator must resolve every task of the original letter before confirmation.,Vor der Bestätigung muss ein Administrator jede Aufgabe des ursprünglichen Schreibens prüfen.
+A replacement already exists for this letter.,Für dieses Schreiben besteht bereits ein Ersatz.
+This letter was already confirmed with different decisions.,Dieses Schreiben wurde bereits mit anderen Entscheidungen bestätigt.
+The review operation could not finish. Reload and try again.,Die Prüfung konnte nicht abgeschlossen werden. Laden Sie neu und versuchen Sie es erneut.
+Human review,Manuelle Prüfung
+Review incoming letter,Eingangsschreiben prüfen
+Unknown,Unbekannt
+Date requires planning,Termin muss geplant werden
+No tasks will be created.,Es werden keine Aufgaben angelegt.
+Search assignees,Zuständige Personen suchen
+Select assignee,Zuständige Person wählen
+Document date,Dokumentdatum
+Letter type,Art des Schreibens
+Summary,Zusammenfassung
+Action title,Titel der Handlung
+Action description,Beschreibung der Handlung
+Decision,Entscheidung
+Pending,Offen
+Accept action,Handlung übernehmen
+Reject action,Handlung ablehnen
+Rejection reason,Begründung der Ablehnung
+Assignment decision,Entscheidung zur Zuständigkeit
+Assign a person,Person zuweisen
+Leave unassigned with a reason,Mit Begründung unzugewiesen lassen
+Reason for no assignee,Begründung für fehlende Zuständigkeit
+Scheduling decision,Entscheidung zur Terminplanung
+Schedule work,Arbeit terminieren
+Plan the date later with a reason,Termin mit Begründung später planen
+Internal work date,Interner Arbeitstermin
+Reason for no internal date,Begründung für fehlenden internen Termin
+Confirmed external deadline,Bestätigte externe Frist
+External deadline basis,Grundlage der externen Frist
+Proposed deadline,Vorgeschlagene Frist
+Accept proposed external date,Vorgeschlagene externe Frist übernehmen
+matched,Beleg geprüft
+unverified,Beleg nicht verifiziert
+missing,Beleg fehlt
+Reason for no actions,Begründung für keine Handlungen
+Clarification reason,Grund für Klärungsbedarf
+I checked the original and all final decisions,Ich habe das Original und alle endgültigen Entscheidungen geprüft
+Save review,Prüfung speichern
+Needs clarification,Klärung erforderlich
+Confirm letter,Schreiben bestätigen
+Check the original and explicitly confirm the human review.,Prüfen Sie das Original und bestätigen Sie die manuelle Prüfung ausdrücklich.
+Reason for keeping the current review,Begründung für das Beibehalten der bisherigen Prüfung
+Keep the current review instead of the latest result,Bisherige Prüfung statt des neuesten Ergebnisses beibehalten
+Review edits remain in this page. Reopen the review to save them.,Ihre Änderungen bleiben auf dieser Seite. Öffnen Sie die Prüfung erneut zum Speichern.
+Create correction,Korrektur anlegen
+Correction reason,Korrekturgrund
+Reuse original PDF,Ursprüngliche PDF wiederverwenden
+Receipt date is known,Eingangsdatum ist bekannt
+Choose one PDF for the replacement.,Wählen Sie eine PDF für den Ersatz.
+Open original PDF,Original-PDF öffnen
+View confirmed review,Bestätigte Prüfung ansehen
+Apply latest analysis result,Neuestes Analyseergebnis übernehmen
+Save the current review before this operation.,Speichern Sie die bisherige Prüfung vor diesem Vorgang.
+Replace the current review? Its previous version will be preserved in history.,Bisherige Prüfung ersetzen? Die vorherige Version bleibt in der Historie erhalten.
+Add manual action,Manuelle Handlung hinzufügen
+Administrative review is complete.,Die administrative Prüfung ist abgeschlossen.
+Administrative review of the original tasks is required.,Die ursprünglichen Aufgaben müssen administrativ geprüft werden.
+Resolve original task,Ursprüngliche Aufgabe prüfen
+Disposition,Umgang mit ursprünglicher Aufgabe
+cancelled,Storniert
+historical,Als Historie erhalten
+Latest analysis proposal,Neuester Analysevorschlag
+Readable,Lesbar
+Partly readable,Teilweise lesbar
+Unreadable,Nicht lesbar
+Actions proposed,Handlungen vorgeschlagen
+No actions proposed by AI,Keine Handlungen von der KI vorgeschlagen
+Action assessment unknown,Handlungsbedarf unklar
+The Mandant selection changed. Reload the letter before saving the review.,Die Mandantenauswahl wurde geändert. Laden Sie das Schreiben vor dem Speichern der Prüfung neu.
+The analysis result changed. Reload before applying it.,Das Analyseergebnis wurde geändert. Laden Sie es vor der Übernahme neu.
+Explicitly confirm replacement of the current review.,Bestätigen Sie das Ersetzen der bisherigen Prüfung ausdrücklich.
+Posteingang task operation is not permitted,Dieser Vorgang für die Posteingangsaufgabe ist nicht erlaubt.
+Posteingang tasks cannot be duplicated,Posteingangsaufgaben können nicht dupliziert werden.
+Posteingang task assignment,Zuweisung einer Posteingangsaufgabe
+Posteingang task assignment updated,Die Zuweisung einer Posteingangsaufgabe wurde aktualisiert.
+Assignment update,Zuweisung aktualisiert
+Incoming Action ID,ID der Eingangshandlung
+Incoming Action Key,Schlüssel der Eingangshandlung
+Requires planning,Planung erforderlich
+Posteingang,Posteingang
+Uploaded,Hochgeladen
+Posteingang source,Quelle aus dem Posteingang
+External deadline is not confirmed,Externe Frist ist nicht bestätigt
+Open incoming letter,Eingangsschreiben öffnen
+Refresh source,Quelle aktualisieren
+This original is quarantined for administrative review.,Dieses Original ist für die administrative Prüfung gesperrt.
+Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: bekanntes Empfangsdatum oder Uploadzeit. E-Mail-Anhänge: E-Mail-Datum. Andere Dateien: Uploaddatum. Dies ist kein Buchungsbelegdatum.
+Received on,Empfangen am
+PDF inbox,Posteingang
+Queue,Warteschlange
+Queue state,Bearbeitungsstand
+Unfinished letters,Offene Schreiben
+History,Historie
+Uploaded by,Hochgeladen von
+Me,Ich
+Search letters,Schreiben suchen
+Workspace panels,Arbeitsbereiche
+Choose a letter from the queue.,Wählen Sie ein Schreiben aus der Warteschlange.
+Age in days: {0},Alter in Tagen: {0}
+No completed analysis is available.,Keine abgeschlossene Analyse vorhanden.
+Unverified proposed deadline,Ungeprüfter Fristvorschlag
+No explicit date,Kein ausdrückliches Datum
+Explicit dates: {0}; relative deadlines: {1},Ausdrückliche Daten: {0}; relative Fristen: {1}
+Unsaved review,Ungespeicherte Prüfung
+Save and continue,Speichern und fortfahren
+Discard,Verwerfen
+Stay,Bleiben
+Original PDF,Original-PDF
+The letter changed. Your local review has been preserved.,Das Schreiben wurde geändert. Ihre lokale Prüfung bleibt erhalten.
+Compare with saved review,Mit gespeicherter Prüfung vergleichen
+Local review,Lokale Prüfung
+Saved review,Gespeicherte Prüfung
+Discard local review and load saved version,Lokale Prüfung verwerfen und gespeicherte Version laden
+Check and retry the same request,Prüfen und dieselbe Anfrage wiederholen
+Resolve the unknown request before another operation.,Klären Sie zuerst das Ergebnis der vorherigen Anfrage.
+Save or discard the current review before continuing.,Speichern oder verwerfen Sie zuerst die aktuelle Prüfung.
+The operation could not finish. Refresh and try again.,Der Vorgang konnte nicht abgeschlossen werden. Aktualisieren Sie und versuchen Sie es erneut.
+Open task,Aufgabe öffnen
+Search,Suchen
+Select,Auswählen
+Explicit date,Ausdrückliches Datum
+Relative deadline,Relative Frist
+No deadline stated,Keine Frist angegeben
+Uncertain deadline,Unklare Frist
+Sort,Sortierung

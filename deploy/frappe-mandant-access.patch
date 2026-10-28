@@ -46,6 +46,20 @@ index 1df576f..90cc0dc 100755
  def _scoped_attachment_condition(doctype: str, user: str, exists_condition: str) -> str:
  	"""Build `(attached_to_doctype = X AND (EXISTS(...) OR individually shared))`."""
  	table = get_table_name(doctype, wrap_in_backticks=True)
+diff --git a/frappe/database/query.py b/frappe/database/query.py
+index 1ff1335..7a33784 100644
+--- a/frappe/database/query.py
++++ b/frappe/database/query.py
+@@ -1574,6 +1574,9 @@ class Engine:
+ 
+ 		if condition := self.get_permission_conditions(self.permission_doctype, self.permission_table):
+ 			self.query = self.query.where(condition)
++		for hook in frappe.get_hooks("required_permission_query_conditions"):
++			if condition := frappe.call(hook, doctype=self.permission_doctype, user=self.user, query_doctype=self.doctype):
++				self.query = self.query.where(RawCriterion(condition))
+ 
+ 	def get_permission_conditions(self, doctype: str, table: Table) -> Criterion | None:
+ 		role_permissions = frappe.permissions.get_role_permissions(doctype, user=self.user)
 diff --git a/frappe/email/email_body.py b/frappe/email/email_body.py
 index 15eae0e..7669129 100755
 --- a/frappe/email/email_body.py
@@ -81,6 +95,46 @@ index 76feb5f..011f201 100644
  
  		def patch_start_response(status, headers, exc_info=None):
  			if (
+diff --git a/frappe/model/db_query.py b/frappe/model/db_query.py
+index 094f6d7..73b2057 100644
+--- a/frappe/model/db_query.py
++++ b/frappe/model/db_query.py
+@@ -1086,6 +1086,9 @@ from {tables}
+ 			if not only_if_shared and self.shared and conditions:
+ 				conditions = f"(({conditions}) or ({self.get_share_condition()}))"
+ 
++			for hook in frappe.get_hooks("required_permission_query_conditions"):
++				if required := frappe.call(hook, doctype=self.doctype, user=self.user):
++					conditions = f"({conditions or '1=1'}) AND ({required})"
+ 			return conditions
+ 
+ 		else:
+diff --git a/frappe/permissions.py b/frappe/permissions.py
+--- a/frappe/permissions.py
++++ b/frappe/permissions.py
+@@ -106,6 +106,11 @@
+ 		user = frappe.session.user
+ 
+ 	if user == "Administrator":
++		for hook in frappe.get_hooks("required_administrator_permission"):
++			admin_doc = doc or (doctype if hasattr(doctype, "doctype") else None)
++			admin_type = getattr(doctype, "doctype", doctype)
++			if frappe.call(hook, doctype=admin_type, doc=admin_doc, ptype=ptype, user=user) is False:
++				return False
+ 		debug and _debug_log("Allowed everything because user is Administrator")
+ 		return True
+ 
+@@ -223,6 +228,10 @@
+ 			ignore_share_permissions=ignore_share_permissions,
+ 		)
+ 
++	# Additional application boundaries remain mandatory after DocShare fallback.
++	for hook in frappe.get_hooks("required_document_permission"):
++		if frappe.call(hook, doctype=doctype, doc=doc, ptype=ptype, user=user) is False:
++			return False
+ 	return bool(perm)
+ 
+ 
 diff --git a/frappe/realtime.py b/frappe/realtime.py
 index 7e8e31f..a250f1d 100644
 --- a/frappe/realtime.py
@@ -176,3 +230,86 @@ index 1897ca8..34ba786 100644
  	let users = [];
  
  	socket.nsp.sockets.forEach((sock) => {
+diff --git a/frappe/core/doctype/data_export/exporter.py b/frappe/core/doctype/data_export/exporter.py
+index 5756599..6f1a6f4 100644
+--- a/frappe/core/doctype/data_export/exporter.py
++++ b/frappe/core/doctype/data_export/exporter.py
+@@ -408,6 +408,8 @@ class DataExporter:
+ 			if self.all_doctypes:
+ 				# add child tables
+ 				for c in self.child_doctypes:
++					if any(frappe.call(hook, doctype=c["doctype"], parent_doctype=self.doctype, parent=doc.name, parentfield=c["parentfield"], user=frappe.session.user) is False for hook in frappe.get_hooks("required_child_export_permission")):
++						continue
+ 					if is_virtual_doctype(c["doctype"]):
+ 						continue
+ 					child_doctype_table = DocType(c["doctype"])
+diff --git a/frappe/model/document.py b/frappe/model/document.py
+--- a/frappe/model/document.py
++++ b/frappe/model/document.py
+@@ -2211,6 +2211,9 @@
+ 
+ def copy_doc(doc: "Document", ignore_no_copy: bool = True) -> "Document":
+ 	"""No_copy fields also get copied."""
++	for hook in frappe.get_hooks("document_copy_guard"):
++		frappe.call(hook, doc=doc)
++
+ 	import copy
+ 	from types import MappingProxyType
+ 
+diff --git a/frappe/public/js/frappe/model/create_new.js b/frappe/public/js/frappe/model/create_new.js
+--- a/frappe/public/js/frappe/model/create_new.js
++++ b/frappe/public/js/frappe/model/create_new.js
+@@ -279,6 +279,7 @@
+ 	},
+ 
+ 	copy_doc: function (doc, from_amend, parent_doc, parentfield) {
++		frappe.model.document_copy_guard?.(doc);
+ 		let no_copy_list = ["name", "amended_from", "amendment_date", "cancel_reason"];
+ 		let newdoc = frappe.model.get_new_doc(doc.doctype, parent_doc, parentfield);
+ 
+diff --git a/frappe/desk/form/assign_to.py b/frappe/desk/form/assign_to.py
+--- a/frappe/desk/form/assign_to.py
++++ b/frappe/desk/form/assign_to.py
+@@ -27,6 +27,9 @@
+ 	"""get assigned to"""
+ 	if not args:
+ 		args = frappe.local.form_dict
++
++	for hook in frappe.get_hooks("assignment_read_guard"):
++		frappe.call(hook, args=args)
+ 
+ 	return frappe.get_all(
+ 		"ToDo",
+@@ -279,6 +282,10 @@
+ 	if assigned_by == allocated_to or not assigned_user.enabled:
+ 		return
+ 
++	for hook in frappe.get_hooks("assignment_notification_override"):
++		if frappe.call(hook, assigned_by=assigned_by, allocated_to=allocated_to, doc_type=doc_type, doc_name=doc_name, action=action) is not None:
++			return
++
+ 	# Search for email address in description -- i.e. assignee
+ 	user_name = frappe.get_cached_value("User", frappe.session.user, "full_name")
+ 	title = get_title(doc_type, doc_name)
+diff --git a/frappe/desk/doctype/notification_log/notification_log.py b/frappe/desk/doctype/notification_log/notification_log.py
+--- a/frappe/desk/doctype/notification_log/notification_log.py
++++ b/frappe/desk/doctype/notification_log/notification_log.py
+@@ -167,6 +167,8 @@
+ 	self_notify_types = get_self_notify_types()
+ 
+ 	for user in _get_user_ids(users):
++		if any(frappe.call(hook, doc=doc, user=user) is False for hook in frappe.get_hooks("notification_delivery_guard")):
++			continue
+ 		if dedupe_on and _notification_exists(doc, user, dedupe_on):
+ 			continue
+ 
+@@ -199,6 +201,9 @@
+ 
+ def send_notification_email(doc: NotificationLog):
+ 	from frappe.utils import get_url_to_form, strip_html
++
++	if any(frappe.call(hook, doc=doc, user=doc.for_user) is False for hook in frappe.get_hooks("notification_delivery_guard")):
++		return
+ 
+ 	user = frappe.db.get_value("User", doc.for_user, fieldname=["email", "language"], as_dict=True)
+ 	if not user:

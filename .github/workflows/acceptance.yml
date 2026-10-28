@@ -1,0 +1,14 @@
+name: Full acceptance (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    uses: ./.github/workflows/verify.yml
+    with:
+      publish: false
+      profile: full

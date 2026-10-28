@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktiver Wasserverband Testküste",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktiver Wasserverband Testküste",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Erhebung versiegelter Flächen",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Erhebung versiegelter Flächen",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Küstenrad Reparatur eG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Küstenrad Reparatur eG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Speichenhof 8, 00044 Testbucht",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Speichenhof 8, 00044 Testbucht",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "BG-KR-734",
+          "jurisdiction": "TEST-KÜSTE",
+          "authority": "Fiktiver Gewerbeverband Küste",
+          "other_type": "Betriebskennzeichen",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betriebskennzeichen des Empfängers: BG-KR-734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Flächenerhebungsbogen übermitteln",
+      "description": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-14",
+        "wording": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Übermitteln Sie den ausgefüllten Erhebungsbogen zur versiegelten Fläche bis zum 14.12.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Entsiegelte Bereiche kennzeichnen",
+      "description": "Kennzeichnen Sie auf dem Lageplan die neu entsiegelten Bereiche.",
+      "evidence": [
+        {
+          "page": 2,
+          "quote": "Kennzeichnen Sie auf dem Lageplan die neu entsiegelten Bereiche.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "not_found",
+        "date": null,
+        "wording": null,
+        "anchor": null,
+        "evidence": []
+      }
+    }
+  ],
+  "warnings": []
+}

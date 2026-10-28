@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "51eeac00-5073-5a14-ada4-0817e82755de",
+      "source_index": 0,
+      "title": "Beleggruppe 1 prüfen",
+      "description": "Prüfen Sie die fiktive Beleggruppe 1 auf fehlende Zuordnungen.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-02",
+      "external_date_basis": "Spätester Eingang: 02.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Prüfen Sie die fiktive Beleggruppe 1 auf fehlende Zuordnungen.",
+          "verification": "matched"
+        }
+      ]
+    },
+    {
+      "action_id": "5921780c-4a98-5404-8162-017852a0a2d6",
+      "source_index": 1,
+      "title": "Rückmeldung 1 senden",
+      "description": "Senden Sie anschließend eine getrennte Rückmeldung zur Musterprüfung 1.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-12",
+      "external_date_basis": "Spätester Eingang: 12.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Senden Sie anschließend eine getrennte Rückmeldung zur Musterprüfung 1.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

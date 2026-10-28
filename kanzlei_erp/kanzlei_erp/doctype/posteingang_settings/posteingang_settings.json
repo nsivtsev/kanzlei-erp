@@ -1,0 +1,195 @@
+{
+ "doctype": "DocType",
+ "name": "Posteingang Settings",
+ "module": "Kanzlei ERP",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": [
+  "enabled",
+  "external_analysis_enabled",
+  "provider",
+  "ocr_model",
+  "extraction_model",
+  "api_key",
+  "max_file_bytes",
+  "max_pages",
+  "max_actions",
+  "max_retries",
+  "request_timeout_seconds",
+  "auto_analysis_enabled",
+  "retry_backoff_seconds",
+  "recovery_interval_seconds",
+  "recovery_batch_size",
+  "worker_timeout_seconds",
+  "analysis_configuration_epoch",
+  "recovery_cursor"
+ ],
+ "fields": [
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "read_only": 0,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "external_analysis_enabled",
+   "fieldtype": "Check",
+   "label": "External Analysis Enabled",
+   "read_only": 0,
+   "no_copy": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "options": "fake\nmistral",
+   "default": "fake"
+  },
+  {
+   "fieldname": "ocr_model",
+   "description": "Recommended OCR model: mistral-ocr-4-1. Use a concrete version; latest is not allowed.",
+   "fieldtype": "Data",
+   "label": "Ocr Model",
+   "read_only": 0,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "extraction_model",
+   "description": "Recommended extraction model: mistral-small-2603. Use a concrete version; latest is not allowed.",
+   "fieldtype": "Data",
+   "label": "Extraction Model",
+   "read_only": 0,
+   "no_copy": 1,
+   "length": 140
+  },
+  {
+   "fieldname": "api_key",
+   "description": "Stored as a server-side secret. Saving settings does not contact Mistral.",
+   "fieldtype": "Password",
+   "label": "Api Key",
+   "read_only": 0,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "max_file_bytes",
+   "fieldtype": "Int",
+   "label": "Max File Bytes",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "20971520"
+  },
+  {
+   "fieldname": "max_pages",
+   "fieldtype": "Int",
+   "label": "Max Pages",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "50"
+  },
+  {
+   "fieldname": "max_actions",
+   "fieldtype": "Int",
+   "label": "Max Actions",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "30"
+  },
+  {
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "2"
+  },
+  {
+   "fieldname": "request_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Request Timeout Seconds",
+   "read_only": 0,
+   "no_copy": 1,
+   "reqd": 1,
+   "default": "120"
+  },
+  {
+   "fieldname": "auto_analysis_enabled",
+   "fieldtype": "Check",
+   "label": "Auto Analysis Enabled",
+   "default": "0",
+   "no_copy": 1,
+   "description": "Analyze new uploads automatically after commit. Existing letters require an explicit start."
+  },
+  {
+   "fieldname": "retry_backoff_seconds",
+   "fieldtype": "Int",
+   "label": "Retry Backoff Seconds",
+   "default": "60",
+   "no_copy": 1,
+   "description": "Base delay for technical retries; processing starts on a later scheduler tick."
+  },
+  {
+   "fieldname": "recovery_interval_seconds",
+   "fieldtype": "Int",
+   "label": "Recovery Interval Seconds",
+   "default": "60",
+   "no_copy": 1,
+   "description": "Minimum interval between recovery sweeps; the Bench scheduler tick may be longer."
+  },
+  {
+   "fieldname": "recovery_batch_size",
+   "fieldtype": "Int",
+   "label": "Recovery Batch Size",
+   "default": "100",
+   "no_copy": 1,
+   "description": "Maximum runs inspected per recovery sweep."
+  },
+  {
+   "fieldname": "worker_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Worker Timeout Seconds",
+   "default": "600",
+   "no_copy": 1,
+   "description": "Worker execution limit; interrupted requests require an explicit retry."
+  },
+  {
+   "fieldname": "analysis_configuration_epoch",
+   "fieldtype": "Int",
+   "label": "Analysis Configuration Epoch",
+   "default": "1",
+   "no_copy": 1,
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "recovery_cursor",
+   "fieldtype": "Data",
+   "label": "Recovery Cursor",
+   "length": 10,
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "issingle": 1
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-05",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktives Finanzamt Beispielstadt",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Finanzamt Beispielstadt"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-18",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 18.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Unbekannter Beispielbetrieb GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Unbekannter Beispielbetrieb GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-UNKNOWN",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-UNKNOWN"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [],
+  "candidate_evidence": [],
+  "actions": [
+    {
+      "gold_action_id": "AP01-05-obligation-1",
+      "title": "Unterlagen einreichen",
+      "description": "Bitte die angeforderten Unterlagen einreichen.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die angeforderten Unterlagen einreichen."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-20",
+        "wording": "Bitte bis zum 20.11.2026 einreichen.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bis zum 20.11.2026 einreichen."
+          }
+        ]
+      }
+    }
+  ]
+}

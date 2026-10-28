@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktives Finanzamt Beispielstadt",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Finanzamt Beispielstadt",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-18",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 18.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Unterlagenanforderung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Unterlagenanforderung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Anforderung von Unterlagen mit ausdrücklichem Termin.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte die angeforderten Unterlagen einreichen.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": []
+    }
+  ],
+  "other_identifiers": [
+    {
+      "type": "other",
+      "value": "SYN-0009",
+      "jurisdiction": "SYNTHETIC",
+      "authority": "Fiktive Beispielstelle",
+      "other_type": "synthetic_client_reference",
+      "holder_role": "sender",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Referenz des Absenders: SYN-0009",
+          "verification": "matched"
+        }
+      ]
+    }
+  ],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Unterlagen einreichen",
+      "description": "Bitte die angeforderten Unterlagen einreichen.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte die angeforderten Unterlagen einreichen.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-20",
+        "wording": "Bitte bis zum 20.11.2026 einreichen.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bis zum 20.11.2026 einreichen.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

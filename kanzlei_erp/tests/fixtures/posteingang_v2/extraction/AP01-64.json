@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Förderbank Probefeld",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Förderbank Probefeld",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Verwendungsnachweis Laborlüftung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Verwendungsnachweis Laborlüftung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Morgenfarn Labor GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Morgenfarn Labor GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Kristallallee 3, 00042 Probedorf",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Kristallallee 3, 00042 Probedorf",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000732",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Ausgabenübersicht einreichen",
+      "description": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-24",
+        "wording": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Reichen Sie die unterschriebene Ausgabenübersicht bis zum 24.11.2026 ein.",
+            "verification": "matched"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Eigenmittel nachweisen",
+      "description": "Legen Sie den Nachweis der Eigenmittel bis zum 26.11.2026 vor.",
+      "evidence": [
+        {
+          "page": 2,
+          "quote": "Legen Sie den Nachweis der Eigenmittel bis zum 26.11.2026 vor.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-26",
+        "wording": "Legen Sie den Nachweis der Eigenmittel bis zum 26.11.2026 vor.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 2,
+            "quote": "Legen Sie den Nachweis der Eigenmittel bis zum 26.11.2026 vor.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

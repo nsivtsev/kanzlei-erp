@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "mode": "draft",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": false,
+  "actions": []
+}

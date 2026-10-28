@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "f391c503-3d76-5164-a362-1b2f047990f4",
+      "source_index": 0,
+      "title": "Inventarliste abgleichen",
+      "description": "Gleichen Sie die Inventarliste mit dem beiliegenden Musterverzeichnis ab.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-07",
+      "external_date_basis": "Spätester Eingang: 07.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Gleichen Sie die Inventarliste mit dem beiliegenden Musterverzeichnis ab.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

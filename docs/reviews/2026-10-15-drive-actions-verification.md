@@ -1,7 +1,6 @@
 # BL-048 — действия Drive по правам Mandant
 
 Дата: 15 октября 2026. Ветка `codex/drive-actions-bl048`, поверх BL-047.
-[Согласованный план](../plans/2026-10-15-drive-actions-implementation.md).
 
 ## Статус
 

@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "observations.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "dataset_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "gold_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "provider": {
+      "enum": [
+        "fake",
+        "mistral"
+      ]
+    },
+    "prompt_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 140
+    },
+    "code_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "configuration_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "models": {
+      "type": "object",
+      "properties": {
+        "ocr": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 140
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extraction": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 140
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ocr",
+        "extraction"
+      ],
+      "additionalProperties": false
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "letter": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "run": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 140
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "interrupted"
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "CONFIGURATION_INVALID",
+                  "PROVIDER_UNAVAILABLE",
+                  "OCR_FAILED",
+                  "INVALID_RESULT",
+                  "LIMIT_EXCEEDED",
+                  "ANALYSIS_STOPPED",
+                  "FAKE_FIXTURE_NOT_FOUND",
+                  "QUEUE_UNAVAILABLE",
+                  "WORKER_INTERRUPTED",
+                  "INTERNAL_ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ocr": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 100000
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "schema_version": {
+                    "const": "1.0"
+                  }
+                },
+                "required": [
+                  "pages",
+                  "schema_version"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "matching": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 140
+                    },
+                    "maxItems": 3
+                  },
+                  "ambiguity": {
+                    "enum": [
+                      "none",
+                      "not_found",
+                      "multiple_matches",
+                      "multiple_addressees"
+                    ]
+                  }
+                },
+                "required": [
+                  "candidates",
+                  "ambiguity"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attempt_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "raw_relative_date_violations": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "case_id",
+          "sha256",
+          "letter",
+          "run",
+          "status",
+          "error_code",
+          "ocr",
+          "extraction",
+          "matching",
+          "duration_seconds",
+          "attempt_count",
+          "raw_relative_date_violations"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "safety": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "code_revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "scenarios": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 140
+                  },
+                  "leaks": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "auto_confirmations": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "duplicate_tasks": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "leaks",
+                  "auto_confirmations",
+                  "duplicate_tasks"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 100
+            }
+          },
+          "required": [
+            "source",
+            "code_revision",
+            "scenarios"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "dataset_hash",
+    "gold_hash",
+    "provider",
+    "prompt_version",
+    "code_revision",
+    "configuration_hash",
+    "models",
+    "started_at",
+    "cases",
+    "safety"
+  ],
+  "additionalProperties": false
+}

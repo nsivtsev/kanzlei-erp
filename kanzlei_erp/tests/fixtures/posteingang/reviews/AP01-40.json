@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "mode": "confirm",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": true,
+  "actions": [
+    {
+      "action_id": "6ebd7b98-888f-5a10-a0ca-28963d5be3ae",
+      "source_index": 0,
+      "title": "Anlage eins berichtigen",
+      "description": "Berichtigen Sie in Anlage eins die fiktive Positionsnummer Z-51.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": "2026-12-22",
+      "external_date_basis": "Spätester Eingang: 22.12.2026.",
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 2,
+          "quote": "Berichtigen Sie in Anlage eins die fiktive Positionsnummer Z-51.",
+          "verification": "matched"
+        }
+      ]
+    },
+    {
+      "action_id": "66874586-6a87-5b2d-a9ec-76e4bf4ebee3",
+      "source_index": 1,
+      "title": "Anlage zwei erläutern",
+      "description": "Erläutern Sie die künstliche Differenz in Anlage zwei, Position Z-62.",
+      "decision": "accept",
+      "assigned_to": "operator-a@example.invalid",
+      "assignment_decision": "assigned",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": "2026-11-15",
+      "scheduling_decision": "scheduled",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 3,
+          "quote": "Erläutern Sie die künstliche Differenz in Anlage zwei, Position Z-62.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

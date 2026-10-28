@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "review.schema.json",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "mode": {
+      "enum": [
+        "draft",
+        "clarification",
+        "confirm"
+      ]
+    },
+    "expected_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "selected_customer": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "customer_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "no_actions_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "clarification_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "human_verified": {
+      "type": "boolean"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 29
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "decision": {
+            "enum": [
+              "pending",
+              "accept",
+              "reject"
+            ]
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 140
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assignment_decision": {
+            "enum": [
+              "pending",
+              "assigned",
+              "unassigned"
+            ]
+          },
+          "assignment_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "external_date": {
+            "$ref": "common.schema.json#/$defs/date"
+          },
+          "external_date_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "internal_date": {
+            "$ref": "common.schema.json#/$defs/date"
+          },
+          "scheduling_decision": {
+            "enum": [
+              "pending",
+              "scheduled",
+              "unscheduled"
+            ]
+          },
+          "scheduling_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_planning": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "$ref": "common.schema.json#/$defs/evidence_list"
+          }
+        },
+        "required": [
+          "action_id",
+          "source_index",
+          "title",
+          "description",
+          "decision",
+          "assigned_to",
+          "assignment_decision",
+          "assignment_reason",
+          "external_date",
+          "external_date_basis",
+          "internal_date",
+          "scheduling_decision",
+          "scheduling_reason",
+          "rejection_reason",
+          "needs_planning",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 30
+    }
+  },
+  "required": [
+    "schema_version",
+    "mode",
+    "expected_revision",
+    "selected_customer",
+    "customer_reason",
+    "no_actions_reason",
+    "clarification_reason",
+    "human_verified",
+    "actions"
+  ],
+  "additionalProperties": false
+}

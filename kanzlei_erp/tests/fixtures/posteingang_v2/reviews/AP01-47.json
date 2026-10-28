@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "draft",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "b4ce5d54-ebc5-519f-a939-b22dfd8d1d76",
+      "source_index": 0,
+      "title": "Bitte senden Sie die unterschriebene Vollmacht.",
+      "description": "Bitte senden Sie die unterschriebene Vollmacht.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte senden Sie die unterschriebene Vollmacht.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

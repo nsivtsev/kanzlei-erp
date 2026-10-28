@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "clarification",
+  "expected_revision": 1,
+  "selected_customer": "SYN-CUSTOMER-A",
+  "customer_reason": "Synthetischer Katalog und Original wurden ausdrücklich geprüft.",
+  "no_actions_reason": null,
+  "clarification_reason": "Synthetischer Sonderfall benötigt eine ausdrückliche Klärung.",
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "baf3ee5d-f916-5730-803c-4f528bd35ea5",
+      "source_index": 0,
+      "title": "Frist im Musterauftrag klären",
+      "description": "Prüfen Sie den fiktiven Korrekturauftrag U1 und reichen Sie die Ergänzung ein.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Prüfen Sie den fiktiven Korrekturauftrag U1 und reichen Sie die Ergänzung ein.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

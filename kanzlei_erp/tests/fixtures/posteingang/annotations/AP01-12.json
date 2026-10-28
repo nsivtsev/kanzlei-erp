@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-12",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktives Finanzamt Beispielstadt",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Finanzamt Beispielstadt"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-18",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 18.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-A"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-12-obligation-1",
+      "title": "Anlage prüfen",
+      "description": "Bitte die beigefügte Aufstellung prüfen.",
+      "evidence": [
+        {
+          "page": 2,
+          "quote": "Bitte die beigefügte Aufstellung prüfen."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-04",
+        "wording": "Rückmeldung bis zum 04.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 3,
+            "quote": "Rückmeldung bis zum 04.12.2026."
+          }
+        ]
+      }
+    }
+  ]
+}

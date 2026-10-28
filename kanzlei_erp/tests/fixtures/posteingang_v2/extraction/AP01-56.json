@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Handwerkskammer Uferland",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Handwerkskammer Uferland",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Ausbildungsstatistik Herbst",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Ausbildungsstatistik Herbst",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Küstenrad Reparatur eG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Küstenrad Reparatur eG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Speichenhof 8, 00044 Testbucht",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Speichenhof 8, 00044 Testbucht",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "BG-KR-734",
+          "jurisdiction": "TEST-KÜSTE",
+          "authority": "Fiktiver Gewerbeverband Küste",
+          "other_type": "Betriebskennzeichen",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Betriebskennzeichen des Empfängers: BG-KR-734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Ausbildungsplätze melden",
+      "description": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-10",
+        "wording": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zeile A: Melden Sie die Zahl der besetzten Ausbildungsplätze bis zum 10.11.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Ausbildungstage nachreichen",
+      "description": "Zeile B: Reichen Sie die anonymisierte Übersicht der Ausbildungstage bis zum 12.11.2026 nach.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Zeile B: Reichen Sie die anonymisierte Übersicht der Ausbildungstage bis zum 12.11.2026 nach.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-12",
+        "wording": "Zeile B: Reichen Sie die anonymisierte Übersicht der Ausbildungstage bis zum 12.11.2026 nach.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zeile B: Reichen Sie die anonymisierte Übersicht der Ausbildungstage bis zum 12.11.2026 nach.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

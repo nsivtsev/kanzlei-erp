@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktiver Probentransport Eichenweg",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktiver Probentransport Eichenweg",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Abholstellenwechsel Laborproben",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Abholstellenwechsel Laborproben",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Morgenfarn Labor GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Morgenfarn Labor GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Kristallallee 3, 00042 Probedorf",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Kristallallee 3, 00042 Probedorf",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000732",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Abholstelle bestätigen",
+      "description": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-06",
+        "wording": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte bestätigen Sie die geänderte Abholstelle für Ihre Musterproben bis zum 06.11.2026.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

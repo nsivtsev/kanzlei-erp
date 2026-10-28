@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktives Finanzamt Beispielstadt",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktives Finanzamt Beispielstadt",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-18",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 18.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Unterlagenanforderung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Betreff: Unterlagenanforderung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Reine Information ohne Handlungsbedarf.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Dieses Schreiben dient nur Ihrer Information.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "none_found",
+  "actions": [],
+  "warnings": []
+}

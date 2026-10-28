@@ -1,0 +1,1579 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "catalog": "catalog.json",
+  "sources": "sources.json",
+  "scenarios": "scenarios.json",
+  "generator": {
+    "seed": 20261018,
+    "date": "2026-10-18",
+    "font": "Helvetica / Pillow Aileron default",
+    "versions": {
+      "reportlab": "4.4.9",
+      "Pillow": "12.3.0",
+      "pypdf": "6.10.0"
+    }
+  },
+  "dataset_version": "1.2",
+  "cases": [
+    {
+      "case_id": "AP01-43",
+      "description": "Entwicklungsübernahme aus REG-01; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-01",
+      "split": "development",
+      "pdf": "pdfs/AP01-43.pdf",
+      "sha256": "622632ed4b0fcb448f6b44fa053297d669e57907896783c8fecb8bb84747169a",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-43.json",
+      "ocr": "ocr/AP01-43.json",
+      "extraction": "extraction/AP01-43.json",
+      "review": "reviews/AP01-43.json",
+      "annotations": "annotations/AP01-43.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-44",
+      "description": "Entwicklungsübernahme aus REG-02; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-02",
+      "split": "development",
+      "pdf": "pdfs/AP01-44.pdf",
+      "sha256": "21d050e4cf62cb306100b3f16b126b13d364e276d6ab28c0f96d4a780bcb6f1a",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-44.json",
+      "ocr": "ocr/AP01-44.json",
+      "extraction": "extraction/AP01-44.json",
+      "review": "reviews/AP01-44.json",
+      "annotations": "annotations/AP01-44.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-45",
+      "description": "Entwicklungsübernahme aus REG-03; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-03",
+      "split": "development",
+      "pdf": "pdfs/AP01-45.pdf",
+      "sha256": "267dfd0ab954e09a3312f13af2f0bea80d000eb7b0dd7a42d542c5cb04545cc5",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-45.json",
+      "ocr": "ocr/AP01-45.json",
+      "extraction": "extraction/AP01-45.json",
+      "review": "reviews/AP01-45.json",
+      "annotations": "annotations/AP01-45.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGB"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA",
+          "SYN-CUSTOMER-REGB"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "not_found",
+        "ambiguous_customer"
+      ]
+    },
+    {
+      "case_id": "AP01-46",
+      "description": "Entwicklungsübernahme aus REG-04; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-04",
+      "split": "development",
+      "pdf": "pdfs/AP01-46.pdf",
+      "sha256": "2b9b82d4a04a914b516b3e216e6630cfefb1b14e7f60e4c9d9b275d2726f546b",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-46.json",
+      "ocr": "ocr/AP01-46.json",
+      "extraction": "extraction/AP01-46.json",
+      "review": "reviews/AP01-46.json",
+      "annotations": "annotations/AP01-46.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGB"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA",
+          "SYN-CUSTOMER-REGB"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "explicit_date",
+        "ambiguous_customer"
+      ]
+    },
+    {
+      "case_id": "AP01-47",
+      "description": "Entwicklungsübernahme aus REG-05; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-05",
+      "split": "development",
+      "pdf": "pdfs/AP01-47.pdf",
+      "sha256": "95e54e9d1e6b7857305244d8a95a383eee05eb7f91da76a0409cb419c3cf3df1",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-47.json",
+      "ocr": "ocr/AP01-47.json",
+      "extraction": "extraction/AP01-47.json",
+      "review": "reviews/AP01-47.json",
+      "annotations": "annotations/AP01-47.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGB"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-48",
+      "description": "Entwicklungsübernahme aus REG-06; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-06",
+      "split": "development",
+      "pdf": "pdfs/AP01-48.pdf",
+      "sha256": "6dfacf8d6881944bb18fad31f125803114f6d4c60668889a70f6e9151971bb24",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-48.json",
+      "ocr": "ocr/AP01-48.json",
+      "extraction": "extraction/AP01-48.json",
+      "review": "reviews/AP01-48.json",
+      "annotations": "annotations/AP01-48.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "explicit_date",
+        "sender_identifier"
+      ]
+    },
+    {
+      "case_id": "AP01-49",
+      "description": "Entwicklungsübernahme aus REG-07; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-07",
+      "split": "development",
+      "pdf": "pdfs/AP01-49.pdf",
+      "sha256": "dd3ef2a0c78c829b99d7bba7802d7878b0ee21137794e6e9b9d7c5db7bb37793",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-49.json",
+      "ocr": "ocr/AP01-49.json",
+      "extraction": "extraction/AP01-49.json",
+      "review": "reviews/AP01-49.json",
+      "annotations": "annotations/AP01-49.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "no_actions"
+      ]
+    },
+    {
+      "case_id": "AP01-50",
+      "description": "Entwicklungsübernahme aus REG-08; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-08",
+      "split": "development",
+      "pdf": "pdfs/AP01-50.pdf",
+      "sha256": "5df05d9520706dced13fb78e6c5d60661656dd3dfaf1a23b38c5ce304d1eb277",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-50.json",
+      "ocr": "ocr/AP01-50.json",
+      "extraction": "extraction/AP01-50.json",
+      "review": "reviews/AP01-50.json",
+      "annotations": "annotations/AP01-50.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "relative"
+      ]
+    },
+    {
+      "case_id": "AP01-51",
+      "description": "Entwicklungsübernahme aus REG-09; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-09",
+      "split": "development",
+      "pdf": "pdfs/AP01-51.pdf",
+      "sha256": "e36801134be370903a9e599e4327376bf2c13e0db0067f4d914fbfbeed3fa21c",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-51.json",
+      "ocr": "ocr/AP01-51.json",
+      "extraction": "extraction/AP01-51.json",
+      "review": "reviews/AP01-51.json",
+      "annotations": "annotations/AP01-51.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "uncertain"
+      ]
+    },
+    {
+      "case_id": "AP01-52",
+      "description": "Entwicklungsübernahme aus REG-10; unabhängig ungeprüfter Entwurf",
+      "source_family": "remediation-REG-10",
+      "split": "development",
+      "pdf": "pdfs/AP01-52.pdf",
+      "sha256": "9b942202c13e3c569d9e578d2d3b178c3d265191978a2ac7bdc84dd4d61e08c4",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-52.json",
+      "ocr": "ocr/AP01-52.json",
+      "extraction": "extraction/AP01-52.json",
+      "review": "reviews/AP01-52.json",
+      "annotations": "annotations/AP01-52.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-REGA",
+        "SYN-CUSTOMER-REGC"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-REGA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_regression",
+        "derived_remediation",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-53",
+      "description": "Abholstellenwechsel Laborproben",
+      "source_family": "v2-dev-probenlogistik",
+      "split": "development",
+      "pdf": "pdfs/AP01-53.pdf",
+      "sha256": "10dd8676a67f446a18ea93d0bc344dfe14974cc87ebe3f50c19af9c26a1fc75b",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-53.json",
+      "ocr": "ocr/AP01-53.json",
+      "extraction": "extraction/AP01-53.json",
+      "review": "reviews/AP01-53.json",
+      "annotations": "annotations/AP01-53.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VB"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_new",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-54",
+      "description": "Aktualisierung Notfallregister",
+      "source_family": "v2-dev-notfallregister",
+      "split": "development",
+      "pdf": "pdfs/AP01-54.pdf",
+      "sha256": "a8dd019d458ad602fccb4ca27ceb431d9a4be0cd15c2e2bacdbcf250bce806e7",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-54.json",
+      "ocr": "ocr/AP01-54.json",
+      "extraction": "extraction/AP01-54.json",
+      "review": "reviews/AP01-54.json",
+      "annotations": "annotations/AP01-54.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "development_new",
+        "identifier_context",
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-55",
+      "description": "Schlussabrechnung Stromkostenzuschuss",
+      "source_family": "v2-h-stromfoerderung-schlussrechnung",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-55.pdf",
+      "sha256": "8462d83211f058807f29f4e9b6dc77f1c96a7e5823279129a74aba1f0f62064f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-55.json",
+      "ocr": "ocr/AP01-55.json",
+      "extraction": "extraction/AP01-55.json",
+      "review": "reviews/AP01-55.json",
+      "annotations": "annotations/AP01-55.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "simple",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-56",
+      "description": "Ausbildungsstatistik Herbst",
+      "source_family": "v2-h-ausbildungsstatistik-kammer",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-56.pdf",
+      "sha256": "532e33564147c7394f4a902dbe2a1e3ebb79e3e80ef1a0e88d2cb0c03e4d046c",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-56.json",
+      "ocr": "ocr/AP01-56.json",
+      "extraction": "extraction/AP01-56.json",
+      "review": "reviews/AP01-56.json",
+      "annotations": "annotations/AP01-56.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "identifier_context",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-57",
+      "description": "Entgeltkorrektur Bogen E4",
+      "source_family": "v2-h-berufsgenossenschaft-entgeltbogen",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-57.pdf",
+      "sha256": "4b20fe63c3d608a4fbe48d639b089473635a7b9e4da463b90e6584ccc4bd16dd",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-57.json",
+      "ocr": "ocr/AP01-57.json",
+      "extraction": "extraction/AP01-57.json",
+      "review": "reviews/AP01-57.json",
+      "annotations": "annotations/AP01-57.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-58",
+      "description": "Vertragsende Fahrzeug L-28",
+      "source_family": "v2-h-leasing-kilometerabschluss",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-58.pdf",
+      "sha256": "9d3416bf06b3318de3ce57a50b0c31bb678d1298868250bacf3f8cfde02dbc2d",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-58.json",
+      "ocr": "ocr/AP01-58.json",
+      "extraction": "extraction/AP01-58.json",
+      "review": "reviews/AP01-58.json",
+      "annotations": "annotations/AP01-58.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VF"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "quoted_history",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-59",
+      "description": "Nachprüfung Warenursprung",
+      "source_family": "v2-h-zoll-ursprungslieferant",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-59.pdf",
+      "sha256": "4d6ce3ffb210cc0cdb2f15f20586b55f082968e05b320304ff7581b22d3a1b9b",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-59.json",
+      "ocr": "ocr/AP01-59.json",
+      "extraction": "extraction/AP01-59.json",
+      "review": "reviews/AP01-59.json",
+      "annotations": "annotations/AP01-59.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-60",
+      "description": "Prüfung Schmutzwasserabzug",
+      "source_family": "v2-h-entwaesserung-zaehlerfoto",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-60.pdf",
+      "sha256": "0482cb5e1e90e8595cc16a8e9ab84cc4d08ab7b71ef83ed33b88a3a6ec2e55bb",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-60.json",
+      "ocr": "ocr/AP01-60.json",
+      "extraction": "extraction/AP01-60.json",
+      "review": "reviews/AP01-60.json",
+      "annotations": "annotations/AP01-60.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-61",
+      "description": "Abgleich Zeichnungsberechtigung",
+      "source_family": "v2-h-bank-vertretungsnachweis",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-61.pdf",
+      "sha256": "35cbc60401f3463c199324d1098a798c86e823cbe4a677d4f06186a3b6642cd7",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-61.json",
+      "ocr": "ocr/AP01-61.json",
+      "extraction": "extraction/AP01-61.json",
+      "review": "reviews/AP01-61.json",
+      "annotations": "annotations/AP01-61.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VF"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-62",
+      "description": "Pflege des beruflichen Verzeichnisses",
+      "source_family": "v2-h-kammer-zustellanschrift",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-62.pdf",
+      "sha256": "c5cfffc6fb5a3057b634481b545f1c9c45aaa783c2e4a0a1c466b935081fc862",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-62.json",
+      "ocr": "ocr/AP01-62.json",
+      "extraction": "extraction/AP01-62.json",
+      "review": "reviews/AP01-62.json",
+      "annotations": "annotations/AP01-62.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VC"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-63",
+      "description": "Ergänzung Kaufpreissammlung",
+      "source_family": "v2-h-gutachterausschuss-nutzungsbogen",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-63.pdf",
+      "sha256": "f54a241ad42032a3fb1c08c8573126b0fea4472020478a86b06e8cec64123520",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-63.json",
+      "ocr": "ocr/AP01-63.json",
+      "extraction": "extraction/AP01-63.json",
+      "review": "reviews/AP01-63.json",
+      "annotations": "annotations/AP01-63.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VC"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-64",
+      "description": "Verwendungsnachweis Laborlüftung",
+      "source_family": "v2-h-foerderbank-eigenmittelanlage",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-64.pdf",
+      "sha256": "7eff05dd3aeed5e3801257ef48b0f30d35c89d63befcac7d1327b79fbc5dd69a",
+      "page_count": 2,
+      "generation": "text",
+      "source_text": "texts/AP01-64.json",
+      "ocr": "ocr/AP01-64.json",
+      "extraction": "extraction/AP01-64.json",
+      "review": "reviews/AP01-64.json",
+      "annotations": "annotations/AP01-64.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VB"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multi_page",
+        "annex",
+        "multiple_actions",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-65",
+      "description": "Kontenabgleich Urlaubstage",
+      "source_family": "v2-h-sozialkasse-urlaubskonto",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-65.pdf",
+      "sha256": "372e60f1f6600489f599999f70cb68b6bf8bc1fd7caf011ad4831fceaff7e170",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-65.json",
+      "ocr": "ocr/AP01-65.json",
+      "extraction": "extraction/AP01-65.json",
+      "review": "reviews/AP01-65.json",
+      "annotations": "annotations/AP01-65.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_actions",
+        "explicit_date",
+        "relative"
+      ]
+    },
+    {
+      "case_id": "AP01-66",
+      "description": "Nachweis Endverbleib Prüfadapter",
+      "source_family": "v2-h-export-endverbleib",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-66.pdf",
+      "sha256": "f797da80e40535ae2a9aef46b21b93d71d74104dbc597936f79dceac56b37bd8",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-66.json",
+      "ocr": "ocr/AP01-66.json",
+      "extraction": "extraction/AP01-66.json",
+      "review": "reviews/AP01-66.json",
+      "annotations": "annotations/AP01-66.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VB"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-67",
+      "description": "Verlängerung Testmarke SILBERMOOS",
+      "source_family": "v2-h-marke-verlaengerungsgebuehr",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-67.pdf",
+      "sha256": "e8badcfe9b621ba74a5dea5788eddc185a78af1018b333825301423abb9a7750",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-67.json",
+      "ocr": "ocr/AP01-67.json",
+      "extraction": "extraction/AP01-67.json",
+      "review": "reviews/AP01-67.json",
+      "annotations": "annotations/AP01-67.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VF"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-68",
+      "description": "Zwischenverfügung Satzungsfassung",
+      "source_family": "v2-h-registergericht-satzung",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-68.pdf",
+      "sha256": "f80f14aefc832556a732af20dad44d00af0f89c983fce988731e0272f93fe32f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-68.json",
+      "ocr": "ocr/AP01-68.json",
+      "extraction": "extraction/AP01-68.json",
+      "review": "reviews/AP01-68.json",
+      "annotations": "annotations/AP01-68.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-69",
+      "description": "Einstufung Folgejahr",
+      "source_family": "v2-h-versorgungswerk-einkommen",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-69.pdf",
+      "sha256": "fea24d5d8bf4e14d01d0a41df53c6d6ef0c5053c5e65c64f948d66a2b9c72bb7",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-69.json",
+      "ocr": "ocr/AP01-69.json",
+      "extraction": "extraction/AP01-69.json",
+      "review": "reviews/AP01-69.json",
+      "annotations": "annotations/AP01-69.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VC"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-70",
+      "description": "Abstimmung Lieferforderung",
+      "source_family": "v2-h-insolvenz-forderungssaldo",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-70.pdf",
+      "sha256": "d8fe70ae39737d6572a532924171daae47c8708eb95e8e851b015e2193ebd068",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-70.json",
+      "ocr": "ocr/AP01-70.json",
+      "extraction": "extraction/AP01-70.json",
+      "review": "reviews/AP01-70.json",
+      "annotations": "annotations/AP01-70.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-71",
+      "description": "Bestandsmitteilung Anschlussinventar",
+      "source_family": "v2-h-telekom-bestandsinformation",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-71.pdf",
+      "sha256": "4b8739f3e0cf029891308008a58fb9b6f281a58a63e3ce934b24ed67c1c81ae5",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-71.json",
+      "ocr": "ocr/AP01-71.json",
+      "extraction": "extraction/AP01-71.json",
+      "review": "reviews/AP01-71.json",
+      "annotations": "annotations/AP01-71.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VF"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "no_actions",
+        "date_is_event"
+      ]
+    },
+    {
+      "case_id": "AP01-72",
+      "description": "Abrechnung Beitragsguthaben",
+      "source_family": "v2-h-krankenkasse-guthabenbescheid",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-72.pdf",
+      "sha256": "dcbf83f94837d515cdc193d65f228c764f1260d33d839b77169f37e880949daf",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-72.json",
+      "ocr": "ocr/AP01-72.json",
+      "extraction": "extraction/AP01-72.json",
+      "review": "reviews/AP01-72.json",
+      "annotations": "annotations/AP01-72.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VB"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "no_actions",
+        "date_is_event"
+      ]
+    },
+    {
+      "case_id": "AP01-73",
+      "description": "Anhörung Einsatzkosten",
+      "source_family": "v2-h-feuerwehr-nutzungserklaerung",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-73.pdf",
+      "sha256": "2df3d24f27e7a91a9e6a2fda7aa38e72440b9e9f3e2d5d4b8e4c9980e3d059ca",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-73.json",
+      "ocr": "ocr/AP01-73.json",
+      "extraction": "extraction/AP01-73.json",
+      "review": "reviews/AP01-73.json",
+      "annotations": "annotations/AP01-73.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "unknown_customer",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-74",
+      "description": "Abgleich belegte Standfläche",
+      "source_family": "v2-h-messe-standflaechenplan",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-74.pdf",
+      "sha256": "f309a01b37c3f4c54ec2955e1a6bf1062875740d827d4f2cc1e915ff0e8f7203",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-74.json",
+      "ocr": "ocr/AP01-74.json",
+      "extraction": "extraction/AP01-74.json",
+      "review": "reviews/AP01-74.json",
+      "annotations": "annotations/AP01-74.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VG",
+          "SYN-CUSTOMER-VH"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "ambiguous_customer",
+        "duplicate_verified_identifier",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-75",
+      "description": "Gemeinsamer Materialprüfplan",
+      "source_family": "v2-h-materialpruefung-gemeinschaft",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-75.pdf",
+      "sha256": "146d9528a1b61cf0f38f34af42a4c85b69dfdcaf6bf20148c337aec2c6d1c970",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-75.json",
+      "ocr": "ocr/AP01-75.json",
+      "extraction": "extraction/AP01-75.json",
+      "review": "reviews/AP01-75.json",
+      "annotations": "annotations/AP01-75.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA",
+          "SYN-CUSTOMER-VB"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multiple_customers",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-76",
+      "description": "Fehlendes Sicherheitsdatenblatt",
+      "source_family": "v2-h-lieferantenportal-sicherheitsblatt",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-76.pdf",
+      "sha256": "1f2b067590de5b4e11328e0ac56ccc40837823605f035db50f46e581114a08e7",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-76.json",
+      "ocr": "ocr/AP01-76.json",
+      "extraction": "extraction/AP01-76.json",
+      "review": "reviews/AP01-76.json",
+      "annotations": "annotations/AP01-76.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "prompt_injection",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-77",
+      "description": "Wartungsfenster Archivserver",
+      "source_family": "v2-h-rechenzentrum-wartungsfenster",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-77.pdf",
+      "sha256": "1a64bf277065da2f8ceecab8886a627b200a497120c4d3cb63f837c9cc5e3e0f",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-77.json",
+      "ocr": "ocr/AP01-77.json",
+      "extraction": "extraction/AP01-77.json",
+      "review": "reviews/AP01-77.json",
+      "annotations": "annotations/AP01-77.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "sender_identifier",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-78",
+      "description": "Erhebung versiegelter Flächen",
+      "source_family": "v2-h-wasserverband-entsiegelungsplan",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-78.pdf",
+      "sha256": "7f561d45d372425d820ae5962daf56fd3c74e0d701598942198499fd4090eb52",
+      "page_count": 2,
+      "generation": "text",
+      "source_text": "texts/AP01-78.json",
+      "ocr": "ocr/AP01-78.json",
+      "extraction": "extraction/AP01-78.json",
+      "review": "reviews/AP01-78.json",
+      "annotations": "annotations/AP01-78.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "multi_page",
+        "annex",
+        "multiple_actions",
+        "explicit_date",
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-79",
+      "description": "Nachweis Fluchtweg",
+      "source_family": "v2-h-bauaufsicht-fluchtweg-teilscan",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-79.pdf",
+      "sha256": "e3b32b919580a3915ff9373db2d57930883c1e0c1be218b1fd85ee82b5f137a8",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-79.json",
+      "ocr": "ocr/AP01-79.json",
+      "extraction": "extraction/AP01-79.json",
+      "review": "reviews/AP01-79.json",
+      "annotations": "annotations/AP01-79.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "partial",
+        "poor_scan",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-80",
+      "description": "Prüfliste Lastenaufzug",
+      "source_family": "v2-h-aufzug-pruefliste-raster",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-80.pdf",
+      "sha256": "d8a105035363f56df7c7f0a62124cff858a8f876b0dca3d9cab8da0025656e31",
+      "page_count": 1,
+      "generation": "raster",
+      "source_text": "texts/AP01-80.json",
+      "ocr": "ocr/AP01-80.json",
+      "extraction": "extraction/AP01-80.json",
+      "review": "reviews/AP01-80.json",
+      "annotations": "annotations/AP01-80.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [],
+        "status": "Needs Clarification",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "poor_scan",
+        "unreadable",
+        "raster_only",
+        "explicit_date"
+      ]
+    },
+    {
+      "case_id": "AP01-81",
+      "description": "Rückmeldung Leihkisten",
+      "source_family": "v2-h-mehrwegkisten-relative-bestaetigung",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-81.pdf",
+      "sha256": "99a2b1bed0a3a5da9c7077ebd6254c00f16fa1ecb93a46ab824c0239d3d64143",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-81.json",
+      "ocr": "ocr/AP01-81.json",
+      "extraction": "extraction/AP01-81.json",
+      "review": "reviews/AP01-81.json",
+      "annotations": "annotations/AP01-81.json",
+      "received_date_known": false,
+      "received_date": null,
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "unknown_receipt_date",
+        "relative"
+      ]
+    },
+    {
+      "case_id": "AP01-82",
+      "description": "Anfrage redaktionelle Zuständigkeit",
+      "source_family": "v2-h-barrierefreiheit-redaktion",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-82.pdf",
+      "sha256": "68b45fdf5dcf05c3b7bee1be2f473c7deedfd2b1e2f10ef28f2dbf998d20cf06",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-82.json",
+      "ocr": "ocr/AP01-82.json",
+      "extraction": "extraction/AP01-82.json",
+      "review": "reviews/AP01-82.json",
+      "annotations": "annotations/AP01-82.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VF"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "not_found"
+      ]
+    },
+    {
+      "case_id": "AP01-83",
+      "description": "Korrektur Beiratsliste",
+      "source_family": "v2-h-beirat-widerspruechliche-frist",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-83.pdf",
+      "sha256": "a3cc6bd9ace1794e423fc1c73b48a7ecfc0a7334672f2594edd8b89a4fff1e5d",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-83.json",
+      "ocr": "ocr/AP01-83.json",
+      "extraction": "extraction/AP01-83.json",
+      "review": "reviews/AP01-83.json",
+      "annotations": "annotations/AP01-83.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VE"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "uncertain_deadline",
+        "uncertain"
+      ]
+    },
+    {
+      "case_id": "AP01-84",
+      "description": "Abgleich Materialbilanz",
+      "source_family": "v2-h-abfallbilanz-unbestimmte-frist",
+      "split": "holdout",
+      "pdf": "pdfs/AP01-84.pdf",
+      "sha256": "ab35b494131b415ce1dc7810104401ebbdcc87549f5b0474437d0b90548db36a",
+      "page_count": 1,
+      "generation": "text",
+      "source_text": "texts/AP01-84.json",
+      "ocr": "ocr/AP01-84.json",
+      "extraction": "extraction/AP01-84.json",
+      "review": "reviews/AP01-84.json",
+      "annotations": "annotations/AP01-84.json",
+      "received_date_known": true,
+      "received_date": "2026-10-28",
+      "allowed_customers": [
+        "SYN-CUSTOMER-VA",
+        "SYN-CUSTOMER-VB",
+        "SYN-CUSTOMER-VC",
+        "SYN-CUSTOMER-VE",
+        "SYN-CUSTOMER-VF",
+        "SYN-CUSTOMER-VG",
+        "SYN-CUSTOMER-VH"
+      ],
+      "expected": {
+        "candidate_customers": [
+          "SYN-CUSTOMER-VA"
+        ],
+        "status": "Needs Review",
+        "tasks": [],
+        "replaces_case": null
+      },
+      "tags": [
+        "uncertain_deadline",
+        "uncertain"
+      ]
+    }
+  ]
+}

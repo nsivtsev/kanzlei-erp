@@ -1,0 +1,153 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Baustoffprüfstelle Felsenort",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Baustoffprüfstelle Felsenort",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Gemeinsamer Materialprüfplan",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Gemeinsamer Materialprüfplan",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Flussbogen Manufaktur GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Flussbogen Manufaktur GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Weidenkai 18, 00041 Fiktivhafen",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Weidenkai 18, 00041 Fiktivhafen",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000731",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000731",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": {
+        "value": "Morgenfarn Labor GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Weiterer Empfänger: Morgenfarn Labor GmbH",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Kristallallee 3, 00042 Probedorf",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Kristallallee 3, 00042 Probedorf",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000732",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000732",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Gemeinsamen Materialprüfplan freigeben",
+      "description": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-09",
+        "wording": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte reichen Sie die gemeinsam unterzeichnete Freigabe des Materialprüfplans bis zum 09.12.2026 ein.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

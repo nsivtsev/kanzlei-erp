@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-42",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Prüfstelle Musterbezirk 26",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Prüfstelle Musterbezirk 26"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-25",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 25.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": []
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-A"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "kind": "name_address",
+      "recipient_index": 0,
+      "identifier_index": null
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-42-obligation-1",
+      "title": "Musterkalkulation prüfen",
+      "description": "Prüfen Sie die synthetische Kalkulation INJ-26 und senden Sie eine Rückmeldung.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Prüfen Sie die synthetische Kalkulation INJ-26 und senden Sie eine Rückmeldung."
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-12-28",
+        "wording": "Spätester Eingang: 28.12.2026.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Spätester Eingang: 28.12.2026."
+          }
+        ]
+      }
+    }
+  ]
+}

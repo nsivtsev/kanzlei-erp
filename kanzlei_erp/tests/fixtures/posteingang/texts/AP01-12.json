@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "pages": [
+    {
+      "page": 1,
+      "text": "Fiktives Finanzamt Beispielstadt\nSYNTHETISCHES TESTDOKUMENT - KEINE REALEN MANDANTENDATEN\nDatum: 18.10.2026\nAn: Beispielbetrieb Alpha GmbH\nAnschrift: Musterweg 7, 00000 Beispielstadt\nMandantenreferenz: SYN-0007\nBetreff: Unterlagenanforderung\nDie Anlagen sind Bestandteil dieses Schreibens."
+    },
+    {
+      "page": 2,
+      "text": "Anlage 1\nBitte die beigefügte Aufstellung prüfen.\nFiktiver Posten A: 100,00 EUR\nFiktiver Posten B: 200,00 EUR"
+    },
+    {
+      "page": 3,
+      "text": "Anlage 2\nRückmeldung bis zum 04.12.2026.\nEnde der synthetischen Anlagen."
+    }
+  ]
+}

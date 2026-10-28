@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "mode": "draft",
+  "expected_revision": 1,
+  "selected_customer": null,
+  "customer_reason": null,
+  "no_actions_reason": null,
+  "clarification_reason": null,
+  "human_verified": false,
+  "actions": [
+    {
+      "action_id": "c7f5282a-a495-59fa-ac30-ec6b9668791f",
+      "source_index": 0,
+      "title": "Materialdifferenz erläutern",
+      "description": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah.",
+      "decision": "pending",
+      "assigned_to": null,
+      "assignment_decision": "pending",
+      "assignment_reason": null,
+      "external_date": null,
+      "external_date_basis": null,
+      "internal_date": null,
+      "scheduling_decision": "pending",
+      "scheduling_reason": null,
+      "rejection_reason": null,
+      "needs_planning": true,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Erklären Sie die im Nachweisbogen markierte Materialdifferenz möglichst zeitnah.",
+          "verification": "matched"
+        }
+      ]
+    }
+  ]
+}

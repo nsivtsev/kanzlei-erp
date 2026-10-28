@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "case_id": "AP01-29",
+  "purpose": "semantic_ground_truth_never_provider_input",
+  "sender": {
+    "value": "Fiktive Prüfstelle Musterbezirk 13",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Prüfstelle Musterbezirk 13"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-25",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Datum: 25.10.2026"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Beispielbetrieb Alpha GmbH",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "An: Beispielbetrieb Alpha GmbH"
+          }
+        ]
+      },
+      "address": {
+        "value": "Musterweg 7, 00000 Beispielstadt",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Anschrift: Musterweg 7, 00000 Beispielstadt"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "other",
+          "value": "SYN-0007",
+          "jurisdiction": "SYNTHETIC",
+          "authority": "Fiktive Beispielstelle",
+          "other_type": "synthetic_client_reference",
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "Mandantenreferenz: SYN-0007"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "customer_candidates": [
+    "SYN-CUSTOMER-A"
+  ],
+  "candidate_evidence": [
+    {
+      "customer": "SYN-CUSTOMER-A",
+      "kind": "exact_identifier",
+      "recipient_index": 0,
+      "identifier_index": 0
+    }
+  ],
+  "actions": [
+    {
+      "gold_action_id": "AP01-29-obligation-1",
+      "title": "Musterunterlagen ergänzen",
+      "description": "Ergänzen Sie die fehlenden Musterunterlagen der Gruppe R1.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ergänzen Sie die fehlenden Musterunterlagen der Gruppe R1."
+        }
+      ],
+      "deadline": {
+        "kind": "relative",
+        "date": null,
+        "wording": "Bitte antworten Sie binnen zehn Tagen nach Erhalt dieses Musterschreibens.",
+        "anchor": "Erhalt dieses Musterschreibens",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bitte antworten Sie binnen zehn Tagen nach Erhalt dieses Musterschreibens."
+          }
+        ]
+      }
+    }
+  ]
+}

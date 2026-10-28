@@ -11,6 +11,21 @@ from kanzlei_erp.navigation import communication_has_permission, configure_desk
 
 
 class TestKanzleiNavigation(FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		throttle = patch("frappe.core.doctype.user.user.throttle_user_creation")
+		throttle.start()
+		self.addCleanup(throttle.stop)
+
+	def test_pdf_inbox_sidebar_requires_operator_and_does_not_duplicate(self):
+		item = {"label": "PDF inbox", "type": "Link", "link_type": "Page", "link_to": "posteingang"}
+		for allowed in (False, True):
+			boot = frappe._dict(workspace_sidebar_item={"kanzlei": {"items": [dict(item)]}}, desktop_icons=[], app_data=[], workspaces={}, module_wise_workspaces={})
+			with patch("kanzlei_erp.posteingang_jobs._operator", return_value=allowed):
+				configure_desk(boot)
+				configure_desk(boot)
+			self.assertEqual(sum(row.get("link_to") == "posteingang" for row in boot.workspace_sidebar_item["kanzlei"]["items"]), int(allowed))
+
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		super().tearDown()

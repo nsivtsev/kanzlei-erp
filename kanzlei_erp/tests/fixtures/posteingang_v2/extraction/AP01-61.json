@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "sender": {
+    "value": "Fiktive Bürgerbank Beispielhain",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Fiktive Bürgerbank Beispielhain",
+        "verification": "matched"
+      }
+    ]
+  },
+  "document_date": {
+    "value": "2026-10-27",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Ausfertigung: 27.10.2026",
+        "verification": "matched"
+      }
+    ]
+  },
+  "letter_type": {
+    "value": "Abgleich Zeichnungsberechtigung",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Vorgang: Abgleich Zeichnungsberechtigung",
+        "verification": "matched"
+      }
+    ]
+  },
+  "summary": {
+    "value": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+    "evidence": [
+      {
+        "page": 1,
+        "quote": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+        "verification": "matched"
+      }
+    ]
+  },
+  "recipients": [
+    {
+      "name": {
+        "value": "Silbermoos Medien UG",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Empfänger: Silbermoos Medien UG",
+            "verification": "matched"
+          }
+        ]
+      },
+      "address": {
+        "value": "Pixelgasse 6, 00045 Beispielhain",
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Zustellanschrift: Pixelgasse 6, 00045 Beispielhain",
+            "verification": "matched"
+          }
+        ]
+      },
+      "identifiers": [
+        {
+          "type": "de_vat_id",
+          "value": "DE000000734",
+          "jurisdiction": null,
+          "authority": null,
+          "other_type": null,
+          "holder_role": "addressee",
+          "evidence": [
+            {
+              "page": 1,
+              "quote": "USt-IdNr. des Empfängers: DE000000734",
+              "verification": "matched"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "other_identifiers": [],
+  "readability": "readable",
+  "action_assessment": "actions_found",
+  "actions": [
+    {
+      "title": "Vertretungsberechtigung belegen",
+      "description": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+          "verification": "matched"
+        }
+      ],
+      "deadline": {
+        "kind": "explicit_date",
+        "date": "2026-11-19",
+        "wording": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+        "anchor": null,
+        "evidence": [
+          {
+            "page": 1,
+            "quote": "Bestätigen Sie die Vertretungsberechtigung für das Testkonto bis zum 19.11.2026 mit einem aktuellen Registerauszug.",
+            "verification": "matched"
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": []
+}

@@ -396,5 +396,76 @@
   "label": "Question Actions",
   "insert_after": "kanzlei_question_events",
   "depends_on": "eval:doc.kanzlei_work_kind=='Question'"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_identifiers_section",
+  "dt": "Customer",
+  "fieldname": "kanzlei_identifiers_section",
+  "fieldtype": "Section Break",
+  "label": "Verified Mandant Identifiers",
+  "insert_after": "tax_id"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-kanzlei_identifiers",
+  "dt": "Customer",
+  "fieldname": "kanzlei_identifiers",
+  "fieldtype": "Table",
+  "label": "Mandant Identifiers",
+  "options": "Mandant Identifier",
+  "insert_after": "kanzlei_identifiers_section",
+  "no_copy": 0
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_incoming_letter",
+  "dt": "Task",
+  "fieldname": "kanzlei_incoming_letter",
+  "fieldtype": "Link",
+  "label": "Incoming Letter",
+  "read_only": 1,
+  "no_copy": 1,
+  "insert_after": "kanzlei_customer",
+  "length": 140,
+  "options": "Incoming Letter"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_incoming_action_id",
+  "dt": "Task",
+  "fieldname": "kanzlei_incoming_action_id",
+  "fieldtype": "Data",
+  "label": "Incoming Action ID",
+  "read_only": 1,
+  "no_copy": 1,
+  "insert_after": "kanzlei_customer",
+  "length": 36
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_incoming_action_key",
+  "dt": "Task",
+  "fieldname": "kanzlei_incoming_action_key",
+  "fieldtype": "Data",
+  "label": "Incoming Action Key",
+  "read_only": 1,
+  "no_copy": 1,
+  "insert_after": "kanzlei_customer",
+  "length": 64,
+  "unique": 1,
+  "hidden": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Task-kanzlei_incoming_needs_planning",
+  "dt": "Task",
+  "fieldname": "kanzlei_incoming_needs_planning",
+  "fieldtype": "Check",
+  "label": "Requires planning",
+  "read_only": 1,
+  "no_copy": 1,
+  "insert_after": "kanzlei_customer",
+  "default": "0"
  }
 ]

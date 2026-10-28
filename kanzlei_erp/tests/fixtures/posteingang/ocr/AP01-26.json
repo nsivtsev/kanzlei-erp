@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "pages": [
+    {
+      "page": 1,
+      "text": "Fiktive Prüfstelle Musterbezirk 10\nSYNTHETISCHES TESTDOKUMENT - KEINE REALEN MANDANTENDATEN\nAktenzeichen: MUSTER-AP01-26\nDatum: 25.10.2026\nAn: Beispielbetrieb Alpha GmbH\nAnschrift: Musterweg 7, 00000 Beispielstadt\nMandantenreferenz: SYN-0007\nBetreff: Unterlagenbitte\nPrüfen Sie die fiktive Beleggruppe 2 auf fehlende Zuordnungen.\nSpätester Eingang: 03.12.2026.\nSenden Sie anschließend eine getrennte Rückmeldung zur Musterprüfung 2.\nSpätester Eingang: 13.12.2026."
+    }
+  ]
+}

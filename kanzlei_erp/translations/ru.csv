@@ -558,3 +558,285 @@ Skip to content,Перейти к содержимому
 Account,Учётная запись
 My profile,Мой профиль
 Sign out,Выйти
+Incoming Letter,Входящее письмо
+Incoming Letter Run,Анализ входящего письма
+Incoming Letter Action,Действие по письму
+Incoming Letter Event,История входящего письма
+Posteingang Settings,Настройки входящих писем
+Posteingang Operator,Оператор входящих писем
+Original File,Оригинал документа
+Page Count,Количество страниц
+Received By,Принял сотрудник
+Received At,Время приёма
+Received Date Known,Дата получения известна
+Received Date,Дата получения
+Sender,Отправитель
+Document Date,Дата документа
+Letter Type,Тип письма
+Confirmed Customer,Подтверждённый клиент
+Review Outcome,Итог проверки
+No Actions Reason,Причина отсутствия действий
+Clarification Reason,Причина уточнения
+Confirmed By,Подтвердил сотрудник
+Confirmed At,Время подтверждения
+Correction Reason,Причина исправления
+Correction Quarantined,Заблокировано для исправления
+Cancellation Reason,Причина отмены
+External Analysis Enabled,Внешний анализ включён
+Ocr Model,Модель OCR
+Extraction Model,Модель извлечения
+Api Key,Ключ API
+Max File Bytes,Максимальный размер файла в байтах
+Max Pages,Максимум страниц
+Max Actions,Максимум действий
+Max Retries,Максимум повторов
+Request Timeout Seconds,Тайм-аут в секундах
+Assignment Decision,Решение о назначении
+Assignment Reason,Причина отсутствия исполнителя
+External Date,Внешний срок
+External Date Basis,Основание внешнего срока
+Internal Date,Внутренний срок
+Scheduling Decision,Решение о планировании
+Scheduling Reason,Причина отсутствия срока
+Rejection Reason,Причина отклонения
+Needs Planning,Требует планирования
+Created Task,Созданная задача
+Needs Review,Требует проверки
+Needs Clarification,Требует уточнения
+Posteingang operation is not permitted,Операция с входящим письмом запрещена
+Posteingang limit exceeded,Превышен лимит входящего письма
+Receipt date must be explicit or unknown,Укажите дату получения либо отметьте её как неизвестную
+Invalid content hash,Некорректный хэш документа
+Duplicate action identity,Повтор идентификатора действия
+Invalid action text,Некорректный текст действия
+Upload PDF,Загрузить PDF
+Check the receipt date and upload parameters,Проверьте дату получения и параметры загрузки
+PDF exceeds the allowed size,PDF превышает допустимый размер
+The file is not a valid PDF,Файл не является корректным PDF
+Encrypted PDF files are not accepted,Зашифрованные PDF не принимаются
+PDF exceeds the allowed page count,PDF превышает допустимое число страниц
+PDF validation exceeded its resource limit,Проверка PDF превысила лимит ресурсов
+Intake is busy; retry with the same request,Приём занят; повторите тот же запрос
+This request was already used with different data,Этот запрос уже использован с другими данными
+This file cannot be accepted,Этот файл не может быть принят
+The result is unknown; check the request before retrying,Результат неизвестен; проверьте запрос перед повтором
+Browser storage is unavailable; PDF upload cannot start,Хранилище браузера недоступно; загрузка PDF не начата
+Receipt dates are separate from upload dates. Unknown dates stay unknown.,Дата получения отличается от даты загрузки. Неизвестные даты остаются неизвестными.
+New PDF intake is disabled,Приём новых PDF выключен
+Receipt date,Дата получения
+Apply date to all unsent files,Применить дату ко всем неотправленным файлам
+Recovered upload request,Восстановленный запрос загрузки
+Receipt date known,Дата получения известна
+Select the original file to retry this request,Выберите исходный файл для повтора запроса
+Uploading PDF,PDF загружается
+Already uploaded,Уже загружено
+PDF received,PDF принят
+Open Incoming Letter,Открыть входящее письмо
+Discard local request,Удалить локальный запрос
+Recommended OCR model: mistral-ocr-4-1. Use a concrete version; latest is not allowed.,Рекомендуемая OCR-модель: mistral-ocr-4-1. Укажите конкретную версию; latest запрещён.
+Recommended extraction model: mistral-small-2603. Use a concrete version; latest is not allowed.,Рекомендуемая модель извлечения: mistral-small-2603. Укажите конкретную версию; latest запрещён.
+Stored as a server-side secret. Saving settings does not contact Mistral.,Хранится как серверный секрет. Сохранение настроек не вызывает Mistral.
+Use a concrete versioned Posteingang model,Укажите конкретную версию модели Posteingang
+Mistral analysis requires an API key and both model versions,Для анализа Mistral нужны API-ключ и версии обеих моделей
+OCR returned no readable text; human review is required.,OCR не вернул читаемый текст; требуется проверка сотрудником.
+Auto Analysis Enabled,Включить автоматический анализ
+Retry Backoff Seconds,Базовая задержка повтора (секунды)
+Recovery Interval Seconds,Интервал восстановления (секунды)
+Recovery Batch Size,Попыток за проход восстановления
+Worker Timeout Seconds,Лимит работы worker (секунды)
+Analyze new uploads automatically after commit. Existing letters require an explicit start.,Автоматически анализировать новые загрузки после сохранения. Старые письма запускаются явным действием.
+Base delay for technical retries; processing starts on a later scheduler tick.,Базовая задержка технического повтора; запуск происходит при следующем подходящем проходе планировщика.
+Minimum interval between recovery sweeps; the Bench scheduler tick may be longer.,Минимальный интервал восстановления; фактический интервал планировщика Bench может быть больше.
+Maximum runs inspected per recovery sweep.,Максимум попыток анализа за один проход восстановления.
+Worker execution limit; interrupted requests require an explicit retry.,Лимит исполнения worker; прерванный запрос требует явного повтора.
+Worker timeout is too short for both analysis steps,Лимит worker слишком мал для двух шагов анализа.
+The letter changed. Reload the form before continuing.,Письмо изменилось. Перезагрузите форму перед продолжением.
+Analysis is already in progress.,Анализ уже выполняется.
+Analysis stopped. Check access and settings before starting again.,Анализ остановлен. Перед новым запуском проверьте доступ и настройки.
+Analysis configuration is invalid. Contact a system manager.,Некорректные настройки анализа. Обратитесь к системному администратору.
+The analysis service is temporarily unavailable.,Сервис анализа временно недоступен.
+The OCR result could not be accepted. Human review is required.,Результат OCR не принят. Требуется проверка сотрудника.
+The analysis result could not be accepted. Human review is required.,Результат анализа не принят. Требуется проверка сотрудника.
+Analysis exceeded an allowed limit. Human review is required.,Анализ превысил допустимый лимит. Требуется проверка сотрудника.
+The test provider supports synthetic fixture documents only.,Тестовый провайдер поддерживает только синтетические документы набора.
+Analysis was interrupted. Start again explicitly; a request may already have been processed.,Анализ прерван. Запустите его явно: предыдущий запрос уже мог быть обработан.
+Analysis is waiting for the queue to recover.,Анализ ожидает восстановления очереди.
+Analysis could not finish. Retry explicitly or use human review.,Анализ не завершён. Повторите его явно или перейдите к ручной проверке.
+This operation is not available in the current state.,Это действие недоступно в текущем состоянии.
+Check the analysis request parameters.,Проверьте параметры запроса анализа.
+Start analysis,Запустить анализ
+Analyze again,Повторить анализ
+Switch to human review,Перейти к ручной проверке
+Cancel letter,Отменить письмо
+Reload the form before managing analysis.,Перезагрузите форму перед управлением анализом.
+Analyze this letter again? Your current review edits will be preserved.,Повторно анализировать письмо? Текущие правки сохранятся.
+Next attempt no earlier than,Следующая попытка не ранее
+Queued,В очереди
+Processing,Обработка
+Verified Mandant Identifiers,Проверенные идентификаторы Mandant
+Mandant Identifiers,Идентификаторы Mandant
+Identifier Type,Тип идентификатора
+Original Identifier,Исходный идентификатор
+Normalized Identifier,Нормализованный идентификатор
+Jurisdiction,Юрисдикция
+Authority,Орган или организация
+Other Identifier Type,Другой тип идентификатора
+Verification Source,Источник проверки
+Verified By,Проверил
+Verified At,Время проверки
+Verify identifier,Подтвердить идентификатор
+Mandant selection,Выбор Mandant
+Check the Mandant selection parameters.,Проверьте параметры выбора Mandant.
+The Customer changed. Reload it before verifying an identifier.,Карточка Customer изменилась. Перечитайте её перед подтверждением номера.
+Several addressees require clarification before selecting one Mandant.,Перед выбором одного Mandant нужно разобрать несколько адресатов.
+Could not load Mandant candidates. Reload and try again.,Не удалось загрузить кандидатов Mandant. Перечитайте форму и повторите.
+Selected Mandant,Выбранный Mandant
+No completed analysis is available. You can search for a Mandant manually.,Завершённого анализа нет. Можно найти Mandant вручную.
+Review the proposed Mandant before selecting it.,Проверьте предложенного Mandant перед выбором.
+No Mandant candidates found.,Кандидаты Mandant не найдены.
+Several Mandant candidates match. An explicit decision is required.,Подходят несколько Mandanten. Требуется явный выбор.
+Verified identifier match,Совпадение проверенного идентификатора
+Matching name,Совпадение имени
+Conflicting identifiers require review.,Противоречивые идентификаторы требуют проверки.
+The extracted name differs from this Customer.,Извлечённое имя отличается от этой карточки Customer.
+Read-only Customer; selection requires write access.,Customer доступен только для чтения; для выбора нужно право изменения.
+Select Mandant,Выбрать Mandant
+Clear Mandant selection,Очистить выбор Mandant
+Find another Mandant,Найти другого Mandant
+Refresh Mandant candidates,Обновить кандидатов Mandant
+Save the Customer before verifying an identifier.,Сохраните Customer перед подтверждением идентификатора.
+Page {0},Страница {0}
+Check the review parameters.,Проверьте параметры проверки письма.
+The saved analysis could not be accepted. Human review is required.,Сохранённый анализ недопустим. Требуется ручная проверка.
+"Check every review decision, date and required reason.","Проверьте все решения, даты и обязательные причины."
+Apply the latest result or explicitly keep the current review with a reason.,Примените последний результат или явно сохраните текущую проверку с причиной.
+The assignee must be an active system user with access to this Mandant.,Исполнитель должен быть активным системным пользователем с доступом к этому клиенту.
+The tasks could not be created. Nothing was confirmed.,Не удалось создать задачи. Подтверждение не выполнено.
+An administrator must resolve every task of the original letter before confirmation.,До подтверждения администратор должен разобрать каждую задачу исходного письма.
+A replacement already exists for this letter.,Для этого письма уже создана замена.
+This letter was already confirmed with different decisions.,Это письмо уже подтверждено с другими решениями.
+The review operation could not finish. Reload and try again.,Не удалось завершить операцию проверки. Перечитайте форму и повторите попытку.
+Human review,Проверка сотрудником
+Review incoming letter,Проверить входящее письмо
+Unknown,Неизвестно
+Date requires planning,Срок требует планирования
+No tasks will be created.,Задачи не будут созданы.
+Search assignees,Поиск исполнителя
+Select assignee,Выбрать исполнителя
+Document date,Дата документа
+Letter type,Тип письма
+Summary,Краткое содержание
+Action title,Название действия
+Action description,Описание действия
+Decision,Решение
+Pending,Ожидает решения
+Accept action,Принять действие
+Reject action,Отклонить действие
+Rejection reason,Причина отклонения
+Assignment decision,Решение об исполнителе
+Assign a person,Назначить исполнителя
+Leave unassigned with a reason,Оставить без исполнителя с причиной
+Reason for no assignee,Причина отсутствия исполнителя
+Scheduling decision,Решение о планировании
+Schedule work,Назначить срок работы
+Plan the date later with a reason,Запланировать срок позже с причиной
+Internal work date,Внутренний срок работы
+Reason for no internal date,Причина отсутствия внутреннего срока
+Confirmed external deadline,Подтверждённый внешний срок
+External deadline basis,Основание внешнего срока
+Proposed deadline,Предложенный срок
+Accept proposed external date,Принять предложенный внешний срок
+matched,Цитата проверена
+unverified,Цитата не проверена
+missing,Цитата отсутствует
+Reason for no actions,Причина отсутствия действий
+Clarification reason,Причина уточнения
+I checked the original and all final decisions,Я проверил оригинал и все итоговые решения
+Save review,Сохранить проверку
+Needs clarification,Требуется уточнение
+Confirm letter,Подтвердить письмо
+Check the original and explicitly confirm the human review.,Проверьте оригинал и явно подтвердите проверку сотрудником.
+Reason for keeping the current review,Причина сохранения текущей проверки
+Keep the current review instead of the latest result,Сохранить текущую проверку вместо последнего результата
+Review edits remain in this page. Reopen the review to save them.,"Правки остаются на этой странице. Откройте проверку снова, чтобы сохранить их."
+Create correction,Создать исправление
+Correction reason,Причина исправления
+Reuse original PDF,Использовать исходный PDF
+Receipt date is known,Дата получения известна
+Choose one PDF for the replacement.,Выберите один PDF для замены.
+Open original PDF,Открыть исходный PDF
+View confirmed review,Просмотреть подтверждённую проверку
+Apply latest analysis result,Применить последний результат анализа
+Save the current review before this operation.,Сохраните текущую проверку перед этой операцией.
+Replace the current review? Its previous version will be preserved in history.,Заменить текущую проверку? Предыдущая версия сохранится в истории.
+Add manual action,Добавить ручное действие
+Administrative review is complete.,Административный разбор завершён.
+Administrative review of the original tasks is required.,Требуется административный разбор исходных задач.
+Resolve original task,Разобрать исходную задачу
+Disposition,Решение по исходной задаче
+cancelled,Отменена
+historical,Сохранена как история
+Latest analysis proposal,Последнее предложение анализа
+Readable,Читаемое письмо
+Partly readable,Частично читаемое письмо
+Unreadable,Нечитаемое письмо
+Actions proposed,Предложены действия
+No actions proposed by AI,AI не предложил действий
+Action assessment unknown,"Неизвестно, требуются ли действия"
+The Mandant selection changed. Reload the letter before saving the review.,Выбор клиента изменился. Перечитайте письмо перед сохранением проверки.
+The analysis result changed. Reload before applying it.,Результат анализа изменился. Перечитайте его перед применением.
+Explicitly confirm replacement of the current review.,Явно подтвердите замену текущей проверки.
+Posteingang task operation is not permitted,Операция с задачей входящего письма недоступна.
+Posteingang tasks cannot be duplicated,Задачи входящих писем нельзя дублировать.
+Posteingang task assignment,Назначение задачи входящего письма
+Posteingang task assignment updated,Назначение задачи входящего письма изменено.
+Assignment update,Изменение назначения
+Incoming Action ID,ID действия входящего письма
+Incoming Action Key,Ключ действия входящего письма
+Requires planning,Требует планирования
+Posteingang,Входящие письма
+Uploaded,Загружено
+Posteingang source,Источник Posteingang
+External deadline is not confirmed,Внешний срок не подтверждён
+Open incoming letter,Открыть входящее письмо
+Refresh source,Обновить источник
+This original is quarantined for administrative review.,Этот оригинал заблокирован для административного разбора.
+Posteingang uses the known receipt date or upload time; email attachments use the email date; other files use their upload date. This is not an accounting document date.,Posteingang: известная дата получения или время загрузки. Вложения email: дата письма. Другие файлы: дата загрузки. Это не дата бухгалтерского документа.
+Received on,Получено
+PDF inbox,Входящие PDF
+Queue,Очередь
+Queue state,Состояние очереди
+Unfinished letters,Незавершённые письма
+History,История
+Uploaded by,Загрузивший сотрудник
+Me,Я
+Search letters,Поиск писем
+Workspace panels,Панели рабочего экрана
+Choose a letter from the queue.,Выберите письмо из очереди.
+Age in days: {0},Возраст в днях: {0}
+No completed analysis is available.,Завершённого анализа ещё нет.
+Unverified proposed deadline,Непроверенный предложенный срок
+No explicit date,Явная дата не указана
+Explicit dates: {0}; relative deadlines: {1},Явных дат: {0}; относительных сроков: {1}
+Unsaved review,Несохранённая проверка
+Save and continue,Сохранить и перейти
+Discard,Отбросить
+Stay,Остаться
+Original PDF,Исходный PDF
+The letter changed. Your local review has been preserved.,Письмо изменилось. Ваши локальные правки сохранены.
+Compare with saved review,Сравнить с сохранённой проверкой
+Local review,Локальная проверка
+Saved review,Сохранённая проверка
+Discard local review and load saved version,Отбросить локальные правки и загрузить сохранённую версию
+Check and retry the same request,Проверить и повторить тот же запрос
+Resolve the unknown request before another operation.,Сначала выясните результат предыдущего запроса.
+Save or discard the current review before continuing.,Сначала сохраните или отбросьте текущие правки.
+The operation could not finish. Refresh and try again.,Операция не завершена. Обновите данные и повторите попытку.
+Open task,Открыть задачу
+Search,Поиск
+Select,Выбрать
+Explicit date,Явная дата
+Relative deadline,Относительный срок
+No deadline stated,Срок не указан
+Uncertain deadline,Неоднозначный срок
+Sort,Сортировка
