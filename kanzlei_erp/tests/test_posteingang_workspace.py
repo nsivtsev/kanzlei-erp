@@ -14,6 +14,22 @@ from kanzlei_erp.tests.posteingang_helpers import PosteingangTestCase
 
 
 class TestPosteingangWorkspace(PosteingangTestCase):
+	def test_work_views_separate_human_review_from_running_analysis(self):
+		service = self.service()
+		letter = self.letter()
+		for status, view in (("Received", "review"), ("Needs Review", "review"), ("Error", "review"), ("Queued", "processing"), ("Processing", "processing")):
+			frappe.db.set_value("Incoming Letter", letter.name, "status", status, update_modified=False)
+			for requested in ("review", "processing"):
+				names = [row["letter"] for row in service.get_queue(filters={"state": requested, "query": letter.name})["items"]]
+				self.assertEqual(letter.name in names, requested == view)
+	def test_receipt_date_is_separate_from_upload_time_and_unknown_is_preserved(self):
+		service = self.service()
+		letter = self.letter()
+		metadata = service.get_letter_workspace(letter.name)["original"]
+		self.assertFalse(metadata["received_date_known"])
+		self.assertIsNone(metadata["received_date"])
+		self.assertEqual(metadata["uploaded_at"], str(letter.received_at))
+
 	def service(self):
 		self.assertTrue(Path(frappe.get_app_path("kanzlei_erp", "posteingang_workspace.py")).exists(), "AP-09 workspace API missing")
 		return importlib.import_module("kanzlei_erp.posteingang_workspace")

@@ -17,6 +17,7 @@ from kanzlei_erp.posteingang_documents import document_endpoint, original, pdf_r
 from kanzlei_erp.posteingang_permissions import letter_access
 
 OPEN = {"Received", "Queued", "Processing", "Needs Review", "Needs Clarification", "Error"}
+WORK_VIEWS = {"review": {"Received", "Needs Review", "Error"}, "processing": {"Queued", "Processing"}}
 DEFAULTS = {"state": "open", "uploaded_by": "all", "query": "", "sort": "oldest"}
 
 
@@ -65,6 +66,8 @@ def _original(doc):
 	file = original(doc)
 	base = "/api/method/kanzlei_erp.posteingang_workspace.download_original?"
 	return {"file_name": file.file_name, "page_count": doc.page_count,
+		"received_date_known": bool(doc.received_date_known), "received_date": str(doc.received_date) if doc.received_date_known and doc.received_date else None,
+		"uploaded_at": str(doc.received_at),
 		"preview_url": base + urlencode({"letter": doc.name, "disposition": "inline"}),
 		"download_url": base + urlencode({"letter": doc.name, "disposition": "attachment"})}
 
@@ -107,7 +110,7 @@ def _filters(value):
 	value = {**DEFAULTS, **value}
 	if any(not isinstance(item, str) for item in value.values()):
 		jobs.fail("INVALID_REQUEST")
-	if value["state"] not in {"open", "history", "all", *jobs.TRANSITIONS} or value["uploaded_by"] not in {"all", "me"} or value["sort"] not in {"oldest", "newest"}:
+	if value["state"] not in {"open", "history", "all", *WORK_VIEWS, *jobs.TRANSITIONS} or value["uploaded_by"] not in {"all", "me"} or value["sort"] not in {"oldest", "newest"}:
 		jobs.fail("INVALID_REQUEST")
 	if not isinstance(value["query"], str) or len(value["query"]) > 140:
 		jobs.fail("INVALID_REQUEST")
@@ -174,7 +177,7 @@ def get_queue(filters=None, cursor=None, page_length=20, **extra):
 		jobs.fail("INVALID_REQUEST")
 	position = _cursor(cursor, filters)
 	snapshot = frappe.utils.get_datetime(position["snapshot"]) if position else frappe.utils.now_datetime()
-	states = OPEN if filters["state"] == "open" else {"Completed", "Cancelled"} if filters["state"] == "history" else set(jobs.TRANSITIONS) if filters["state"] == "all" else {filters["state"]}
+	states = WORK_VIEWS.get(filters["state"]) or (OPEN if filters["state"] == "open" else {"Completed", "Cancelled"} if filters["state"] == "history" else set(jobs.TRANSITIONS) if filters["state"] == "all" else {filters["state"]})
 	query = filters["query"].casefold()
 	rows = []
 	for doc in frappe.get_all("Incoming Letter", filters={"status": ["in", sorted(states)], "received_at": ["<=", snapshot]}, fields=["*"]):

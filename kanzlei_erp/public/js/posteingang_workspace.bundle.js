@@ -93,5 +93,29 @@
    }finally{this.busy=false;}
   }
  }
- frappe.posteingang=Object.assign(frappe.posteingang || {},{WorkspaceClient});
+ // UI guidance only. The service remains authoritative for confirmation.
+ function reviewIssues(state,review,step) {
+  const issues=[],blank=value=>!String(value || '').trim();
+  const add=(message,action)=>issues.push({message,action_id:action?.action_id});
+  if(step===0){
+   if(!state.matching.selected_customer)add('Select a Mandant before continuing.');
+   else if(blank(state.matching.customer_reason))add('Explain the Mandant selection.');
+   if(state.matching.matching?.ambiguity==='multiple_addressees')add('Several addressees require clarification before selecting one Mandant.');
+   return issues;
+  }
+  const actions=review.actions || [],accepted=actions.filter(a=>a.decision==='accept');
+  for(const action of actions){
+   if(action.decision==='pending')add('Decide whether this action is required.',action);
+   if(action.decision==='reject' && blank(action.rejection_reason))add('Explain why this action is not required.',action);
+   if(action.decision!=='accept')continue;
+   if(blank(action.title) || blank(action.description))add('Enter an action title and description.',action);
+   if(action.assigned_to ? action.assignment_decision!=='assigned' : action.assignment_decision!=='unassigned' || blank(action.assignment_reason))add('Select an assignee or explain why assignment is deferred.',action);
+   if(action.internal_date ? action.scheduling_decision!=='scheduled' : action.scheduling_decision!=='unscheduled' || blank(action.scheduling_reason))add('Set an internal work date or explain why planning is deferred.',action);
+   if(action.external_date && blank(action.external_date_basis))add('Enter the basis for the confirmed external deadline.',action);
+  }
+  if(!accepted.length && blank(review.no_actions_reason))add('Explain why no tasks are required.');
+  if(accepted.length && !blank(review.no_actions_reason))add('Clear the no-actions reason when accepting a task.');
+  return issues;
+ }
+ frappe.posteingang=Object.assign(frappe.posteingang || {},{WorkspaceClient,reviewIssues});
 })();

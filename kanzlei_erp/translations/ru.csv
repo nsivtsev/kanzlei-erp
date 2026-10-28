@@ -840,3 +840,63 @@ Relative deadline,Относительный срок
 No deadline stated,Срок не указан
 Uncertain deadline,Неоднозначный срок
 Sort,Сортировка
+A newer analysis is available. Apply it or explain why you are keeping this review.,Доступен новый анализ. Примените его или обоснуйте сохранение текущей проверки.
+Action details,Подробности действия
+Analysis and document options,Анализ и действия с документом
+Back to inbox,К очереди
+Back to review,К проверке
+Change document or Mandant,Изменить документ или клиента
+Change tasks and dates,Изменить задачи и сроки
+Check exactly what will be created before confirming.,Перед подтверждением проверьте итоговый результат.
+Check the original and explicitly select the Mandant.,Проверьте оригинал и явно выберите клиента.
+"Check the original, select the Mandant and prepare the next steps.","Проверьте оригинал, выберите клиента и подготовьте следующие действия."
+Clear the no-actions reason when accepting a task.,"Уберите причину отсутствия действий, если принимаете задачу."
+Completed documents,Завершённые
+Confirm and create one task,Подтвердить и создать 1 задачу
+Confirm and create {0} tasks,Подтвердить и создать задачи: {0}
+Deadline in the letter,Срок из письма
+Decide what needs to be done and plan the work.,"Решите, что нужно сделать, и запланируйте работу."
+Decide whether this action is required.,"Решите, требуется ли это действие."
+Document and Mandant,Документ и клиент
+Document details,Данные письма
+Enter an action title and description.,Укажите название и описание действия.
+Enter the basis for the confirmed external deadline.,Укажите основание подтверждённого внешнего срока.
+Explain the Mandant selection.,Обоснуйте выбор клиента.
+Explain why no tasks are required.,Обоснуйте отсутствие задач.
+Explain why this action is not required.,Обоснуйте отказ от этого действия.
+Final review,Подтверждение
+Finish without tasks,Завершить без задач
+In progress,В обработке
+Inbox views,Представления входящих
+Internal planning,Внутренняя работа
+Leave assignment for later,Назначить исполнителя позже
+Letter completed,Письмо обработано
+More filters,Дополнительные фильтры
+No confirmed external deadline.,Нет подтверждённого внешнего срока.
+No documents in this view.,В этом представлении нет документов.
+No matching documents.,Подходящие документы не найдены.
+No tasks have been created yet.,Задачи ещё не созданы.
+No tasks will be created. Explain your decision after checking the original.,Задачи не будут созданы. Проверьте оригинал и обоснуйте решение.
+Not assigned to a Mandant,Клиент ещё не выбран
+Not yet confirmed,Ещё не подтверждено
+Open review,Проверить
+Plan the work date later,Запланировать дату работы позже
+Previous step,Назад
+Review incoming documents,Проверка входящих документов
+Review next document,Проверить следующий документ
+Review saved. No tasks have been created.,Черновик сохранён. Задачи не созданы.
+Review steps,Этапы проверки
+Save and review result,Сохранить и проверить итог
+Select a Mandant before continuing.,Сначала выберите клиента.
+Select an assignee or explain why assignment is deferred.,Выберите исполнителя или обоснуйте отложенное назначение.
+Set an internal work date or explain why planning is deferred.,Укажите внутреннюю дату работы или обоснуйте отложенное планирование.
+Start the analysis or switch to human review to prepare a draft.,Запустите анализ или перейдите к ручной проверке.
+Step {0} of 3,Шаг {0} из 3
+Tasks and deadlines,Задачи и сроки
+Tasks are created only after your final confirmation.,Задачи создаются только после окончательного подтверждения.
+The proposed date is unverified until you explicitly confirm it.,Предложенная дата не проверена до вашего явного подтверждения.
+To review,К проверке
+View result,Посмотреть результат
+When should the firm work on this task?,Когда канцелярия должна выполнить работу?
+Tasks created: {0},Создано задач: {0}
+Uploaded at,Загружено
