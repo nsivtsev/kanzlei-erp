@@ -20,6 +20,7 @@
   {"label": "Email Account", "type": "Link", "link_type": "DocType", "link_to": "Email Account", "icon": "email"},
   {"label": "Email Domain", "type": "Link", "link_type": "DocType", "link_to": "Email Domain", "icon": "globe"},
   {"label": "Email Queue", "type": "Link", "link_type": "DocType", "link_to": "Email Queue", "icon": "send"},
+  {"label": "Posteingang Settings", "type": "Link", "link_type": "DocType", "link_to": "Posteingang Settings", "icon": "inbox"},
   {"label": "System", "type": "Link", "link_type": "DocType", "link_to": "System Settings", "icon": "settings"},
   {"label": "Druckvorlagen", "type": "Link", "link_type": "DocType", "link_to": "Print Format", "icon": "printer"},
   {"label": "Datenimport", "type": "Link", "link_type": "DocType", "link_to": "Data Import", "icon": "upload"},
