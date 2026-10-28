@@ -5,9 +5,9 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -136,7 +136,7 @@ class ReleaseCoordinationTests(unittest.TestCase):
                   "Config": {"Labels": {"org.opencontainers.image.revision": REVISION}}}]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ("application", "upgrade"):
+            for name in ("smoke",):
                 (root / (name + ".json")).write_text(json.dumps({"name": name, "exit_code": 0, "seconds": 1}))
             env = {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main",
                    "GITHUB_REPOSITORY": "nsivtsev/kanzlei-erp", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",

@@ -384,3 +384,22 @@ pip check/Ruff/bash syntax/diff — PASS. Тестовые переключат�
 framework patch и проверяет наличие document_copy_guard в desk bundle. Это
 сохраняет клиентский запрет штатного Duplicate наряду с серверными guards.
 Профильные проверки сборочного контракта: 6 PASS; фактическую сборку проверяет CI.
+
+## Сокращение обязательного CI — 28.10.2026
+
+По решению владельца PR выполняет только быстрые deployment/shell/workflow checks.
+Main собирает образ и выполняет smoke установки/миграции, HTTP/assets и запуска
+сервисов. Полные app/Node suites, Suite upgrade и backup/restore вынесены в ручной
+workflow Full acceptance. Production backup перед миграцией сохраняется.
+Квитанция v2 отражает deployment/smoke; пропущенные сценарии не отмечаются passed.
+
+Предыдущий CI 40580673157 собрал образ и выполнил установку/миграции, затем был
+остановлен часовым лимитом: около 50 минут внутри app-suite, без подробного
+вывода отдельных тестов. Полная приёмка не прошла. Локальная диагностика с
+failfast обнаружила зависимость AP-10 acceptance от состояния предыдущих suites:
+фиксированный PDF вернулся как duplicate вместо created. Это отдельный открытый
+дефект изоляции тестов; он не доказывает причину CI timeout. Обязательный минимум
+не выдаётся за полную регрессию, AP-10 сохраняет INCOMPLETE.
+
+Проверки изменения CI: deployment131 PASS; profile/receipt23 PASS;
+actionlint, Ruff, bash syntax и diff PASS. Smoke образа проверяется в main CI.

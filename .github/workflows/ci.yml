@@ -15,9 +15,7 @@ jobs:
     concurrency:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
-    uses: ./.github/workflows/verify.yml
-    with:
-      publish: false
+    uses: ./.github/workflows/checks.yml
     permissions:
       contents: read
 

@@ -6,11 +6,19 @@ on:
       publish:
         type: boolean
         default: false
+      profile:
+        type: string
+        default: minimal
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+    permissions:
+      contents: read
   verify:
+    needs: checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.profile == 'full' && 60 || 20 }}
     env:
       CI_METRICS_DIR: /tmp/kanzlei-ci-metrics-${{ github.run_id }}-${{ github.run_attempt }}
       # Enable 2 only after a comparison on the GitHub runner shows lower total minutes.
@@ -27,13 +35,6 @@ jobs:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
         with:
           driver: docker
-      - name: Deployment tests and shell checks
-        run: |
-          python3 -m unittest discover -s tests/deploy -v
-          bash -n scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/setup-local.sh scripts/fetch-suite.sh
-          shellcheck -x scripts/bootstrap-production.sh scripts/build-production-image.sh scripts/ci-image.sh scripts/deploy-ssh.sh scripts/fetch-suite.sh
-          # actionlint 1.7.12 predates GitHub concurrency.queue (May 2026).
-          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color -ignore '^unexpected key "queue" for "concurrency" section\.'
       - name: Exact commit
         id: source
         run: |
@@ -83,8 +84,11 @@ jobs:
           elapsed=$(( $(date +%s) - started ))
           printf '{"seconds":%s}\n' "$elapsed" > "$CI_METRICS_DIR/build.json"
           printf 'Build or pull: %s seconds\n' "$elapsed" >> "$GITHUB_STEP_SUMMARY"
-      - name: Verify application, Suite upgrade and backup restore
-        run: bash scripts/ci-image.sh kanzlei-ci:test
+      - name: Verify selected image profile
+        timeout-minutes: ${{ inputs.profile == 'full' && 50 || 10 }}
+        env:
+          VERIFY_PROFILE: ${{ inputs.profile }}
+        run: python3 scripts/ci_scenarios.py kanzlei-ci:test --profile "$VERIFY_PROFILE"
       - name: Publish the exact verified main image and receipt
         if: inputs.publish
         id: publish

@@ -80,9 +80,11 @@ def run_scenarios(commands, metrics, jobs=1):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image")
+    parser.add_argument("--profile", choices=("minimal", "full"), default="full")
     args = parser.parse_args()
     script = Path(__file__).with_name("ci-image.sh")
-    commands = {name: ["bash", str(script), args.image, name] for name in ("application", "upgrade")}
+    names = ("smoke",) if args.profile == "minimal" else ("application", "upgrade")
+    commands = {name: ["bash", str(script), args.image, name] for name in names}
     directory = os.environ.get("CI_METRICS_DIR")
     if directory:
         return run_scenarios(commands, directory, int(os.environ.get("CI_SCENARIO_JOBS", "1")))

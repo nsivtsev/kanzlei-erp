@@ -223,7 +223,7 @@ def publish_receipt(registry, local_image, revision, metrics):
 
 def report(local_image, metrics):
     rows = []
-    for name in ("application", "upgrade"):
+    for name in ("smoke", "application", "upgrade"):
         path = Path(metrics) / (name + ".json")
         if path.exists():
             data = json.loads(path.read_text())
