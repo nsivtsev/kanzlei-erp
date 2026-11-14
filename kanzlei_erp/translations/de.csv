@@ -880,3 +880,43 @@ View result,Ergebnis ansehen
 When should the firm work on this task?,Wann soll die Kanzlei daran arbeiten?
 Tasks created: {0},Erstellte Aufgaben: {0}
 Uploaded at,Hochgeladen am
+Reimport all emails,Alle E-Mails erneut importieren
+Email import progress,Fortschritt des E-Mail-Imports
+Start reimport,Erneuten Import starten
+Refresh progress,Fortschritt aktualisieren
+Save the Email Account before reimporting its archive.,Speichern Sie das E-Mail-Konto vor dem erneuten Archivimport.
+No archive import has been started for this account.,Für dieses Konto wurde noch kein Archivimport gestartet.
+"Recheck all incoming, sent and archived emails. Drafts, spam and trash are excluded. Existing messages are reused and missing attachments are restored.","Alle eingegangenen, gesendeten und archivierten E-Mails erneut prüfen. Entwürfe, Spam und Papierkorb werden ausgelassen. Vorhandene Nachrichten werden wiederverwendet und fehlende Anhänge wiederhergestellt."
+Automatic receiving pauses during the import and resumes afterwards. You can close this window and reopen it to see progress.,Der automatische Empfang pausiert während des Imports und wird danach fortgesetzt. Sie können dieses Fenster schließen und später den Fortschritt wieder aufrufen.
+Old sender addresses (optional),Frühere Absenderadressen (optional)
+One address per line or separated by commas. These addresses identify historical sent mail.,Eine Adresse pro Zeile oder durch Kommas getrennt. Diese Adressen kennzeichnen früher gesendete E-Mails.
+Loading import progress…,Importfortschritt wird geladen…
+"Could not load import progress. Check your connection and access, then click Refresh progress before retrying.",Der Importfortschritt konnte nicht geladen werden. Prüfen Sie Verbindung und Berechtigungen und klicken Sie vor einem neuen Versuch auf Fortschritt aktualisieren.
+Waiting for an import worker,Warten auf einen Import-Worker
+Waiting for the email receiver,Warten auf den E-Mail-Empfang
+Counting messages in mailbox folders,Nachrichten in den Postfachordnern werden gezählt
+Importing messages,Nachrichten werden importiert
+Linking email replies,E-Mail-Antworten werden verknüpft
+Finished,Abgeschlossen
+{0} of {1} messages checked,{0} von {1} Nachrichten geprüft
+New messages,Neue Nachrichten
+Existing messages,Vorhandene Nachrichten
+Failed messages,Fehlgeschlagene Nachrichten
+Unsaved attachments,Nicht gespeicherte Anhänge
+Folder progress,Fortschritt je Ordner
+Completed with errors,Mit Fehlern abgeschlossen
+Interrupted,Unterbrochen
+The import could not be queued. Try again later.,Der Import konnte nicht eingereiht werden. Versuchen Sie es später erneut.
+The mailbox is still receiving email. Try again shortly.,Für das Postfach läuft noch ein E-Mail-Empfang. Versuchen Sie es in Kürze erneut.
+"The import failed. Check the Error Log and mailbox settings, then retry.",Der Import ist fehlgeschlagen. Prüfen Sie Fehlerprotokoll und Postfacheinstellungen und versuchen Sie es erneut.
+The import was interrupted. Start it again to check all messages and continue safely.,"Der Import wurde unterbrochen. Starten Sie ihn erneut, um alle Nachrichten zu prüfen und sicher fortzufahren."
+"Some messages or attachments could not be imported. Check the Error Log and file limits, then run the import again.",Einige Nachrichten oder Anhänge konnten nicht importiert werden. Prüfen Sie Fehlerprotokoll und Dateigrößenlimits und starten Sie den Import erneut.
+Only email administrators may reimport an email archive.,Nur E-Mail-Administratoren dürfen ein E-Mail-Archiv erneut importieren.
+Enter at most 50 sender alias email addresses.,Geben Sie höchstens 50 frühere Absenderadressen ein.
+Enter valid sender alias email addresses.,Geben Sie gültige frühere Absenderadressen ein.
+The email archive receiver lock is no longer held.,Die Empfangssperre für den Archivimport besteht nicht mehr.
+The IMAP folder changed during import. Start the import again.,Der IMAP-Ordner wurde während des Imports geändert. Starten Sie den Import erneut.
+Import queued,Import eingereiht
+Import in progress,Import läuft
+Import completed,Import abgeschlossen
+Messages in folder,Nachrichten im Ordner

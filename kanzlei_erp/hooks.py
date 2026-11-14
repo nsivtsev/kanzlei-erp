@@ -17,6 +17,7 @@ override_whitelisted_methods = {
 	"suite.slides.doctype.presentation.presentation.create_presentation": "kanzlei_erp.mandant_drive.create_presentation",
 }
 extend_doctype_class = {"File": ["kanzlei_erp.suite_file.ERPAttachmentGuard"]}
+extend_doctype_class["Email Account"] = ["kanzlei_erp.email_archive_jobs.ArchiveReceiverGuard"]
 write_file = "kanzlei_erp.object_storage.write_file"
 file_content_from_url = ["kanzlei_erp.object_storage.url_content"]
 drive_s3_client = ["kanzlei_erp.object_storage.client"]
@@ -67,6 +68,7 @@ fixtures = [
 override_doctype_dashboards = {"Customer": "kanzlei_erp.navigation.customer_dashboard"}
 doctype_js = {
 	"Contact": "public/js/contact.js",
+	"Email Account": "public/js/email_account.js",
 	"Drive Disk Settings": "public/js/s3_storage_settings.js",
 	"Customer": "public/js/customer.js",
 	"Task": "public/js/task.js",
@@ -100,6 +102,7 @@ doc_events = {
 }
 scheduler_events = {"daily": ["kanzlei_erp.work_schedule.generate_due_tasks", "kanzlei_erp.fibu_questions.send_question_reminders"], "hourly": ["kanzlei_erp.object_storage.retry_deletions"]}
 scheduler_events["cron"] = {"* * * * *": ["kanzlei_erp.posteingang_jobs.recover_runs"]}
+scheduler_events["cron"]["* * * * *"].append("kanzlei_erp.email_archive_jobs.recover_imports")
 after_migrate = ["kanzlei_erp.work_schedule.backfill_task_calendar_titles", "kanzlei_erp.suite_setup.configure"]
 
 # Posteingang structures are additive; no user role assignments.
