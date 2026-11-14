@@ -137,6 +137,12 @@ Creating a Contact with email addresses and a Mandant link, or changing those ad
 
 ### Import an existing mailbox archive
 
+Email administrators with write access to an IMAP **Email Account** can use **Einstellungen → Email Account → Reimport all emails**. Save the account first. The dialog checks the last run, accepts optional historical sender addresses, and starts a background reimport of that account. It shows the counting/importing/linking stages, checked/total messages, new/existing/failed messages and per-folder progress. Progress refreshes automatically every two seconds while the dialog is open. Closing the dialog or reloading the page does not cancel the import; use the same button to reopen its saved state. Starting again while a run is active reuses that run.
+
+The action uses the same safe, repeatable importer as the console command below, including original attachment verification, contact linking and folder exclusions. It does not delete stored mail, send archived messages, or change account configuration. A shared lock pauses scheduled/manual receiving for this account while the archive worker runs; normal receiving resumes when the lock is released. Incoming and outgoing account settings, including Sent-folder appends, stay enabled as configured. The original console command still requires pausing **Enable Incoming** manually.
+
+Only **Completed** means the archive reconciled without message/attachment failures. **Completed with errors**, **Failed**, and **Interrupted** require resolving the indicated configuration/file limits or checking **Error Log**, then running the import again. A one-minute recovery job detects abandoned imports through RQ and releases only the abandoned run's receiver lock. Workers have a six-hour limit; a timed-out pass retains committed batches and can be rerun. No import starts during migration. Applying the new **Email Archive Import** DocType and receiver hook requires the normal site migration and worker restart on deployment.
+
 Make a database and site-files backup before importing a real archive. Prepare the Contacts first when possible. Use a System Manager shell in the Bench directory. The preview reads the mailbox without changing messages and reports folder counts, message and attachment sizes, and attachments over the configured file limits:
 
 ```bash

@@ -900,3 +900,43 @@ View result,Посмотреть результат
 When should the firm work on this task?,Когда канцелярия должна выполнить работу?
 Tasks created: {0},Создано задач: {0}
 Uploaded at,Загружено
+Reimport all emails,Повторно импортировать все письма
+Email import progress,Прогресс импорта email
+Start reimport,Начать повторный импорт
+Refresh progress,Обновить прогресс
+Save the Email Account before reimporting its archive.,Сохраните почтовый аккаунт перед повторным импортом архива.
+No archive import has been started for this account.,Для этого аккаунта импорт архива ещё не запускался.
+"Recheck all incoming, sent and archived emails. Drafts, spam and trash are excluded. Existing messages are reused and missing attachments are restored.","Повторная проверка всех входящих, отправленных и архивных писем. Черновики, спам и корзина исключены. Существующие письма используются повторно, недостающие вложения восстанавливаются."
+Automatic receiving pauses during the import and resumes afterwards. You can close this window and reopen it to see progress.,Автоматический приём приостанавливается на время импорта и возобновляется после него. Окно можно закрыть и открыть снова для просмотра прогресса.
+Old sender addresses (optional),Старые адреса отправителя (необязательно)
+One address per line or separated by commas. These addresses identify historical sent mail.,По одному адресу в строке или через запятую. По этим адресам определяются старые отправленные письма.
+Loading import progress…,Загрузка прогресса импорта…
+"Could not load import progress. Check your connection and access, then click Refresh progress before retrying.","Не удалось загрузить прогресс импорта. Проверьте соединение и права доступа, затем нажмите «Обновить прогресс» перед повторной попыткой."
+Waiting for an import worker,Ожидание запуска импорта
+Waiting for the email receiver,Ожидание завершения приёма почты
+Counting messages in mailbox folders,Подсчёт писем в папках ящика
+Importing messages,Импорт писем
+Linking email replies,Связывание ответов на письма
+Finished,Завершено
+{0} of {1} messages checked,Проверено писем: {0} из {1}
+New messages,Новые письма
+Existing messages,Существующие письма
+Failed messages,Письма с ошибками
+Unsaved attachments,Несохранённые вложения
+Folder progress,Прогресс по папкам
+Completed with errors,Завершено с ошибками
+Interrupted,Прервано
+The import could not be queued. Try again later.,Не удалось поставить импорт в очередь. Повторите попытку позже.
+The mailbox is still receiving email. Try again shortly.,Приём почты ещё выполняется. Повторите попытку немного позже.
+"The import failed. Check the Error Log and mailbox settings, then retry.","Импорт завершился ошибкой. Проверьте журнал ошибок и настройки ящика, затем повторите попытку."
+The import was interrupted. Start it again to check all messages and continue safely.,"Импорт был прерван. Запустите его снова, чтобы проверить все письма и продолжить обработку."
+"Some messages or attachments could not be imported. Check the Error Log and file limits, then run the import again.","Некоторые письма или вложения не удалось импортировать. Проверьте журнал ошибок и ограничения файлов, затем запустите импорт снова."
+Only email administrators may reimport an email archive.,Повторный импорт архива доступен только администраторам почты.
+Enter at most 50 sender alias email addresses.,Укажите не более 50 старых адресов отправителя.
+Enter valid sender alias email addresses.,Укажите корректные старые адреса отправителя.
+The email archive receiver lock is no longer held.,Блокировка приёма для импорта архива больше не удерживается.
+The IMAP folder changed during import. Start the import again.,Папка IMAP изменилась во время импорта. Запустите импорт снова.
+Import queued,Импорт в очереди
+Import in progress,Идёт импорт
+Import completed,Импорт завершён
+Messages in folder,Писем в папке

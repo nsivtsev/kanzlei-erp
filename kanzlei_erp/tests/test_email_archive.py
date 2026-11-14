@@ -2,7 +2,7 @@ import hashlib
 from email.message import EmailMessage
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -18,6 +18,30 @@ from kanzlei_erp.email_archive import (
 
 
 class TestEmailArchiveHelpers(FrappeTestCase):
+	def test_archive_connection_and_logout_have_finite_timeouts(self):
+		from kanzlei_erp.email_archive import _connect, _safe_close
+
+		server = Mock(settings=frappe._dict(use_imap=1))
+		account = frappe._dict(flags=frappe._dict())
+
+		def get_server(**kwargs):
+			self.assertTrue(account.flags.validate_imap_pop_connection)
+			return server
+
+		account.get_incoming_server = get_server
+		self.assertIs(_connect(account), server)
+		self.assertIsNone(account.flags.validate_imap_pop_connection)
+		self.assertEqual(server.imap_timeout, 120)
+		_safe_close(server)
+		server.imap.sock.settimeout.assert_called_once_with(5)
+		server.imap.logout.assert_called_once()
+		server.logout.assert_not_called()
+		from rq.timeouts import JobTimeoutException
+
+		server.imap.logout.side_effect = JobTimeoutException("timeout during logout")
+		with self.assertRaises(JobTimeoutException):
+			_safe_close(server)
+
 	def test_parse_imap_list_preserves_folder_names_and_flags(self):
 		folders = parse_imap_list(
 			[
@@ -343,7 +367,7 @@ class TestEmailArchiveImport(FrappeTestCase):
 			frappe.db.commit()
 
 
-class TestEmailArchiveOriginals(FrappeTestCase):
+class ArchiveMailFixture(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
 		from contextlib import ExitStack
@@ -362,7 +386,7 @@ class TestEmailArchiveOriginals(FrappeTestCase):
 		self.stack.enter_context(patch("kanzlei_erp.email_archive._connect", return_value=server))
 		self.stack.enter_context(patch("kanzlei_erp.email_archive._site_archive_dir", return_value=Path(temp_dir) / "archive.sqlite"))
 		self.sendmail = self.stack.enter_context(patch("frappe.sendmail"))
-		self.stack.enter_context(patch("frappe.log_error"))
+		self.error_log = self.stack.enter_context(patch("frappe.log_error"))
 
 	def tearDown(self):
 		try:
@@ -415,6 +439,8 @@ class TestEmailArchiveOriginals(FrappeTestCase):
 		image.save(buffer, format="JPEG", exif=exif)
 		return buffer.getvalue()
 
+
+class TestEmailArchiveOriginals(ArchiveMailFixture):
 	def test_import_preserves_encoded_display_names_with_commas(self):
 		from email.utils import getaddresses
 

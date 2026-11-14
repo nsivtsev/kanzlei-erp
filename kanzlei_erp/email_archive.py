@@ -19,6 +19,7 @@ from frappe import _
 from frappe.core.api.file import get_max_file_size
 from frappe.email.receive import InboundMail
 from frappe.utils.html_utils import clean_email_html
+from rq.timeouts import JobTimeoutException
 
 _LIST_RE = re.compile(
 	rb'^\((?P<flags>[^)]*)\)\s+(?P<delimiter>NIL|"(?:\\.|[^"])*"|[^\s]+)\s+(?P<mailbox>"(?:\\.|[^"])*"|.+)$'
@@ -550,9 +551,16 @@ def _link_pending_replies(journal, account_name: str) -> int:
 def _connect(email_account):
 	# Use the standard account configuration, but avoid receive-mode error handling,
 	# which can disable the account and send an automatic admin notice on failure.
-	server = email_account.get_incoming_server(in_receive=False, email_sync_rule="ALL")
+	# Frappe otherwise leaves connect/login and its initial logout unbounded.
+	previous = email_account.flags.validate_imap_pop_connection
+	email_account.flags.validate_imap_pop_connection = True
+	try:
+		server = email_account.get_incoming_server(in_receive=False, email_sync_rule="ALL")
+	finally:
+		email_account.flags.validate_imap_pop_connection = previous
 	if not server or not server.settings.use_imap:
 		frappe.throw(_("The configured Email Account must use IMAP."))
+	server.imap_timeout = 120
 	server.connect()
 	return server
 
@@ -568,8 +576,16 @@ def _inbox_first(folder):
 
 def _safe_close(server):
 	if server:
-		with suppress(Exception):
-			server.logout()
+		try:
+			if getattr(server.imap, "sock", None):
+				server.imap.sock.settimeout(5)
+			# EmailServer.logout reconnects recursively on abort. Never reconnect
+			# during cleanup, especially after the worker's one-shot timeout alarm.
+			server.imap.logout()
+		except JobTimeoutException:
+			raise
+		except Exception:
+			pass
 
 
 def _preview_message(mail_account, raw_message):
@@ -658,32 +674,69 @@ def preview(email_account_name: str) -> dict:
 	return result
 
 
-def import_archive(email_account_name: str, sender_aliases=None) -> dict:
+def import_archive(email_account_name: str, sender_aliases=None, *, progress_callback=None, receiving_lock=None) -> dict:
 	"""Import all mail from selected IMAP folders, resuming from a private checkpoint."""
 	account = _require_archive_account(email_account_name, require_safe_linking=True)
-	if account.enable_incoming:
+	if receiving_lock is not None and not receiving_lock.owned():
+		frappe.throw(_("The email archive receiver lock is no longer held."))
+	if account.enable_incoming and receiving_lock is None:
 		frappe.throw(_("Pause automatic email receiving on the Email Account before importing its archive."))
 	aliases = [alias.strip().casefold() for alias in sender_aliases or [] if alias and alias.strip()]
 	base_path = _site_archive_dir(account.name)
 	server = None
 	counts = {"imported": 0, "existing": 0, "new_contact_links": 0, "thread_links": 0}
+	state = {"stage": "scanning", "total": 0, "processed": 0, "imported": 0, "existing": 0, "failed": 0, "folders": []}
+
+	def report():
+		state.update({key: counts[key] for key in ("imported", "existing")})
+		if progress_callback:
+			progress_callback(state)
+
 	unlinked = set()
 	try:
 		with ArchiveJournal(base_path) as journal:
+			report()
 			server = _connect(account)
+			inventory = []
 			for folder in sorted(_get_folders(server.imap), key=_inbox_first):
 				validity, uids = _open_mailbox(server.imap, folder["name"], folder["server_name"])
+				inventory.append((folder, validity, uids))
+				state["folders"].append({"name": folder["name"], "total": len(uids), "processed": 0,
+					"imported": 0, "existing": 0, "failed": 0})
+				state["total"] += len(uids)
+				report()
+			state["stage"] = "importing"
+			for index, (folder, expected_validity, uids) in enumerate(inventory):
+				folder_state = state["folders"][index]
+				state["current_folder"] = folder["name"]
+				report()
+				# Reopen the folder but retain the original UID snapshot for truthful totals.
+				validity, uids = _open_mailbox(server.imap, folder["name"], folder["server_name"])
+				if validity != expected_validity:
+					raise ArchiveImportError(_("The IMAP folder changed during import. Start the import again."))
+				uids = inventory[index][2]
 				journal.prepare_folder(folder["name"], validity)
 				is_inbox = "\\inbox" in folder["flags"] or folder["name"].casefold() == "inbox"
 				for batch in _batches(uids):
+					before_batch = {key: counts[key] for key in ("imported", "existing")}
 					try:
 						messages = _fetch_message_batch(server.imap, batch)
+					except JobTimeoutException:
+						raise
 					except Exception as error:
 						for uid in batch:
 							journal.record_failure(folder["name"], validity, uid, str(error))
 						journal.connection.commit()
+						frappe.log_error(title=_("Email archive import failed"),
+							message=f"Email Account: {account.name}\nFolder: {folder['name']}\nUIDs: {batch[0]}-{batch[-1]}\n{error}")
+						state["processed"] += len(batch)
+						state["failed"] += len(batch)
+						folder_state["processed"] += len(batch)
+						folder_state["failed"] += len(batch)
+						report()
 						continue
 					for uid in batch:
+						before_message = counts.copy()
 						frappe.db.savepoint("kanzlei_email_archive_message")
 						try:
 							raw_message, seen_status = messages.get(uid, (None, 0))
@@ -733,8 +786,13 @@ def import_archive(email_account_name: str, sender_aliases=None) -> dict:
 							):
 								unlinked.add(communication.name)
 							journal.record_progress(folder["name"], validity, uid)
+						except JobTimeoutException:
+							raise
 						except Exception as error:
 							frappe.db.rollback(save_point="kanzlei_email_archive_message")
+							counts.update(before_message)
+							state["failed"] += 1
+							folder_state["failed"] += 1
 							journal.record_failure(
 								folder["name"],
 								validity,
@@ -751,6 +809,13 @@ def import_archive(email_account_name: str, sender_aliases=None) -> dict:
 						# Checkpoint first: a crash before the DB commit is detected by the next run.
 						journal.connection.commit()
 						frappe.db.commit()
+						state["processed"] += len(batch)
+						folder_state["processed"] += len(batch)
+						for key in ("imported", "existing"):
+							folder_state[key] += counts[key] - before_batch[key]
+						report()
+			state["stage"] = "linking"
+			report()
 			counts["thread_links"] = _link_pending_replies(journal, account.name)
 			frappe.db.commit()
 			journal.connection.commit()
@@ -761,6 +826,8 @@ def import_archive(email_account_name: str, sender_aliases=None) -> dict:
 				failure["unsaved_attachments"] for failure in counts["failures"]
 			)
 			counts["complete"] = not counts["failures"]
+			state["stage"] = "finished"
+			report()
 	finally:
 		_safe_close(server)
 	return counts

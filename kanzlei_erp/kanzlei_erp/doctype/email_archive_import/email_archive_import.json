@@ -1,0 +1,29 @@
+{
+ "doctype": "DocType",
+ "name": "Email Archive Import",
+ "module": "Kanzlei ERP",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "track_changes": 0,
+ "field_order": ["email_account", "status", "stage", "queued_by", "queued_at", "started_at", "finished_at", "total", "processed", "imported", "existing", "failed", "unsaved_attachments", "new_contact_links", "error_code", "aliases_json", "folders_json"],
+ "fields": [
+  {"fieldname": "email_account", "label": "Email Account", "fieldtype": "Link", "options": "Email Account", "reqd": 1, "read_only": 1, "search_index": 1},
+  {"fieldname": "status", "label": "Status", "fieldtype": "Select", "options": "Queued\nRunning\nCompleted\nCompleted with errors\nFailed\nInterrupted", "reqd": 1, "read_only": 1, "search_index": 1},
+  {"fieldname": "stage", "label": "Stage", "fieldtype": "Data", "read_only": 1},
+  {"fieldname": "queued_by", "label": "Queued By", "fieldtype": "Link", "options": "User", "read_only": 1, "reqd": 1},
+  {"fieldname": "queued_at", "label": "Queued At", "fieldtype": "Datetime", "read_only": 1, "reqd": 1},
+  {"fieldname": "started_at", "label": "Started At", "fieldtype": "Datetime", "read_only": 1},
+  {"fieldname": "finished_at", "label": "Finished At", "fieldtype": "Datetime", "read_only": 1},
+  {"fieldname": "total", "label": "Total", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "processed", "label": "Processed", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "imported", "label": "Imported", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "existing", "label": "Existing", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "failed", "label": "Failed", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "unsaved_attachments", "label": "Unsaved Attachments", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "new_contact_links", "label": "New Contact Links", "fieldtype": "Int", "default": "0", "read_only": 1},
+  {"fieldname": "error_code", "label": "Error Code", "fieldtype": "Data", "read_only": 1},
+  {"fieldname": "aliases_json", "label": "Sender Aliases", "fieldtype": "Long Text", "read_only": 1},
+  {"fieldname": "folders_json", "label": "Folder Progress", "fieldtype": "Long Text", "read_only": 1}
+ ],
+ "permissions": []
+}
