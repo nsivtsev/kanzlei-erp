@@ -17,6 +17,7 @@ The first vertical slice supports a synthetic, text-based PDF in one managed Man
 | Responsibility | Selection |
 | --- | --- |
 | API and schema validation | Python, FastAPI, Pydantic, Uvicorn |
+| Independent frontend | Vite and TypeScript, introduced at the browser milestone |
 | Persistent application state | PostgreSQL, SQLAlchemy, Alembic |
 | Search | Qdrant, dense vectors plus BM25, initial fusion using RRF |
 | Background work | Celery and a dedicated Redis broker |
@@ -79,7 +80,7 @@ Source identity is `(connector_id, source_id)`. Manifests include `source_type`,
 
 The contract also declares processing policy and supported formats. Unlinked mail is excluded from the initial corpus; adding a separate unassigned-mail scope requires a later explicit decision. HTTP links are references, not permission to crawl their destinations. Folder membership requires an active path under the verified Mandant root, not just a matching File marker.
 
-Service credentials authorize configured ingestion only. They do not prove which human is asking a question. User-facing operations require a trusted, expiring user identity bound to the service and mapped to ERP. Resolve the initial login handoff in the connector-contract task; never trust a browser-supplied role, email or `user_id`, or expose a free-form impersonation endpoint. Anonymous fake identities are permitted only with synthetic fixtures in an isolated development configuration.
+Service credentials do not prove which human is asking a question. The implemented user-facing contract exchanges a 60-second, single-use opaque ERP ticket for a 300-second opaque grant bound to the active ERP session, integration audience and key generation. Every operation checks the current user/session and source permissions online. Browser-supplied roles, emails and `user_id` fields cannot select the principal. No fake identity bypass is enabled. Automatic browser handoff still requires state/verifier binding; unattended ingestion authorization belongs to the inventory/feed stage. See the [implemented identity/source contract](../../services/kanzlei_ai/docs/erp-connector.md).
 
 ## Durable synchronization
 
@@ -115,7 +116,7 @@ Questions requiring exhaustive lists, counts or current workflow state use bound
 
 **First milestone:** On an isolated local fixture, upload a text PDF under client A, observe readiness, ask in client A's chat, and open a cited page in the original document. The PDF must be absent from client B's context and from an unauthorized user's output. Restarting workers must not lose processing state. Trash, replacement and access revocation must prevent stale content from being used.
 
-Follow with scanned PDF/OCR evaluation, email and attachments, general mode, structured work context, broader file formats and pilot operations. The UI is independently served; an ERP shortcut can launch a scoped conversation later. Its initial frontend framework and the login handoff are resolved before the browser milestone.
+Follow with scanned PDF/OCR evaluation, email and attachments, general mode, structured work context, broader file formats and pilot operations. The UI is independently served using Vite and TypeScript; an ERP shortcut can launch a scoped conversation later. Complete the browser handoff binding before that milestone.
 
 Acceptance uses synthetic documents first. A small German fixture set must distinguish exact facts, semantic matches, contradictions, tables, prompt injection and unanswerable questions. Real model quality and real-document processing are separate from mocked integration acceptance. The task owner creates the PR and deploys.
 

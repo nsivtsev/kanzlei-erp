@@ -4,10 +4,10 @@ Independent FastAPI service in the ERP monorepo. It has its own Python environme
 Docker Compose project, PostgreSQL, Qdrant and Redis. It does not import Frappe,
 read ERP database tables or join the ERP Docker network.
 
-This bootstrap provides health endpoints and an idle Celery worker. Document
-ingestion, authentication, chat, ERP connectors and application migrations are
-subsequent implementation stages. No model API keys or real documents are needed
-to run this skeleton.
+The service provides health endpoints, an idle Celery worker and an optional ERP
+connector with delegated identity, online permissions and original-file reads.
+Document ingestion, chat and application migrations are subsequent stages. No
+model API keys or real documents are needed to run the default disabled connector.
 
 ## Start locally
 
@@ -122,7 +122,9 @@ German documents before live data is used.
 
 See the [accepted design](../../docs/plans/2026-11-15-ai-service-design.md) and
 [implementation plan](../../docs/plans/2026-11-15-ai-service-implementation.md).
-The next stage defines the versioned ERP source/identity contract before adding
-ingestion. PostgreSQL remains authoritative; Redis is a transport and Qdrant a
+The [ERP connector contract](docs/erp-connector.md) describes optional setup,
+identity, source access and local HTTP acceptance. The next stage adds the durable
+Drive inventory/change feed before ingestion. PostgreSQL remains authoritative;
+Redis is a transport and Qdrant a
 rebuildable projection. Durable jobs and recovery are not provided by this
 bootstrap worker.

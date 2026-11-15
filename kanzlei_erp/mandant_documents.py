@@ -862,30 +862,48 @@ def get_documents(customer, filters=None, cursor=None, page_length=DOCUMENT_PAGE
 	return {"items": page, "next_cursor": next_cursor, "has_more": more}
 
 
-def _authorized_files(customer, file_ids):
+def get_authorized_document_files(customer, file_ids, *, allow_partial=False):
+	"""Internal service boundary: current membership and read access for bounded File IDs.
+
+	Returns ERP documents, never a serialized API response. Callers must still use
+	the storage reader and enforce their own content limits. This does not grant
+	background ingestion access or authorize remote links/native Suite editors.
+	"""
+	return _authorized_files(customer, _normalize_file_ids(file_ids), allow_partial=allow_partial)
+
+
+def _authorized_files(customer, file_ids, *, allow_partial=False):
 	"""Re-evaluate current Customer, relation graph, and File permissions before serving bytes."""
 	customer_doc = _require_customer(customer)
 	permission_cache = {}
 	file_contexts, _, _, _, drive_documents, incoming = _collect_documents(customer_doc, _normalize_filters(), permission_cache)
 	authorized = {}
 	for file_id in file_ids:
-		if not frappe.db.exists("File", file_id) or file_id not in file_contexts:
-			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
-		if not _readable("File", file_id, permission_cache):
-			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
-		file = frappe.get_doc("File", file_id)
-		if file.attached_to_doctype == "Incoming Letter" and file_id not in incoming:
-			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
-		if file.get(FILE_CUSTOMER) and file_id not in drive_documents:
-			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
-		if file.is_folder or _external_url(file) or not file.file_url:
-			frappe.throw(frappe._("This document cannot be downloaded"), frappe.PermissionError)
-		if file.attached_to_doctype and file.attached_to_name and not _readable(
-			file.attached_to_doctype, file.attached_to_name, permission_cache
-		):
-			frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
-		authorized[file_id] = file
+		try:
+			authorized[file_id] = _authorize_document_file(file_id, file_contexts, drive_documents, incoming, permission_cache)
+		except (frappe.PermissionError, frappe.DoesNotExistError):
+			if not allow_partial:
+				raise
 	return customer_doc, authorized
+
+
+def _authorize_document_file(file_id, file_contexts, drive_documents, incoming, permission_cache):
+	if not frappe.db.exists("File", file_id) or file_id not in file_contexts:
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+	if not _readable("File", file_id, permission_cache):
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+	file = frappe.get_doc("File", file_id)
+	if file.attached_to_doctype == "Incoming Letter" and file_id not in incoming:
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+	if file.get(FILE_CUSTOMER) and file_id not in drive_documents:
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+	if file.is_folder or _external_url(file) or not file.file_url:
+		frappe.throw(frappe._("This document cannot be downloaded"), frappe.PermissionError)
+	if file.attached_to_doctype and file.attached_to_name and not _readable(
+		file.attached_to_doctype, file.attached_to_name, permission_cache
+	):
+		frappe.throw(frappe._("Document is no longer available"), frappe.PermissionError)
+	return file
 
 
 def _safe_local_path(file):

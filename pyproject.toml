@@ -35,6 +35,8 @@ target-version = "py314"
 "scripts/ci_*.py" = "py39"
 "scripts/deploy_preflight.py" = "py39"
 "tests/deploy/**/*.py" = "py39"
+# AI acceptance runs in the independent service's Python environment.
+"scripts/verify-ai-connector.py" = "py313"
 
 [tool.ruff.lint]
 select = [

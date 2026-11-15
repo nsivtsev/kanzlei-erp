@@ -6,7 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="AI_", env_file=".env", extra="ignore", hide_input_in_errors=True
+        env_prefix="AI_",
+        env_file=".env",
+        extra="ignore",
+        hide_input_in_errors=True,
+        env_ignore_empty=True,
     )
 
     database_url: SecretStr = SecretStr("postgresql://kanzlei_ai@127.0.0.1:55432/kanzlei_ai")
@@ -15,3 +19,8 @@ class Settings(BaseSettings):
     qdrant_api_key: SecretStr | None = None
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:56379/0")
     health_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    erp_base_url: HttpUrl | None = None
+    erp_service_key: SecretStr | None = None
+    erp_site_name: str | None = None
+    erp_allow_insecure_http: bool = False
+    erp_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
