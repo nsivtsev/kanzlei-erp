@@ -157,7 +157,7 @@ def main(argv=None):
 		"--env-file",
 		str(ROOT / ".env"),
 		"-f",
-		str(ROOT / ".devcontainer/docker-compose.yml"),
+		str(ROOT / "compose.yml"),
 	]
 	subprocess.run([*compose, "up", "-d", "--build", "--wait", "--wait-timeout", "120", "minio"], check=True)
 	subprocess.run([*compose, "exec", "-T", "minio", "sh"], input=PROVISION, text=True, check=True)

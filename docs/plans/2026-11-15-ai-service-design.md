@@ -4,6 +4,14 @@
 
 **Goal:** Provide answers, summaries and drafts grounded in the Kanzlei's email and uploaded documents, either for one Mandant or across the user's permitted Mandanten.
 
+## Deployment decision (2026-11-16)
+
+Local development and production use one Compose project containing ERP and AI
+containers. The AI code, database, broker, search storage and credentials remain
+independent. The shared network carries the authenticated ERP HTTP connector.
+Production AI activation is opt-in; ERP backup and restore do not cover AI data.
+After an ERP restore AI stays stopped until operators reconcile and rescan.
+
 ## Scope and deployment boundary
 
 The service lives in `services/kanzlei_ai/` and owns its dependencies, migrations, API, workers and deployment configuration. It imports no Frappe modules, reads no ERP database tables, and does not share ERP Redis credentials or database credentials. The same repository provides coordinated development without requiring coordinated application releases.
@@ -23,7 +31,7 @@ The first vertical slice supports a synthetic, text-based PDF in one managed Man
 | Background work | Celery and a dedicated Redis broker |
 | Document extraction | Docling, with replaceable OCR adapter |
 | Large derived artifacts | Private S3-compatible storage with a service-specific namespace |
-| Initial deployment | Separate Docker Compose project; API and workers use the same application image |
+| Initial deployment | One ERP Compose project with separate AI API, worker, coordinator and dedicated data services |
 
 Exact runtime, image and package versions are selected and locked after an ARM64 dependency smoke check. LLM, embedding, reranking and OCR providers remain replaceable. Provider/model selection is a separate decision before live-data use. Synthetic providers establish pipeline correctness, not model quality.
 

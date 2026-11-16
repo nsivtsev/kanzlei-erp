@@ -406,6 +406,58 @@ class DeploymentTests(unittest.TestCase):
 			manager.restore(self.root, backup, "erp.example.com", commands=commands, smoke=lambda _: None)
 		self.assertEqual(commands.calls, [])
 
+	def test_backup_failure_does_not_restart_ai_with_new_images(self):
+		digest = "c" * 64
+		with self.config.open("a") as handle:
+			handle.write("AI_ENABLED=1\nAI_API_IMAGE=example/api@sha256:" + digest +
+				"\nAI_WORKER_IMAGE=example/worker@sha256:" + digest +
+				"\nAI_POSTGRES_PASSWORD=" + "x" * 32 + "\nAI_ERP_SERVICE_KEY=" + "y" * 32 + "\n")
+		(self.release / "deploy/compose.yml").write_text("services:\n  ai-api:\n")
+		(self.previous / "deploy/compose.yml").write_text("services:\n  ai-api:\n")
+		commands = FakeCommands("backup")
+		with self.assertRaisesRegex(RuntimeError, "backup"):
+			self.deployer(commands).deploy()
+		self.assertFalse(any("up" in call and "ai-api" in call for call in commands.calls))
+		self.assertFalse(any("migrate" in call for call in commands.calls))
+		self.assertTrue(any("up" in call and "scheduler" in call for call in commands.calls))
+
+	def test_unhealthy_ai_api_does_not_publish_release(self):
+		digest = "c" * 64
+		with self.config.open("a") as handle:
+			handle.write("AI_ENABLED=1\nAI_API_IMAGE=example/api@sha256:" + digest +
+				"\nAI_WORKER_IMAGE=example/worker@sha256:" + digest +
+				"\nAI_POSTGRES_PASSWORD=" + "x" * 32 + "\nAI_ERP_SERVICE_KEY=" + "y" * 32 + "\n")
+		(self.release / "deploy/compose.yml").write_text("services:\n  ai-api:\n")
+		class UnhealthyCommands(FakeCommands):
+			def run(self, args, **kwargs):
+				if "up" in args and "ai-api" in args and "--wait" in args:
+					raise RuntimeError("AI API unhealthy")
+				return super().run(args, **kwargs)
+		commands = UnhealthyCommands()
+		with self.assertRaisesRegex(RuntimeError, "AI API unhealthy"):
+			self.deployer(commands).deploy()
+		self.assertEqual(json.loads((self.root / "shared/current.json").read_text()), self.state)
+
+	def test_restore_config_replace_failure_keeps_live_ai_credentials_for_retry(self):
+		from unittest.mock import patch
+		self.deployer().deploy()
+		backup = next((self.root / "backups").iterdir())
+		with self.config.open("a") as handle:
+			handle.write("AI_POSTGRES_PASSWORD=current-ai-password\n")
+		original = self.config.read_text()
+		real_replace = manager.os.replace
+		def fail_config_replace(source, target):
+			if Path(target) == self.config:
+				raise OSError("injected config replace failure")
+			return real_replace(source, target)
+		with patch.object(manager.os, "replace", side_effect=fail_config_replace):
+			with self.assertRaisesRegex(OSError, "injected config replace failure"):
+				manager.restore(self.root, backup, "erp.example.com", commands=FakeCommands(), smoke=lambda _: None)
+		self.assertEqual(self.config.read_text(), original)
+		manager.restore(self.root, backup, "erp.example.com", commands=FakeCommands(), smoke=lambda _: None)
+		self.assertIn("AI_POSTGRES_PASSWORD=current-ai-password\n", self.config.read_text())
+		self.assertIn("AI_ENABLED=0\n", self.config.read_text())
+
 
 if __name__ == "__main__":
 	unittest.main()

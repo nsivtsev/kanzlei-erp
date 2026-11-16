@@ -1,0 +1,120 @@
+x-ai-environment: &ai-environment
+  AI_DATABASE_URL: postgresql://kanzlei_ai@ai-postgres:5432/kanzlei_ai
+  AI_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-}
+  AI_QDRANT_URL: http://ai-qdrant:6333
+  AI_REDIS_URL: redis://ai-redis:6379/0
+  AI_HEALTH_TIMEOUT_SECONDS: ${AI_HEALTH_TIMEOUT_SECONDS:-2}
+  AI_ERP_BASE_URL: http://frappe:8000
+  AI_ERP_SITE_NAME: development.localhost
+  AI_ERP_SERVICE_KEY: ${AI_ERP_SERVICE_KEY:-}
+  AI_ERP_ALLOW_INSECURE_HTTP: "true"
+  AI_ERP_TIMEOUT_SECONDS: ${AI_ERP_TIMEOUT_SECONDS:-5}
+  AI_INGESTION_ENABLED: ${AI_INGESTION_ENABLED:-false}
+  AI_INGESTION_KEY: ${AI_INGESTION_KEY:-}
+  AI_INGESTION_CONNECTOR_ID: ${AI_INGESTION_CONNECTOR_ID:-kanzlei-erp}
+  AI_INGESTION_POLL_SECONDS: ${AI_INGESTION_POLL_SECONDS:-30}
+  AI_INGESTION_RECONCILE_SECONDS: ${AI_INGESTION_RECONCILE_SECONDS:-86400}
+  AI_INGESTION_PIPELINE_VERSION: ${AI_INGESTION_PIPELINE_VERSION:-metadata-v1}
+
+services:
+  ai-api:
+    image: kanzlei-ai-api:local
+    build:
+      context: .
+      target: runtime
+    environment: *ai-environment
+    ports:
+      - "127.0.0.1:${AI_API_PORT:-8180}:8000"
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-qdrant:
+        condition: service_started
+      ai-redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=32).close()"]
+      interval: 10s
+      timeout: 35s
+      retries: 6
+      start_period: 10s
+    init: true
+
+  ai-worker:
+    image: kanzlei-ai-worker:local
+    build:
+      context: .
+      target: documents
+    environment: *ai-environment
+    hostname: ai-worker
+    command: [celery, -A, "kanzlei_ai.worker:app", worker, "--hostname=worker@%h", "--loglevel=INFO", "--concurrency=1"]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-qdrant:
+        condition: service_started
+      ai-redis:
+        condition: service_healthy
+    init: true
+
+  ai-coordinator:
+    image: kanzlei-ai-api:local
+    build:
+      context: .
+      target: runtime
+    environment: *ai-environment
+    command: [python, -m, kanzlei_ai.coordinator, run]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+
+  ai-postgres:
+    image: postgres:18-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+    environment:
+      POSTGRES_USER: kanzlei_ai
+      POSTGRES_DB: kanzlei_ai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${AI_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - ai-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  ai-qdrant:
+    image: qdrant/qdrant:latest@sha256:d18c8e5061be3eaea2f53fbee1f0bf0382dc59cbb9b7112e41ffcc937ec14220
+    ports:
+      - "127.0.0.1:${AI_QDRANT_PORT:-56333}:6333"
+    volumes:
+      - ai-qdrant-data:/qdrant/storage
+
+  ai-redis:
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec]
+    ports:
+      - "127.0.0.1:${AI_REDIS_PORT:-56379}:6379"
+    volumes:
+      - ai-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  ai-postgres-data:
+    external: true
+    name: kanzlei-ai_postgres-data
+  ai-qdrant-data:
+    external: true
+    name: kanzlei-ai_qdrant-data
+  ai-redis-data:
+    external: true
+    name: kanzlei-ai_redis-data

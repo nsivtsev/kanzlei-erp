@@ -12,13 +12,33 @@ EOF
   echo "Created local credentials in .env"
 fi
 
+if [[ ! -f services/kanzlei_ai/.env ]]; then
+  umask 077
+  ai_password=$(openssl rand -hex 32)
+  sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$ai_password/" \
+      -e "s/^AI_DATABASE_PASSWORD=.*/AI_DATABASE_PASSWORD=$ai_password/" \
+      services/kanzlei_ai/.env.example > services/kanzlei_ai/.env
+  echo "Created AI credentials in services/kanzlei_ai/.env"
+fi
 bash scripts/setup-minio.sh --credentials-only
-compose=(docker compose --env-file .env -f .devcontainer/docker-compose.yml)
+compose=(docker compose --env-file .env -f compose.yml)
 "${compose[@]}" config --quiet
+if [[ -n $(docker ps -q --filter label=com.docker.compose.project=kanzlei-ai) ]]; then
+  echo "Stop the legacy kanzlei-ai project before starting the unified project; do not remove its volumes." >&2
+  exit 1
+fi
 rm -f development/frappe-bench/.kanzlei-ready
 # Bench must restart after editable dependencies change; keep it behind the ready gate.
 "${compose[@]}" stop frappe
-"${compose[@]}" up -d --build
+"${compose[@]}" up -d --build mariadb redis-cache redis-queue minio frappe
+for volume in kanzlei-ai_postgres-data kanzlei-ai_qdrant-data kanzlei-ai_redis-data; do
+  docker volume inspect "$volume" >/dev/null 2>&1 || docker volume create "$volume" >/dev/null
+done
+"${compose[@]}" stop ai-api ai-worker ai-coordinator
+"${compose[@]}" build ai-api ai-worker
+"${compose[@]}" up -d --wait ai-postgres ai-redis ai-qdrant
+"${compose[@]}" run --rm --no-deps ai-api python -m kanzlei_ai.coordinator migrate
+"${compose[@]}" up -d --no-build ai-api ai-worker ai-coordinator
 
 echo "Waiting for MariaDB..."
 for attempt in {1..60}; do

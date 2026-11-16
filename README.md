@@ -21,9 +21,9 @@ Open [http://development.localhost:8100](http://development.localhost:8100) and 
 To inspect or stop the services:
 
 ```bash
-docker compose --env-file .env -f .devcontainer/docker-compose.yml ps
-docker compose --env-file .env -f .devcontainer/docker-compose.yml logs -f frappe
-docker compose --env-file .env -f .devcontainer/docker-compose.yml down
+docker compose --env-file .env -f compose.yml ps
+docker compose --env-file .env -f compose.yml logs -f frappe
+docker compose --env-file .env -f compose.yml down
 ```
 
 The Kanzlei ERP Frappe app lives at the repository root and is linked into the ignored `development/frappe-bench/apps/kanzlei_erp/` at runtime. Bench and site data are ignored; MariaDB data is in a named Docker volume. `down` preserves both; `down -v` removes the database, so use it only to discard the local site.
@@ -97,7 +97,7 @@ Open the [Task calendar](http://development.localhost:8100/desk/task/view/calend
 For a quick local walkthrough, populate two clearly fictitious Mandants, one single Task, and one monthly schedule:
 
 ```bash
-docker compose --env-file .env -f .devcontainer/docker-compose.yml exec -T frappe bash -lc \
+docker compose --env-file .env -f compose.yml exec -T frappe bash -lc \
   'cd /workspace/development/frappe-bench && env/bin/python /workspace/scripts/seed_local_demo.py'
 ```
 
@@ -330,3 +330,7 @@ Mail opens the standard Communication form; full Task Calendar and Inbox remain 
 For rollout, back up the site's database and files, run `bench --site <site> migrate`, `bench build --app kanzlei_erp`, then `bench --site <site> clear-cache`. The patch `detach_settings_icon` changes only the old Einstellungen → Kanzlei relationship in saved Desktop layouts. Repeat execution is safe and preserves other layout entries and ordering.
 
 Run the overview and navigation modules through Bench and the client checks with `node --test tests/*.test.cjs`. Development-only fictitious fixtures can be created with `env/bin/python /workspace/scripts/seed_overview_demo.py` from the container's Bench directory; pass `cleanup` afterward to remove the created records and restore the saved Administrator language, theme and email assignments. Do not run fixture setup on production. See [overview acceptance](docs/acceptance/kanzlei-overview.md) for validation and screenshots.
+
+Local ERP and AI containers share the root Compose project. Existing AI data
+keeps its legacy named volumes. Before the first unified start, stop the old
+`kanzlei-ai` project without removing volumes. See [AI operations](services/kanzlei_ai/README.md).

@@ -1,8 +1,9 @@
 # Kanzlei AI service
 
 Independent FastAPI service in the ERP monorepo. It has its own Python environment,
-Docker Compose project, PostgreSQL, Qdrant and Redis. It does not import Frappe,
-read ERP database tables or join the ERP Docker network.
+PostgreSQL, Qdrant and Redis. The local and production services share one Compose
+project and network with ERP, while keeping application code and storage separate.
+It does not import Frappe or read ERP database tables.
 
 The service provides health endpoints, a metadata-staging Celery worker, durable
 ingestion and an optional ERP connector with delegated identity, online permissions
@@ -12,16 +13,21 @@ No model API keys or real documents are needed with the default disabled connect
 ## Start locally
 
 Requirements: Docker Compose with BuildKit and ARM64 or x86-64 Linux containers.
-Run commands from this directory, not the repository root:
+From the repository root, run `bash scripts/setup-local.sh` to create credentials
+only when missing, provision the named volumes, migrate AI PostgreSQL and start
+all services. The Compose entry point is `docker compose --env-file .env -f compose.yml`.
+If upgrading an existing standalone AI project, first stop that project's containers
+without deleting its volumes. Never start two PostgreSQL containers on the same volume.
+The legacy Compose file paths are wrappers for the same project and require both
+credential files created by setup. From this directory the AI wrapper can also be
+used with `docker compose`; it loads the root ERP and service-local settings.
 
 ```bash
-cp .env.example .env
-docker compose up -d --build --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8180/health/live
 curl --fail http://127.0.0.1:8180/health/ready
 ```
 
-The example password is for this loopback-only local stack. Keep `.env` private
+The example password is for local development only. Keep `.env` private
 and use independent credentials; do not copy the ERP's root `.env`. Image contents
 are pinned by digest and Python dependencies by `uv.lock`. The Qdrant `latest`
 label is also digest-pinned, so it does not track new releases automatically.
@@ -35,18 +41,19 @@ host `AI_DATABASE_PASSWORD`. The password is passed separately from the URL, so
 characters such as `@`, `:` and `/` do not require URI encoding. Changing an environment variable does not rotate an
 existing database volume's password.
 
+The following commands run from `services/kanzlei_ai`:
+
 ```bash
-docker compose ps
-docker compose logs --tail 100 api worker
-docker compose exec worker celery -A kanzlei_ai.worker:app inspect ping --destination worker@ai-worker --timeout 5
-docker compose stop
-docker compose start
-docker compose down
+docker compose --env-file ../../.env -f ../../compose.yml ps
+docker compose --env-file ../../.env -f ../../compose.yml logs --tail 100 ai-api ai-worker
+docker compose --env-file ../../.env -f ../../compose.yml exec ai-worker celery -A kanzlei_ai.worker:app inspect ping --destination worker@ai-worker --timeout 5
+docker compose --env-file ../../.env -f ../../compose.yml stop
+docker compose --env-file ../../.env -f ../../compose.yml start
+docker compose --env-file ../../.env -f ../../compose.yml down
 ```
 
-`down` keeps this project's database/search/broker volumes. Do not use `down -v`
-unless intentionally discarding this service's local data. Commands above do not
-stop, migrate, rebuild or remove the existing ERP environment.
+`down` stops the shared project, including ERP. AI volumes retain their existing
+external names; never use volume deletion unless intentionally discarding data.
 
 ## Health contract
 
@@ -83,7 +90,7 @@ uv run --locked uvicorn kanzlei_ai.app:create_app --factory --host 127.0.0.1 --p
 Stop Compose's API first when running Uvicorn on the same port:
 
 ```bash
-docker compose stop api
+docker compose --env-file ../../.env -f ../../compose.yml stop ai-api
 ```
 
 Tests inject asynchronous probes and need no running ERP, database, broker,
@@ -111,7 +118,7 @@ Linux PyTorch packages resolve from the explicit official CPU wheel index;
 macOS packages use PyPI. No document model weights are downloaded in the build.
 
 ```bash
-docker compose run --rm --no-deps worker python -c 'from docling.document_converter import DocumentConverter; import torch; print("Docling import OK; torch", torch.__version__)'
+docker compose --env-file ../../.env -f ../../compose.yml run --rm --no-deps ai-worker python -c 'from docling.document_converter import DocumentConverter; import torch; print("Docling import OK; torch", torch.__version__)'
 ```
 
 This checks binary/import compatibility, not OCR or model quality. A future
@@ -132,13 +139,13 @@ and stages metadata; extraction and indexing are not yet implemented.
 
 Ingestion is opt-in. The coordinator starts independently from the worker and
 recovers committed work even when ERP polling is disabled. First initialize the
-service database explicitly (`docker compose run --rm api python -m
+service database explicitly (`docker compose --env-file ../../.env -f ../../compose.yml run --rm ai-api python -m
 kanzlei_ai.coordinator migrate`); migrations are packaged in both images. This
 never changes the ERP database. Configure the ERP background ingestion identity,
 client allowlist, and **separate** ingestion key as described in
 [the ERP connector contract](docs/erp-connector.md). Set `AI_INGESTION_KEY`,
 `AI_INGESTION_ENABLED=true`, and the existing ERP origin/site settings only when
-ready to ingest. Start a full scan with `docker compose run --rm api python -m
+ready to ingest. Start a full scan with `docker compose --env-file ../../.env -f ../../compose.yml run --rm ai-api python -m
 kanzlei_ai.coordinator scan`, then start the coordinator and worker. A new scan
 can also be initiated with the same command after changing bindings or repairing
 an invalid cursor; cursor errors do not silently skip feed history. The coordinator
@@ -163,8 +170,8 @@ fsync). Outbox leases are 30s; worker leases are 120s, task soft/hard limits are
 metadata with status `awaiting_extraction`; it does not fetch bytes, parse, or
 index content. Protect the database and its receipt contents as private data.
 
-Start the standalone coordinator after migration with `docker compose up -d
-coordinator worker`. A stopped worker does not stop polling or recovery.
+Start the standalone coordinator after migration with `docker compose --env-file ../../.env -f ../../compose.yml up -d
+ai-coordinator ai-worker`. A stopped worker does not stop polling or recovery.
 Historical receipts, jobs and
 published outbox rows are not automatically pruned in this stage. Retention
 and operator cleanup policy must be defined before a production pilot; deleting
