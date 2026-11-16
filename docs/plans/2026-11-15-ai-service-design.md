@@ -127,3 +127,12 @@ Acceptance uses synthetic documents first. A small German fixture set must disti
 - [Qdrant hybrid queries](https://qdrant.tech/documentation/search/hybrid-queries/)
 - [Celery task retries and delivery](https://docs.celeryq.dev/en/stable/userguide/tasks.html)
 - [Docling formats](https://docling-project.github.io/docling/usage/supported_formats/)
+
+Task 3 scope: unattended background inventory is restricted to managed S3 Drive
+sources. An eligible local source fails the scan visibly until local WebDAV
+compensation can be captured or reconciled. File invalidations are recorded
+regardless of whether ingestion access is enabled; disabling access alone does
+not create an event gap. The private ingestion credential is bound to a fixed
+staff identity and explicit client allowlist, distinct from browser delegation.
+See the [ERP connector contract](../../services/kanzlei_ai/docs/erp-connector.md)
+for bootstrap, snapshot overlap, tombstone and resume semantics.

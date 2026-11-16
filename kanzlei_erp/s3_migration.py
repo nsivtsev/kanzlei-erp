@@ -576,6 +576,8 @@ def activate(run_id):
 				settings.flat = 1
 				settings.root_folder = data["prefix"] + "/drive"
 				settings.save(ignore_permissions=True)
+				from kanzlei_erp.ai_connector.events import record_ids
+				record_ids(data["target_urls"].keys())
 				# Persist the recovery marker in the SAME DB transaction; a process
 				# crash after commit cannot leave an undecidable journal state.
 				frappe.db.set_single_value("Drive Disk Settings", "kanzlei_s3_migration_run", run_id)
@@ -671,6 +673,8 @@ def rollback(run_id):
 					settings.set(field, data["settings"].get(field))
 				settings.save(ignore_permissions=True)
 				frappe.db.set_single_value("Drive Disk Settings", "kanzlei_s3_migration_run", "")
+				from kanzlei_erp.ai_connector.events import record_ids
+				record_ids(data["target_urls"].keys())
 				frappe.db.commit()
 		except Exception:
 			frappe.db.rollback()

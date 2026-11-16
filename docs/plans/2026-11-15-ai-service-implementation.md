@@ -70,6 +70,41 @@ Acceptance: 31 service tests (including the real infrastructure check), 21 ERP c
 
 **Expected:** A stopped consumer can resume without skipping committed changes or seeing rolled-back sources.
 
+**Result on 2026-11-16:** Local Drive ingestion is deferred because Suite's local
+WebDAV failed-promotion repair performs a raw metadata commit outside File
+hooks. Managed S3 is the background boundary; a reachable local source fails
+closed. Capture remains active while ingestion access is disabled. The
+[ERP connector contract](../../services/kanzlei_ai/docs/erp-connector.md)
+describes configuration, the locking and alias-scan costs, and operational
+limits. Worker persistence and reconciliation remain Task 4.
+
+Focused acceptance: 18 real Bench database/Redis tests passed, including
+rollback, duplicate invalidations, deletion, trash and restore, S3 replacement,
+held sequence lock, reversed mutation completion, an established snapshot,
+concurrent descendant movement, keyset overlap, direct `db_insert`, atomic
+`commit=True`, authentication and RPC dispatch. Tests use an in-memory S3
+fixture and do not test a live S3 provider or the deferred consumer/worker.
+Shared regression checks passed: 17 Mandant Documents, 19 object-storage,
+20 S3-migration and 23 Posteingang document cases. All 21 existing connector
+cases were verified across the main run and a focused rerun of four cases
+after isolating the test user-creation throttle. The shared PDF fixture now
+contains a valid ASCII-safe PDF and works without a live S3 connection.
+
+The old Drive suites retain 19 errors in Mandant Drive and 21 errors plus one
+failure in Drive Storage Security. Representative path-validation and copied
+folder failures reproduce with the original production files from `7ccf20f`.
+These fixtures limit full Drive acceptance. Ruff and diff whitespace checks
+passed; independent Astra review has no remaining blockers. Replacement's
+linear alias scan remains a documented contention cost.
+
+A failed committed test initially leaked temporary S3 settings. The six fields
+were restored from ERP version history, the user confirmed S3 was enabled,
+and a read-only bucket HEAD returned 200. Tests now keep durable private
+configuration snapshots, roll back each case, and verify restoration. Final
+acceptance restored and verified the original S3 configuration; unreferenced
+synthetic bindings attributable to this task were removed without changing
+File records or S3 objects.
+
 ## Task 4: Durable service ingestion and recovery
 
 **Create:** `services/kanzlei_ai/src/kanzlei_ai/db.py`, `models.py`, `sync.py`, `jobs.py`, `worker.py`, `outbox.py`, `migrations/env.py`, `migrations/versions/0001_sources_jobs.py`, `tests/integration/test_sync.py`, `tests/integration/test_job_recovery.py`.

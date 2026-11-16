@@ -1,0 +1,21 @@
+{
+ "doctype": "DocType",
+ "name": "AI Source State",
+ "module": "Kanzlei ERP",
+ "custom": 0,
+ "engine": "InnoDB",
+ "autoname": "prompt",
+ "field_order": [
+  "sequence"
+ ],
+ "fields": [
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Long Int",
+   "label": "Sequence",
+   "default": "0"
+  }
+ ],
+ "permissions": [],
+ "track_changes": 0
+}

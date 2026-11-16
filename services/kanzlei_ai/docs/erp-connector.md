@@ -163,3 +163,58 @@ ERP storage bookkeeping. It does not send email, call models or index real data.
 The real transaction test in `test_ai_connector` covers concurrent File revision
 changes from another DB connection. Existing Mandant Documents, Drive storage and
 Posteingang checks remain relevant because the connector reuses their policy.
+
+## Background Drive inventory and changes
+
+After migrating the ERP schema, configure `kanzlei_ai_connector.ingestion` in
+private site configuration with `enabled: true`, a fixed enabled System User
+in `user` (never Administrator), an explicit nonempty `client_ids` array,
+`generation` (an operator-controlled string), and `key_sha256` (the SHA-256
+hex digest of a separate private ingestion key). Send the original ingestion key
+in `X-Kanzlei-AI-Service-Key`; the browser delegation key does not grant this
+background access. The connector itself must also be enabled. The fixed user
+must currently have Customer read permission on every configured client or the
+whole request fails with 403; current File and attachment permissions govern
+manifests. A dedicated credential authorizes minimal source IDs and client IDs
+in invalidations for the allowlisted clients, including IDs that the fixed user
+cannot currently read. Such tombstones include no title, path or bytes. Keep the
+allowlist and credential restricted to the trusted ingestion service.
+
+Call `inventory` with an optional `cursor` and `limit` (1–100). Apply all pages
+before replaying changes: a later inventory page can otherwise overwrite a newer
+change. Empty pages can have a continuation. Every page carries the same opaque
+`changes_cursor` watermark; retain it through the scan. After the final page,
+call `changes` with that cursor and save each returned `next_cursor` durably
+with the applied results. Empty changes pages also return a resumable cursor.
+Changes are invalidations projected to the current state: `operation` is
+`upsert` with a current manifest, or `delete` with `manifest: null`. They are
+not historical versions and duplicates are expected. Apply each operation
+idempotently and remove indexed content on delete. Current permissions must also
+be checked online before content is served. Cursor signatures bind the subject,
+client allowlist, connector, audience, key digest and generation. Changes to
+any of these require a fresh full inventory; do not reuse an old cursor.
+
+Capture begins after schema installation and remains active even while ingestion
+is disabled. A first deployment, a period without capture, lost event history,
+or a generation change requires a full inventory and reconciliation that
+removes previously indexed sources absent from the completed scan. No event
+retention or pruning is implemented. The feed currently supports managed S3
+Drive files only: a readable active local Drive source reachable during a scan
+or change projection causes `UNSUPPORTED_STORAGE` (409). Migrate local files
+before enabling ingestion; the existing delegated document API still supports
+local files. This restriction is necessary because Suite's failed local WebDAV
+promotion repair can commit raw metadata updates without File hooks. Future
+legacy support needs reliable capture or reconciliation for that path.
+
+File writes append private invalidations in the same transaction, without
+network calls or content processing. A locked sequence row serializes event
+allocation through commit, and the initial watermark is read from the same
+consistent database snapshot as the first inventory page. Parent and root
+changes invalidate descendants, including unchanged files. S3 migration
+activation and rollback explicitly invalidate affected File IDs. Locking reads
+can conflict with concurrent writers; retry a deadlocked operation as a whole
+transaction. Binding replacement scans and locks managed File IDs and URLs to
+match every canonical alias; its cost grows with the number of managed Files,
+but capture does not read file content or call object storage. This stage
+provides no ingestion worker, durable consumer database, indexing or periodic
+reconciliation; these belong to a later stage.

@@ -123,8 +123,8 @@ German documents before live data is used.
 See the [accepted design](../../docs/plans/2026-11-15-ai-service-design.md) and
 [implementation plan](../../docs/plans/2026-11-15-ai-service-implementation.md).
 The [ERP connector contract](docs/erp-connector.md) describes optional setup,
-identity, source access and local HTTP acceptance. The next stage adds the durable
-Drive inventory/change feed before ingestion. PostgreSQL remains authoritative;
+identity, source access, managed S3 Drive inventory/change feed and local acceptance.
+The next stage adds durable consumption, ingestion jobs and recovery. PostgreSQL remains authoritative;
 Redis is a transport and Qdrant a
 rebuildable projection. Durable jobs and recovery are not provided by this
 bootstrap worker.

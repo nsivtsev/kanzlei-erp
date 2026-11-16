@@ -5,6 +5,7 @@ import importlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,10 @@ class TestAIConnector(FrappeTestCase):
 	make_drive_child = document_fixtures.TestMandantDocuments.make_drive_child
 
 	def setUp(self):
+		# Repeated synthetic users can exceed the site's ordinary creation limit.
+		self.user_throttle = patch("frappe.core.doctype.user.user.throttle_user_creation")
+		self.user_throttle.start()
+		self.addCleanup(self.user_throttle.stop)
 		frappe.set_user("Administrator")
 		self.file_names = set()
 		self.reader = frappe.get_doc(
@@ -37,7 +42,15 @@ class TestAIConnector(FrappeTestCase):
 		self.other = self.customer_fixture("AI client B")
 		frappe.share.add("Customer", self.customer.name, self.reader.name, read=1)
 		self.root = self.make_drive_root()
-		self.original = b"%PDF-1.4\nSynthetic private source\n" + frappe.generate_hash(length=8).encode()
+		from pypdf import PdfWriter
+
+		pdf = BytesIO()
+		writer = PdfWriter()
+		writer.add_blank_page(width=72, height=72)
+		writer.add_metadata({"/Title": "Synthetic " + frappe.generate_hash(length=16)})
+		writer.write(pdf)
+		# Keep Frappe's text round-trip byte-preserving, as in the document fixture.
+		self.original = pdf.getvalue().replace(b"%\xe2\xe3\xcf\xd3", b"%test", 1)
 		self.file = self.make_drive_child(self.root, "synthetic.pdf", self.original)
 		self.key = "synthetic-service-key-" + frappe.generate_hash(length=32)
 		self.config = {
@@ -235,7 +248,7 @@ class TestAIConnector(FrappeTestCase):
 
 	def test_signed_pagination_is_bound_to_user_and_client(self):
 		frappe.set_user("Administrator")
-		self.make_drive_child(self.root, "second.pdf", b"second synthetic file")
+		self.make_drive_child(self.root, "second.pdf")
 		token = self.grant_for_reader()
 		page = self.documents(token, limit=1)
 		self.assertTrue(page["next_cursor"])

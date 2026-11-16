@@ -114,3 +114,17 @@ def read_source(access_token=None, scope=None, source=None, version=1, **extra):
 			"X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
 		},
 	)
+
+
+@frappe.whitelist(allow_guest=True, methods=['GET', 'POST'])
+@endpoint
+def inventory(cursor=None, limit=50, version=1, **extra):
+	from kanzlei_erp.ai_connector import inventory as feed
+	return feed.inventory(cursor, limit)
+
+
+@frappe.whitelist(allow_guest=True, methods=['GET', 'POST'])
+@endpoint
+def changes(cursor=None, limit=50, version=1, **extra):
+	from kanzlei_erp.ai_connector import inventory as feed
+	return feed.changes(cursor, limit)
