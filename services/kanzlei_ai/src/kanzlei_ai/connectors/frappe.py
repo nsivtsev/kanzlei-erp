@@ -11,10 +11,12 @@ from pydantic import SecretStr, ValidationError
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import (
     AuthorizationResult,
+    ChangePage,
     ClientPage,
     DocumentPage,
     Grant,
     Identity,
+    InventoryPage,
     Revoked,
     Scope,
     SourceRef,
@@ -169,3 +171,9 @@ class FrappeConnector:
         ):
             raise ConnectorError()
         return content
+
+    async def inventory(self, cursor: str | None = None, limit: int = 50) -> InventoryPage:
+        return await self._typed(InventoryPage, "inventory", cursor=cursor, limit=limit)
+
+    async def changes(self, cursor: str, limit: int = 50) -> ChangePage:
+        return await self._typed(ChangePage, "changes", cursor=cursor, limit=limit)

@@ -24,3 +24,9 @@ class Settings(BaseSettings):
     erp_site_name: str | None = None
     erp_allow_insecure_http: bool = False
     erp_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+    ingestion_enabled: bool = False
+    ingestion_key: SecretStr | None = None
+    ingestion_connector_id: str = "kanzlei-erp"
+    ingestion_poll_seconds: int = Field(default=30, ge=5, le=3600)
+    ingestion_reconcile_seconds: int = Field(default=86400, ge=60, le=2592000)
+    ingestion_pipeline_version: str = Field(default="metadata-v1", min_length=1, max_length=100)

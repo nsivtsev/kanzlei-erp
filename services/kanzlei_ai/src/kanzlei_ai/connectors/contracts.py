@@ -126,3 +126,35 @@ class AuthorizationResult(Contract):
 
 class Revoked(Contract):
     revoked: Literal[True]
+
+
+class InventoryPage(Contract):
+    items: Annotated[list[SourceManifest], Field(max_length=100)]
+    next_cursor: Annotated[str, Field(min_length=1, max_length=4096)] | None
+    changes_cursor: Annotated[str, Field(min_length=1, max_length=4096)]
+
+
+class ChangeItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
+    client_id: Identifier
+    operation: Literal["upsert", "delete"]
+    manifest: SourceManifest | None
+
+    @model_validator(mode="after")
+    def validate_projection(self):
+        if self.operation == "delete":
+            if self.manifest is not None:
+                raise ValueError("Delete must not include a manifest")
+        elif (
+            self.manifest is None
+            or self.manifest.source_id != self.source_id
+            or self.client_id not in self.manifest.client_ids
+        ):
+            raise ValueError("Upsert must match its source and client")
+        return self
+
+
+class ChangePage(Contract):
+    items: Annotated[list[ChangeItem], Field(max_length=100)]
+    next_cursor: Annotated[str, Field(min_length=1, max_length=4096)]

@@ -1,9 +1,10 @@
 # ERP connector contract v1
 
 This stage implements delegated user identity, permitted clients and documents,
-batch authorization and bounded retrieval of original stored files. Email bodies,
-background ingestion credentials, a durable change feed and the chat UI are later
-stages. The independent frontend will use Vite and TypeScript; this stage adds no
+batch authorization and bounded retrieval of original stored files. Email bodies
+and the chat UI are later stages. Background ingestion uses the separate
+credential described below. The independent frontend will use Vite and TypeScript;
+this stage adds no
 browser login shortcut or automatic redirect.
 
 ## Identity and trust boundary
@@ -215,6 +216,6 @@ activation and rollback explicitly invalidate affected File IDs. Locking reads
 can conflict with concurrent writers; retry a deadlocked operation as a whole
 transaction. Binding replacement scans and locks managed File IDs and URLs to
 match every canonical alias; its cost grows with the number of managed Files,
-but capture does not read file content or call object storage. This stage
-provides no ingestion worker, durable consumer database, indexing or periodic
-reconciliation; these belong to a later stage.
+but capture does not read file content or call object storage. The AI service now
+provides a durable consumer, metadata-staging worker and periodic reconciliation;
+extraction and indexing remain later stages.

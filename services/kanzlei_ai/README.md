@@ -4,10 +4,10 @@ Independent FastAPI service in the ERP monorepo. It has its own Python environme
 Docker Compose project, PostgreSQL, Qdrant and Redis. It does not import Frappe,
 read ERP database tables or join the ERP Docker network.
 
-The service provides health endpoints, an idle Celery worker and an optional ERP
-connector with delegated identity, online permissions and original-file reads.
-Document ingestion, chat and application migrations are subsequent stages. No
-model API keys or real documents are needed to run the default disabled connector.
+The service provides health endpoints, a metadata-staging Celery worker, durable
+ingestion and an optional ERP connector with delegated identity, online permissions
+and original-file reads. Extraction, indexing and chat remain subsequent stages.
+No model API keys or real documents are needed with the default disabled connector.
 
 ## Start locally
 
@@ -124,7 +124,59 @@ See the [accepted design](../../docs/plans/2026-11-15-ai-service-design.md) and
 [implementation plan](../../docs/plans/2026-11-15-ai-service-implementation.md).
 The [ERP connector contract](docs/erp-connector.md) describes optional setup,
 identity, source access, managed S3 Drive inventory/change feed and local acceptance.
-The next stage adds durable consumption, ingestion jobs and recovery. PostgreSQL remains authoritative;
-Redis is a transport and Qdrant a
-rebuildable projection. Durable jobs and recovery are not provided by this
-bootstrap worker.
+Durable consumption, ingestion jobs and recovery use PostgreSQL as the authority;
+Redis is a transport and Qdrant a rebuildable projection. The worker validates
+and stages metadata; extraction and indexing are not yet implemented.
+
+### Durable ingestion operations
+
+Ingestion is opt-in. The coordinator starts independently from the worker and
+recovers committed work even when ERP polling is disabled. First initialize the
+service database explicitly (`docker compose run --rm api python -m
+kanzlei_ai.coordinator migrate`); migrations are packaged in both images. This
+never changes the ERP database. Configure the ERP background ingestion identity,
+client allowlist, and **separate** ingestion key as described in
+[the ERP connector contract](docs/erp-connector.md). Set `AI_INGESTION_KEY`,
+`AI_INGESTION_ENABLED=true`, and the existing ERP origin/site settings only when
+ready to ingest. Start a full scan with `docker compose run --rm api python -m
+kanzlei_ai.coordinator scan`, then start the coordinator and worker. A new scan
+can also be initiated with the same command after changing bindings or repairing
+an invalid cursor; cursor errors do not silently skip feed history. The coordinator
+periodically starts a full reconciliation (`AI_INGESTION_RECONCILE_SECONDS`,
+default one day) to account for permission changes not represented in the feed.
+One page per cycle is fetched with `AI_INGESTION_POLL_SECONDS` (default 30s).
+
+For operations, `sync-once`, `recover`, and `dispatch` are also available as
+`python -m kanzlei_ai.coordinator` commands. The database stores page receipts,
+items, cursor, source relations, jobs, and outbox records atomically. A processing
+generation fences stale workers when a revision, membership, or pipeline version
+changes; a restored source receives a new generation even if its revision is
+unchanged. Change `AI_INGESTION_PIPELINE_VERSION` and initiate a scan to restage
+existing sources. Jobs have five durable attempts and end in `failed` after the
+limit; changing the pipeline version and initiating a scan creates a new
+generation. A broker publication failure defers ERP polling until a successful
+coordinator cycle. The AI service retains its cursor and ERP retains feed history.
+Outbox publication is at least once and queued jobs are periodically republished after
+broker loss. Broker persistence is enabled in Compose (Redis AOF, one-second
+fsync). Outbox leases are 30s; worker leases are 120s, task soft/hard limits are
+60/90s, and broker visibility is 300s. Worker execution validates and stages
+metadata with status `awaiting_extraction`; it does not fetch bytes, parse, or
+index content. Protect the database and its receipt contents as private data.
+
+Start the standalone coordinator after migration with `docker compose up -d
+coordinator worker`. A stopped worker does not stop polling or recovery.
+Historical receipts, jobs and
+published outbox rows are not automatically pruned in this stage. Retention
+and operator cleanup policy must be defined before a production pilot; deleting
+cursor or receipt history requires a deliberate full rescan and reconciliation.
+
+The ingestion integration tests create their own PostgreSQL schema and Redis
+namespace, start only their own worker, and clean those resources afterward:
+
+```bash
+uv run --locked pytest -m integration tests/integration/test_sync.py tests/integration/test_job_recovery.py -q --tb=no
+```
+
+These checks use synthetic metadata and a real broker/worker. They do not poll
+the live ERP, fetch document bytes or prove extraction quality. Keep connection
+diagnostics private; driver tracebacks can include connection parameters.
