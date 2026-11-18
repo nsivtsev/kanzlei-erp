@@ -105,6 +105,28 @@ def test_binary_read_checks_revision_and_checksum():
     assert type(result.value).__name__ == "ConnectorError"
 
 
+def test_background_binary_read_has_no_browser_grant_and_keeps_revision_check():
+    from kanzlei_ai.connectors.contracts import SourceRef
+
+    reference = SourceRef(source_id="file:abc", revision="a" * 64, client_id="A")
+    content = b"synthetic ingestion PDF"
+
+    def handler(request):
+        assert request.url.path.endswith(".background_read_source")
+        assert json.loads(request.content) == {"version": 1, "source": reference.model_dump()}
+        assert b"access_token" not in request.content
+        return httpx.Response(
+            200,
+            content=content,
+            headers={
+                "X-AI-Revision": reference.revision,
+                "X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+            },
+        )
+
+    assert asyncio.run(client(handler).read_background_source(reference)) == content
+
+
 def test_json_responses_are_bounded():
     adapter = client(lambda request: httpx.Response(200, content=b"x" * 2048), max_json_bytes=1024)
     with pytest.raises(Exception) as result:

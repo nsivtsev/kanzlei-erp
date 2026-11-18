@@ -17,6 +17,38 @@ from werkzeug.wrappers import Request
 from kanzlei_erp.tests import test_mandant_documents as document_fixtures
 
 
+class TestPermissionContext(FrappeTestCase):
+	def test_restores_request_locals_when_close_fails(self):
+		from kanzlei_erp.ai_connector import inventory
+
+		class Fresh:
+			def sql(self, *_args, **_kwargs):
+				pass
+
+			def begin(self, **_kwargs):
+				pass
+
+			def rollback(self):
+				self.rolled_back = True
+
+			def close(self):
+				raise RuntimeError("synthetic close failure")
+
+		fresh = Fresh()
+		original = {key: getattr(frappe.local, key) for key in ("db", "cache", "request_cache", "role_permissions", "user_perms")}
+		try:
+			with patch("frappe.database.get_db", return_value=fresh):
+				with self.assertRaisesRegex(RuntimeError, "synthetic close failure"):
+					with inventory.current_permission_context():
+						self.assertIs(frappe.local.db, fresh)
+			self.assertTrue(fresh.rolled_back)
+			for key, value in original.items():
+				self.assertIs(getattr(frappe.local, key), value)
+		finally:
+			for key, value in original.items():
+				setattr(frappe.local, key, value)
+
+
 class TestAIConnector(FrappeTestCase):
 	make_file = document_fixtures.TestMandantDocuments.make_file
 	make_drive_root = document_fixtures.TestMandantDocuments.make_drive_root
@@ -208,6 +240,37 @@ class TestAIConnector(FrappeTestCase):
 			self.call("read_source", access_token=token, scope=self.scope(), source=ref).status_code, 409
 		)
 
+	def test_background_read_rejects_local_or_non_drive_source(self):
+		"""The worker can read only its configured Drive source and current rights."""
+		ingestion_key = "synthetic-ingestion-key-" + frappe.generate_hash(length=32)
+		self.config["ingestion"] = {
+			"enabled": True,
+			"user": self.reader.name,
+			"client_ids": [self.customer.name],
+			"generation": "fixture-v1",
+			"key_sha256": hashlib.sha256(ingestion_key.encode()).hexdigest(),
+		}
+		manifest = self.documents(self.grant())["items"][0]
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
+		# background_read_source deliberately uses an isolated connection.
+		self.committed = True
+		frappe.db.commit()
+		request = Request(
+			EnvironBuilder(method="POST", headers={"X-Kanzlei-AI-Service-Key": ingestion_key}).get_environ()
+		)
+		with (
+			patch.object(frappe.local, "request", request, create=True),
+			patch("kanzlei_erp.object_storage.get_binding", return_value=None),
+		):
+			response = self.api().background_read_source(source=ref)
+		self.assertEqual(response.status_code, 409)
+		# The separate private key is required; a browser grant never authorizes this path.
+		self.assertEqual(self.call("background_read_source", source=ref).status_code, 401)
+
 	def test_batch_authorization_has_no_denied_metadata_and_rechecks_revocation(self):
 		token = self.grant()
 		manifest = self.documents(token)["items"][0]
@@ -386,6 +449,77 @@ class TestAIConnectorS3(FrappeTestCase):
 		response = self.call("read_source", access_token=token, scope=self.scope(), source=ref)
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.get_data(), self.original)
+
+	def test_background_read_uses_fixed_ingestion_identity_and_current_s3_drive_rights(self):
+		ingestion_key = "synthetic-ingestion-key-" + frappe.generate_hash(length=32)
+		self.config["ingestion"] = {
+			"enabled": True,
+			"user": self.reader.name,
+			"client_ids": [self.customer.name],
+			"generation": "fixture-v1",
+			"key_sha256": hashlib.sha256(ingestion_key.encode()).hexdigest(),
+		}
+		manifest = self.documents(self.grant())["items"][0]
+		ref = {"source_id": manifest["source_id"], "revision": manifest["revision"], "client_id": self.customer.name}
+		# A production background read is a separate database session. Commit the
+		# synthetic fixture so its isolated READ COMMITTED transaction can see it.
+		self.committed = True
+		frappe.db.commit()
+		request = Request(EnvironBuilder(method="POST", headers={"X-Kanzlei-AI-Service-Key": ingestion_key}).get_environ())
+		with patch.object(frappe.local, "request", request, create=True):
+			response = self.api().background_read_source(source=ref)
+		self.assertEqual(response.get_data(), self.original)
+		frappe.set_user("Administrator")
+		frappe.db.set_value("File", self.root.name, "status", "Trashed")
+		frappe.db.commit()
+		with patch.object(frappe.local, "request", request, create=True):
+			self.assertEqual(self.api().background_read_source(source=ref).status_code, 409)
+
+	def test_background_read_denies_docshare_revoked_after_bytes_and_preserves_request_db(self):
+		from kanzlei_erp.object_storage import open_file
+
+		ingestion_key = "synthetic-ingestion-key-" + frappe.generate_hash(length=32)
+		self.config["ingestion"] = {
+			"enabled": True,
+			"user": self.reader.name,
+			"client_ids": [self.customer.name],
+			"generation": "fixture-v1",
+			"key_sha256": hashlib.sha256(ingestion_key.encode()).hexdigest(),
+		}
+		# This fixture gets Customer access only through the explicit DocShare.
+		self.assertTrue(frappe.has_permission("Customer", "read", doc=self.customer.name, user=self.reader.name))
+		manifest = self.documents(self.grant())["items"][0]
+		ref = {"source_id": manifest["source_id"], "revision": manifest["revision"], "client_id": self.customer.name}
+		self.committed = True
+		frappe.db.commit()
+		site, user, customer = frappe.local.site, self.reader.name, self.customer.name
+		original_db, original_connection = frappe.local.db, frappe.local.db._conn
+
+		def revoke_share():
+			frappe.init(site)
+			frappe.connect()
+			try:
+				frappe.share.remove("Customer", customer, user)
+				frappe.db.commit()
+			finally:
+				frappe.destroy()
+
+		@contextmanager
+		def revoking_reader(file):
+			with open_file(file) as stream:
+				yield stream
+			with ThreadPoolExecutor(max_workers=1) as executor:
+				executor.submit(revoke_share).result(timeout=15)
+
+		request = Request(EnvironBuilder(method="POST", headers={"X-Kanzlei-AI-Service-Key": ingestion_key}).get_environ())
+		with patch("kanzlei_erp.object_storage.open_file", revoking_reader), patch.object(
+			frappe.local, "request", request, create=True
+		):
+			response = self.api().background_read_source(source=ref)
+		self.assertEqual(response.status_code, 403)
+		self.assertIs(frappe.local.db, original_db)
+		self.assertIs(frappe.local.db._conn, original_connection)
+		self.assertEqual(frappe.db.sql("SELECT 1")[0][0], 1)
 
 	def test_s3_binding_replacement_invalidates_revision_without_file_modified(self):
 		token = self.grant()

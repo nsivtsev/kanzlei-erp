@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import re
+from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
 
@@ -64,6 +65,72 @@ def principal(user):
 		frappe.local.form_dict = form
 
 
+@contextmanager
+def current_permission_context():
+	"""Use a private READ COMMITTED connection for a background byte read.
+
+	It never commits or rolls back the RPC request's database connection. The
+	post-stream projection is the consistency point for fresh SQL-backed
+	DocShare, Customer-root, File and Drive-ancestry reads at READ COMMITTED.
+	Frappe role and User Permission freshness remains cache-dependent; this
+	background ingestion boundary is not a user-facing retrieval authorization
+	contract and must be tightened before the pilot.
+	"""
+	from frappe.database import get_db
+
+	conf = frappe.local.conf
+	fresh = get_db(
+		socket=conf.db_socket,
+		host=conf.db_host,
+		port=conf.db_port,
+		user=conf.db_user or conf.db_name,
+		password=conf.db_password,
+		cur_db_name=conf.db_name,
+	)
+	original_db = frappe.local.db
+	original_cache = frappe.local.cache
+	original_request_cache = frappe.local.request_cache
+	original_role_permissions = frappe.local.role_permissions
+	original_user_perms = frappe.local.user_perms
+	try:
+		# MariaDB's default repeatable-read snapshot could retain permissions
+		# from before streaming. READ COMMITTED makes the final projection see a
+		# revocation committed while object storage was being read.
+		fresh.sql("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
+		fresh.begin(read_only=True)
+		frappe.local.db = fresh
+		frappe.local.cache = {}
+		frappe.local.request_cache = defaultdict(dict)
+		yield
+	finally:
+		try:
+			try:
+				fresh.rollback()
+			finally:
+				fresh.close()
+		finally:
+			frappe.local.db = original_db
+			frappe.local.cache = original_cache
+			frappe.local.request_cache = original_request_cache
+			frappe.local.role_permissions = original_role_permissions
+			frappe.local.user_perms = original_user_perms
+
+
+def refresh_principal_permissions(user):
+	"""Discard permission state before a current SQL-backed projection."""
+	frappe.cache.hdel("roles", user)
+	frappe.cache.hdel("user_permissions", user)
+	# has_permission also consults state attached to this request. The first
+	# projection may have populated these before the stream, so they must not
+	# survive to the final SQL-backed decision. Redis can be repopulated by an
+	# older transaction, therefore this does not promise fresh role/User Permission
+	# revocations.
+	frappe.local.cache = {}
+	frappe.local.request_cache = defaultdict(dict)
+	frappe.local.role_permissions = {}
+	frappe.local.user_perms = None
+
+
 def encode(data, binding):
 	raw = base64.urlsafe_b64encode(
 		json.dumps({"binding": binding, **data}, separators=(",", ":")).encode()
@@ -93,11 +160,11 @@ def require_clients(clients):
 			fail("FORBIDDEN", 403)
 
 
-def project(name, client, clients):
+def project(name, client, clients, locked=False):
 	if client not in clients or not frappe.has_permission("Customer", "read", doc=client):
 		return None
 	try:
-		file = frappe.get_doc("File", name)
+		file = frappe.get_doc("File", name, for_update=locked)
 		if file.get("kanzlei_drive_customer") != client or file.is_folder:
 			return None
 		from suite.drive.utils.downloads import content_kind
@@ -116,12 +183,20 @@ def project(name, client, clients):
 		seen = set()
 		while parent and parent not in seen and len(seen) < 256:
 			seen.add(parent)
-			row = frappe.db.get_value(
-				"File",
-				parent,
-				["name", "folder", "is_folder", "status", "kanzlei_drive_customer"],
-				as_dict=True,
-			)
+			if locked:
+				rows = frappe.db.sql(
+					"SELECT name,folder,is_folder,status,kanzlei_drive_customer FROM `tabFile` WHERE name=%s FOR UPDATE",
+					(parent,),
+					as_dict=True,
+				)
+				row = rows[0] if rows else None
+			else:
+				row = frappe.db.get_value(
+					"File",
+					parent,
+					["name", "folder", "is_folder", "status", "kanzlei_drive_customer"],
+					as_dict=True,
+				)
 			if not row or not row.is_folder or row.status != "Active" or row.kanzlei_drive_customer != client:
 				return None
 			if parent == root:
@@ -138,6 +213,30 @@ def project(name, client, clients):
 	except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError:
 		return None
 	return None
+
+
+def read_current(source, clients, *, before_final_projection=None):
+	"""Current background projection; never infer access from S3 alone."""
+	value = policy.reference(source)
+	if value["client_id"] not in clients:
+		fail("FORBIDDEN", 403)
+	require_clients(clients)
+	manifest = project(value["source_id"][5:], value["client_id"], clients)
+	if not manifest or manifest["revision"] != value["revision"]:
+		fail("STALE_SOURCE", 409)
+	content = policy.read_source(
+		{"kind": "client", "client_id": value["client_id"]}, value, lock_current=False
+	)
+	# This is the SQL-backed authorization consistency point. Refresh cache state
+	# immediately before it so current DocShare/root/Drive reads use the isolated
+	# READ COMMITTED connection; role/User Permission freshness remains Frappe
+	# cache-dependent and is deliberately not promised by this stage.
+	if before_final_projection:
+		before_final_projection()
+	manifest = project(value["source_id"][5:], value["client_id"], clients)
+	if not manifest or manifest["revision"] != value["revision"]:
+		fail("STALE_SOURCE", 409)
+	return content
 
 
 def inventory(cursor=None, limit=50):

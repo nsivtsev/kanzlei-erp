@@ -263,7 +263,7 @@ def authorize_sources(requested_scope, sources):
 	return {"version": 1, "decisions": decisions}
 
 
-def read_source(requested_scope, source):
+def read_source(requested_scope, source, *, lock_current=True):
 	from kanzlei_erp.object_storage import open_file
 
 	requested_scope = scope(requested_scope)
@@ -274,13 +274,15 @@ def read_source(requested_scope, source):
 	if len(content) > MAX_BYTES:
 		fail("LIMIT_EXCEEDED", 413)
 	authorized(value, requested_scope)
-	# FOR UPDATE is a current read even under MariaDB repeatable-read. Lock the
-	# managed storage binding as well: its revision can change without File.modified.
+	# The ordinary delegated path takes a current lock. The fixed-ingestion path
+	# runs inside inventory.current_permission_context instead: it is read-only
+	# and makes its post-read authorization projection at READ COMMITTED.
 	from kanzlei_erp.object_storage import lock_binding
 
 	try:
-		current = frappe.get_doc("File", file.name, for_update=True)
-		lock_binding(current.file_url)
+		current = frappe.get_doc("File", file.name, for_update=lock_current)
+		if lock_current:
+			lock_binding(current.file_url)
 		current_revision = _revision(current)
 	except frappe.QueryDeadlockError:
 		# innodb_snapshot_isolation rejects a current read of a row changed

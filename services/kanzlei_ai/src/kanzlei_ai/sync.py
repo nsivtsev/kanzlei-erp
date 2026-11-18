@@ -17,7 +17,7 @@ from kanzlei_ai.models import (
     sources,
 )
 
-PIPELINE_VERSION = "metadata-v1"
+PIPELINE_VERSION = "pdf-native-v1"
 
 
 def initialize(engine):
@@ -152,6 +152,7 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version):
                 generation=generation,
                 active=True,
                 status="queued" if changed else row["status"],
+                error_code=None if changed else row["error_code"],
             )
         )
     for client in incoming_clients:
@@ -191,6 +192,7 @@ def _remove_relation(conn, source_id, client_id, pipeline_version):
             manifest=manifest,
             generation=generation,
             status="queued" if clients else "deleted",
+            error_code=None,
         )
     )
     if clients:

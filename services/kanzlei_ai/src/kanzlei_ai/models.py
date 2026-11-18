@@ -38,6 +38,7 @@ sources = Table(
     Column("generation", Integer, nullable=False),
     Column("active", Boolean, nullable=False),
     Column("status", String(32), nullable=False),
+    Column("error_code", String(64)),
     UniqueConstraint("connector_id", "source_id"),
 )
 relations = Table(
@@ -56,6 +57,7 @@ jobs = Table(
     Column("pipeline_version", String(100), nullable=False),
     Column("generation", Integer, nullable=False),
     Column("status", String(32), nullable=False),
+    Column("error_code", String(64)),
     Column("lease_token", String(36)),
     Column("lease_until", DateTime(timezone=True)),
     Column("attempts", Integer, nullable=False, server_default="0"),
@@ -91,4 +93,34 @@ inbox_items = Table(
     Column("receipt_id", ForeignKey("page_receipts.id"), primary_key=True),
     Column("ordinal", Integer, primary_key=True),
     Column("payload", JSON, nullable=False),
+)
+
+document_artifacts = Table(
+    "document_artifacts",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("source_id", ForeignKey("sources.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("artifact_key", String(256), nullable=False),
+    Column("page_count", Integer, nullable=False),
+    UniqueConstraint("source_id", "revision", "generation", "parser_version"),
+)
+document_chunks = Table(
+    "document_chunks",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("artifact_id", ForeignKey("document_artifacts.id"), nullable=False),
+    Column("source_id", ForeignKey("sources.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("page", Integer, nullable=False),
+    Column("kind", String(20), nullable=False),
+    Column("ordinal", Integer, nullable=False),
+    Column("text", Text, nullable=False),
+    UniqueConstraint("source_id", "revision", "generation", "parser_version", "ordinal"),
 )

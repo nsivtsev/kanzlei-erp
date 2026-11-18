@@ -29,4 +29,11 @@ class Settings(BaseSettings):
     ingestion_connector_id: str = "kanzlei-erp"
     ingestion_poll_seconds: int = Field(default=30, ge=5, le=3600)
     ingestion_reconcile_seconds: int = Field(default=86400, ge=60, le=2592000)
-    ingestion_pipeline_version: str = Field(default="metadata-v1", min_length=1, max_length=100)
+    ingestion_pipeline_version: str = Field(default="pdf-native-v1", min_length=1, max_length=100)
+    artifact_s3_endpoint: HttpUrl | None = None
+    artifact_s3_bucket: str | None = None
+    artifact_s3_access_key: SecretStr | None = None
+    artifact_s3_secret_key: SecretStr | None = None
+    artifact_s3_region: str = Field(default="us-east-1", min_length=1, max_length=100)
+    artifact_s3_prefix: str = Field(default="kanzlei-ai", min_length=1, max_length=60)
+    artifact_max_bytes: int = Field(default=4 * 1024 * 1024, ge=1024, le=20 * 1024 * 1024)

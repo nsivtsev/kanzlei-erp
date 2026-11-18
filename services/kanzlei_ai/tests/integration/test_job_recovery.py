@@ -1,7 +1,7 @@
 """Lease and generation fencing against PostgreSQL, without eager workers."""
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from kanzlei_ai import sync
 from kanzlei_ai.models import jobs, sources
@@ -60,6 +60,52 @@ def test_expired_worker_cannot_publish_over_new_generation(database):
     assert not job_service.complete(database, job_id, token)
     with database.connect() as conn:
         assert conn.execute(select(sources.c.status)).scalar_one() == "queued"
+
+
+def test_extraction_publication_is_fenced_and_keeps_page_chunks(database):
+    """A replaced source, stale worker, or duplicate delivery cannot publish chunks."""
+    from kanzlei_ai import jobs as job_service
+    from kanzlei_ai.models import document_chunks
+
+    sync.initialize(database)
+    epoch = sync.start_scan(database, "erp")
+    manifest = {
+        "version": 1,
+        "source_id": "file:extract",
+        "source_type": "file",
+        "revision": "a" * 64,
+        "client_ids": ["client"],
+        "title": "Synthetic",
+        "mime_type": "application/pdf",
+        "source_modified_at": "2026-01-01",
+        "locator": "/file",
+        "byte_size": 1,
+        "active": True,
+    }
+    sync.apply_inventory(
+        database,
+        "erp",
+        epoch,
+        None,
+        {"items": [manifest], "next_cursor": None, "changes_cursor": "w"},
+    )
+    with database.connect() as conn:
+        job_id = conn.execute(select(jobs.c.id)).scalar_one()
+    token = job_service.claim(database, job_id)
+    publication = {
+        "parser_version": "docling-native-v1",
+        "content_sha256": "b" * 64,
+        "artifact_key": "private/hash",
+        "page_count": 2,
+        "chunks": [
+            {"id": "c" * 64, "page": 2, "kind": "table", "ordinal": 0, "text": "A | B\n1 | 2"}
+        ],
+    }
+    assert job_service.publish_extraction(database, job_id, token, publication)
+    assert not job_service.publish_extraction(database, job_id, token, publication)
+    with database.connect() as conn:
+        chunk = conn.execute(select(document_chunks)).mappings().one()
+        assert chunk["page"] == 2 and chunk["kind"] == "table"
 
 
 def test_outbox_republishes_unclaimed_job_and_expired_lease(database):
@@ -583,3 +629,161 @@ def test_completion_retries_postgres_lock_timeout_with_same_lease(database):
             assert job["status"] == "completed" and job["attempts"] == 1
     finally:
         event.remove(database, "handle_error", record_timeout)
+
+
+def _pdf_manifest(source_id="file:error", revision="a" * 64):
+    return {
+        "version": 1,
+        "source_id": source_id,
+        "source_type": "file",
+        "revision": revision,
+        "client_ids": ["client"],
+        "title": "Synthetic",
+        "mime_type": "application/pdf",
+        "source_modified_at": "2026-01-01",
+        "locator": "/file",
+        "byte_size": 1,
+        "active": True,
+    }
+
+
+def _queued_pdf_job(database, source_id="file:error"):
+    sync.initialize(database)
+    epoch = sync.start_scan(database, "erp")
+    sync.apply_inventory(
+        database,
+        "erp",
+        epoch,
+        None,
+        {"items": [_pdf_manifest(source_id)], "next_cursor": None, "changes_cursor": "w"},
+    )
+    with database.connect() as conn:
+        return conn.execute(
+            select(jobs.c.id).join(sources).where(sources.c.source_id == source_id)
+        ).scalar_one()
+
+
+def test_error_code_migration_upgrades_existing_ingestion_schema(database):
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    def upgrade(revision):
+        with database.begin() as conn:
+            config = Config()
+            config.set_main_option(
+                "script_location",
+                str(Path(__file__).parents[2] / "src" / "kanzlei_ai" / "migrations"),
+            )
+            config.attributes["connection"] = conn
+            command.upgrade(config, revision)
+
+    upgrade("0001_sources_jobs")
+    with database.connect() as conn:
+        assert "error_code" not in {column["name"] for column in inspect(conn).get_columns("jobs")}
+
+    upgrade("head")
+    with database.connect() as conn:
+        for table in ("sources", "jobs"):
+            columns = {column["name"]: column for column in inspect(conn).get_columns(table)}
+            assert columns["error_code"]["nullable"]
+            assert columns["error_code"]["type"].length == 64
+
+
+@pytest.mark.parametrize(
+    "error_code", ["OCR_REQUIRED", "UNSUPPORTED_MEDIA", "TABLE_LIMIT_EXCEEDED"]
+)
+def test_terminal_failure_persists_safe_code_for_current_source(database, error_code):
+    from kanzlei_ai import jobs as job_service
+
+    job_id = _queued_pdf_job(database, f"file:{error_code.lower()}")
+    token = job_service.claim(database, job_id)
+
+    assert job_service.fail_terminal(database, job_id, token, error_code)
+
+    with database.connect() as conn:
+        job = conn.execute(select(jobs).where(jobs.c.id == job_id)).mappings().one()
+        source = conn.execute(select(sources)).mappings().one()
+    assert job["status"] == source["status"] == "failed"
+    assert job["error_code"] == source["error_code"] == error_code
+
+
+def test_transient_exhaustion_persists_retry_exhausted_and_successful_retry_clears_code(database):
+    from kanzlei_ai import jobs as job_service
+
+    job_id = _queued_pdf_job(database, "file:transient")
+    token = job_service.claim(database, job_id)
+    assert job_service.fail(database, job_id, token, "CONNECTOR_UNAVAILABLE")
+    with database.connect() as conn:
+        job = conn.execute(select(jobs).where(jobs.c.id == job_id)).mappings().one()
+        assert job["status"] == "queued"
+        assert job["error_code"] == "CONNECTOR_UNAVAILABLE"
+
+    with database.begin() as conn:
+        conn.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(retry_not_before=text("clock_timestamp() - interval '1 second'"))
+        )
+    token = job_service.claim(database, job_id)
+    assert job_service.complete(database, job_id, token)
+    with database.connect() as conn:
+        job = conn.execute(select(jobs).where(jobs.c.id == job_id)).mappings().one()
+        source = conn.execute(select(sources)).mappings().one()
+    assert job["status"] == "completed" and job["error_code"] is None
+    assert source["status"] == "awaiting_extraction" and source["error_code"] is None
+
+    job_id = _queued_pdf_job(database, "file:exhausted")
+    for _ in range(job_service.MAX_ATTEMPTS):
+        token = job_service.claim(database, job_id)
+        assert token
+        assert job_service.fail(database, job_id, token, "CONNECTOR_UNAVAILABLE")
+        with database.begin() as conn:
+            conn.execute(
+                update(jobs)
+                .where(jobs.c.id == job_id)
+                .values(retry_not_before=text("clock_timestamp() - interval '1 second'"))
+            )
+    with database.connect() as conn:
+        job = conn.execute(select(jobs).where(jobs.c.id == job_id)).mappings().one()
+        source = (
+            conn.execute(select(sources).where(sources.c.source_id == "file:exhausted"))
+            .mappings()
+            .one()
+        )
+    assert job["status"] == source["status"] == "failed"
+    assert job["error_code"] == source["error_code"] == "RETRY_EXHAUSTED"
+
+
+def test_stale_terminal_failure_cannot_set_current_source_error(database):
+    from kanzlei_ai import jobs as job_service
+
+    job_id = _queued_pdf_job(database, "file:stale-error")
+    token = job_service.claim(database, job_id)
+    epoch = 1
+    changed = _pdf_manifest("file:stale-error", "b" * 64)
+    sync.apply_changes(
+        database,
+        "erp",
+        epoch,
+        "w",
+        {
+            "items": [
+                {
+                    "source_id": "file:stale-error",
+                    "client_id": "client",
+                    "operation": "upsert",
+                    "manifest": changed,
+                }
+            ],
+            "next_cursor": "w2",
+        },
+    )
+
+    assert not job_service.fail_terminal(database, job_id, token, "OCR_REQUIRED")
+    with database.connect() as conn:
+        source = conn.execute(select(sources)).mappings().one()
+    assert source["status"] == "queued"
+    assert source["error_code"] is None

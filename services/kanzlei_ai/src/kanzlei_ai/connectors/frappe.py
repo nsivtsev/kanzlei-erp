@@ -172,6 +172,18 @@ class FrappeConnector:
             raise ConnectorError()
         return content
 
+    async def read_background_source(self, source: SourceRef) -> bytes:
+        """Read a current source under the fixed ingestion principal only."""
+        content, headers = await self._rpc(
+            "background_read_source", {"source": source.model_dump()}, binary=True
+        )
+        if (
+            headers.get("X-AI-Revision") != source.revision
+            or headers.get("X-AI-Content-SHA256") != hashlib.sha256(content).hexdigest()
+        ):
+            raise ConnectorError()
+        return content
+
     async def inventory(self, cursor: str | None = None, limit: int = 50) -> InventoryPage:
         return await self._typed(InventoryPage, "inventory", cursor=cursor, limit=limit)
 

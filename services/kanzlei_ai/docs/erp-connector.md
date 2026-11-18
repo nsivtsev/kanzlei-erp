@@ -99,6 +99,7 @@ unexpected privilege fields and invalid batches are rejected.
 | `list_documents` | `POST /v1/connector/documents` |
 | `authorize_sources` | `POST /v1/connector/authorize` |
 | `read_source` | `POST /v1/connector/read` |
+| `background_read_source` | private ingestion worker only; no browser grant |
 
 Document listing takes `client_id`, `limit` (1–100) and optional `cursor`. Cursors
 are signed, expire after five minutes, and bind to the user and operation/client.
@@ -138,6 +139,20 @@ Public failures are content-free codes: `UNAUTHENTICATED`, `FORBIDDEN`,
 `CONNECTOR_UNAVAILABLE`. Browser validation errors omit rejected input. Responses
 disable caching and MIME sniffing. The client bounds JSON to 2 MiB and binary
 responses to 20 MiB, including streamed/chunked responses.
+
+`background_read_source` is deliberately separate from `read_source`. It accepts
+only `{version: 1, source}` and authenticates with the ingestion key and its
+fixed configured user/client allowlist. It then performs the same current
+Customer, File, attachment, active Drive ancestry, managed-storage and revision
+checks as a delegated read. The existence of a managed S3 object does not grant
+the worker access, and the endpoint neither accepts nor creates a browser grant.
+For the post-stream background projection, the connector uses an isolated
+READ COMMITTED SQL connection: committed DocShare, Customer-root, File and
+Drive-ancestry changes are checked again before bytes return. Frappe role and
+User Permission freshness remains dependent on its cache invalidation behavior,
+so this is not a complete authorization-revocation guarantee. Task 5 has no
+user-facing retrieval; any later serving/query endpoint must reauthorize at
+query time. This pre-pilot boundary must be resolved before real-document use.
 
 ## Local acceptance
 
@@ -199,7 +214,10 @@ Capture begins after schema installation and remains active even while ingestion
 is disabled. A first deployment, a period without capture, lost event history,
 or a generation change requires a full inventory and reconciliation that
 removes previously indexed sources absent from the completed scan. No event
-retention or pruning is implemented. The feed currently supports managed S3
+retention or pruning is implemented. Operators recover sources that exhausted
+transient attempts by changing the AI pipeline version and initiating a full
+scan/reconciliation; this deliberately creates a fenced new generation rather
+than bypassing the durable retry policy. The feed currently supports managed S3
 Drive files only: a readable active local Drive source reachable during a scan
 or change projection causes `UNSUPPORTED_STORAGE` (409). Migrate local files
 before enabling ingestion; the existing delegated document API still supports

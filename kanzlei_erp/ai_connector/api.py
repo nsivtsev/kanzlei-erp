@@ -116,6 +116,34 @@ def read_source(access_token=None, scope=None, source=None, version=1, **extra):
 	)
 
 
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
+def background_read_source(source=None, version=1, **extra):
+	"""Read one background-ingestion source under its fixed ERP identity."""
+	from kanzlei_erp.ai_connector import inventory
+
+	# Do not borrow the RPC connection: its snapshot may predate a permission
+	# revocation. The isolated context is read-only and restores this request's
+	# DB object and permission caches unchanged when the response is built.
+	with inventory.current_permission_context():
+		user, clients, _ = inventory.settings()
+		inventory.refresh_principal_permissions(user)
+		with inventory.principal(user):
+			content = inventory.read_current(
+				source, clients, before_final_projection=lambda: inventory.refresh_principal_permissions(user)
+			)
+			value = policy.reference(source)
+	return Response(
+		content,
+		mimetype="application/octet-stream",
+		headers={
+			**HEADERS,
+			"X-AI-Revision": value["revision"],
+			"X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+		},
+	)
+
+
 @frappe.whitelist(allow_guest=True, methods=['GET', 'POST'])
 @endpoint
 def inventory(cursor=None, limit=50, version=1, **extra):

@@ -133,7 +133,8 @@ The [ERP connector contract](docs/erp-connector.md) describes optional setup,
 identity, source access, managed S3 Drive inventory/change feed and local acceptance.
 Durable consumption, ingestion jobs and recovery use PostgreSQL as the authority;
 Redis is a transport and Qdrant a rebuildable projection. The worker validates
-and stages metadata; extraction and indexing are not yet implemented.
+and stages metadata; native-text PDF extraction is a separate bounded stage and
+indexing is not yet implemented.
 
 ### Durable ingestion operations
 
@@ -160,15 +161,32 @@ generation fences stale workers when a revision, membership, or pipeline version
 changes; a restored source receives a new generation even if its revision is
 unchanged. Change `AI_INGESTION_PIPELINE_VERSION` and initiate a scan to restage
 existing sources. Jobs have five durable attempts and end in `failed` after the
-limit; changing the pipeline version and initiating a scan creates a new
+limit; this native-PDF upgrade uses pipeline version `pdf-native-v1`, so start
+a new scan (or let reconciliation start one) after deployment to create a new
+generation for existing metadata-only sources. Changing the pipeline version
+and initiating a scan creates a new
 generation. A broker publication failure defers ERP polling until a successful
 coordinator cycle. The AI service retains its cursor and ERP retains feed history.
 Outbox publication is at least once and queued jobs are periodically republished after
 broker loss. Broker persistence is enabled in Compose (Redis AOF, one-second
 fsync). Outbox leases are 30s; worker leases are 120s, task soft/hard limits are
-60/90s, and broker visibility is 300s. Worker execution validates and stages
-metadata with status `awaiting_extraction`; it does not fetch bytes, parse, or
-index content. Protect the database and its receipt contents as private data.
+60/90s, and broker visibility is 300s. With ingestion configured, the worker
+fetches a current PDF only through the fixed-ingestion ERP identity, with the
+expected revision and the existing 20 MiB connector bound. Docling uses native
+text with OCR disabled; page-aware chunks and private derived artifacts publish
+only while the source generation and worker lease remain current. Encrypted,
+unsupported, and size/page-limited input is terminal; connector and transient
+parser failures retry through the durable job policy. It does not index content.
+Configure the separate private S3-compatible artifact endpoint, bucket,
+credentials and `AI_ARTIFACT_S3_PREFIX` before enabling ingestion; the worker
+refuses extraction without all of them. Protect the database, artifacts and
+receipt contents as private data.
+
+The Task 5 background byte read has an isolated READ COMMITTED final check for
+SQL-backed DocShare, Customer-root, File and Drive ancestry state. Frappe role
+and User Permission changes can remain cache-dependent, so this is explicitly a
+pre-pilot boundary rather than a user-facing retrieval guarantee; any later
+query/serving feature must authorize again at query time.
 
 Start the standalone coordinator after migration with `docker compose --env-file ../../.env -f ../../compose.yml up -d
 ai-coordinator ai-worker`. A stopped worker does not stop polling or recovery.
@@ -176,6 +194,8 @@ Historical receipts, jobs and
 published outbox rows are not automatically pruned in this stage. Retention
 and operator cleanup policy must be defined before a production pilot; deleting
 cursor or receipt history requires a deliberate full rescan and reconciliation.
+Artifact retention is deliberately deferred to Task 11: there is no artifact
+sweep before the pilot, so operators must provision bounded private storage.
 
 The ingestion integration tests create their own PostgreSQL schema and Redis
 namespace, start only their own worker, and clean those resources afterward:
