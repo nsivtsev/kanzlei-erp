@@ -2,6 +2,8 @@ x-ai-environment: &ai-environment
   AI_DATABASE_URL: postgresql://kanzlei_ai@ai-postgres:5432/kanzlei_ai
   AI_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-}
   AI_QDRANT_URL: http://ai-qdrant:6333
+  AI_SEARCH_INDEX_ENABLED: ${AI_SEARCH_INDEX_ENABLED:-false}
+  AI_SEARCH_COLLECTION: ${AI_SEARCH_COLLECTION:-kanzlei_pdf_synthetic_v1}
   AI_REDIS_URL: redis://ai-redis:6379/0
   AI_HEALTH_TIMEOUT_SECONDS: ${AI_HEALTH_TIMEOUT_SECONDS:-2}
   AI_ERP_BASE_URL: http://frappe:8000

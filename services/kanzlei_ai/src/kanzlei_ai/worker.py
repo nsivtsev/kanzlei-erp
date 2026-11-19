@@ -1,4 +1,4 @@
-"""Celery worker for fenced native-PDF extraction."""
+"""Celery tasks for fenced native-PDF extraction and indexing."""
 
 import asyncio
 import logging
@@ -44,10 +44,11 @@ def stage_metadata(job_id):
     engine = None
     token = None
     try:
-        engine = engine_from_settings(Settings())
+        settings = Settings()
+        engine = engine_from_settings(settings)
         token = claim(engine, job_id)
         if token:
-            _extract_or_stage(engine, job_id, token, Settings())
+            _extract_or_stage(engine, job_id, token, settings)
     except Exception:
         if token and engine is not None:
             try:
@@ -55,6 +56,33 @@ def stage_metadata(job_id):
             except Exception:
                 pass  # Expired-lease recovery handles an unavailable database.
         logging.getLogger(__name__).error("Metadata staging failed; recovery will retry")
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
+@app.task(name="kanzlei_ai.index_document")
+def index_document(job_id):
+    from kanzlei_ai.search.index import SearchIndex
+    from kanzlei_ai.search.publication import INDEX_STAGE, INDEX_UNAVAILABLE, process
+
+    engine = None
+    token = None
+    try:
+        settings = Settings()
+        if not settings.search_index_enabled:
+            return
+        engine = engine_from_settings(settings)
+        token = claim(engine, job_id, stage=INDEX_STAGE)
+        if token:
+            process(engine, job_id, token, SearchIndex.from_settings(settings))
+    except Exception:
+        if token and engine is not None:
+            try:
+                fail(engine, job_id, token, INDEX_UNAVAILABLE, stage=INDEX_STAGE)
+            except Exception:
+                pass  # Expired-lease recovery handles an unavailable database.
+        logging.getLogger(__name__).error("Index staging failed; recovery will retry")
     finally:
         if engine is not None:
             engine.dispose()
@@ -175,6 +203,7 @@ def _extract_or_stage(engine, job_id, token, settings):
                     for chunk in chunks
                 ],
             },
+            enqueue_index=settings.search_index_enabled,
         )
         # Immutable unreferenced objects are left for a retention sweep.  A
         # stale claimant must never delete an object another claimant published.

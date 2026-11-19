@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     database_password: SecretStr | None = None
     qdrant_url: HttpUrl = "http://127.0.0.1:56333"
     qdrant_api_key: SecretStr | None = None
+    search_index_enabled: bool = False
+    search_collection: str = Field(default="kanzlei_pdf_synthetic_v1", min_length=1, max_length=255)
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:56379/0")
     health_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
     erp_base_url: HttpUrl | None = None

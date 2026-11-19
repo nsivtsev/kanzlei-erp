@@ -112,7 +112,11 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version):
         if row is None
         else conn.execute(
             select(jobs.c.pipeline_version)
-            .where(and_(jobs.c.source_id == row["id"], jobs.c.generation == row["generation"]))
+            .where(
+                jobs.c.source_id == row["id"],
+                jobs.c.generation == row["generation"],
+                jobs.c.stage == "extract",
+            )
             .limit(1)
         ).scalar_one_or_none()
     )

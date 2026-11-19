@@ -3,6 +3,7 @@
 import re
 import time
 import uuid
+from datetime import timedelta
 
 from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.exc import OperationalError
@@ -12,6 +13,7 @@ from kanzlei_ai.models import document_artifacts, document_chunks, jobs, sources
 
 LEASE_SECONDS = 120
 MAX_ATTEMPTS = 5
+MAX_CHUNKS = 10000
 RETRY_EXHAUSTED = "RETRY_EXHAUSTED"
 
 
@@ -21,9 +23,9 @@ def _error_code(value):
     return value
 
 
-def _locked(conn, job_id, *, skip_locked=True):
+def _locked(conn, job_id, *, stage="extract", skip_locked=True):
     source_id = conn.execute(
-        select(jobs.c.source_id).where(jobs.c.id == job_id)
+        select(jobs.c.source_id).where(jobs.c.id == job_id, jobs.c.stage == stage)
     ).scalar_one_or_none()
     if source_id is None:
         return None, None
@@ -48,15 +50,32 @@ def _locked(conn, job_id, *, skip_locked=True):
     return source, job
 
 
-def claim(engine, job_id):
+def _current(source, job):
+    return (
+        job is not None
+        and source["active"]
+        and source["generation"] == job["generation"]
+        and source["revision"] == job["revision"]
+    )
+
+
+def _live_claim(source, job, token, now):
+    return (
+        _current(source, job)
+        and job["status"] == "running"
+        and job["lease_token"] == token
+        and job["lease_until"] > now
+    )
+
+
+def exhausted_code(stage):
+    return "INDEX_RETRY_EXHAUSTED" if stage == "index" else RETRY_EXHAUSTED
+
+
+def claim(engine, job_id, *, stage="extract"):
     with engine.begin() as conn:
-        source, job = _locked(conn, job_id)
-        if (
-            job is None
-            or not source["active"]
-            or source["generation"] != job["generation"]
-            or source["revision"] != job["revision"]
-        ):
+        source, job = _locked(conn, job_id, stage=stage)
+        if not _current(source, job):
             return None
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
         if job["status"] != "queued" and not (
@@ -66,22 +85,24 @@ def claim(engine, job_id):
         if job["retry_not_before"] is not None and job["retry_not_before"] > now:
             return None
         if job["attempts"] >= MAX_ATTEMPTS:
+            code = exhausted_code(stage)
             conn.execute(
                 update(jobs)
                 .where(jobs.c.id == job_id)
                 .values(
                     status="failed",
-                    error_code=RETRY_EXHAUSTED,
+                    error_code=code,
                     lease_token=None,
                     lease_until=None,
                     updated_at=now,
                 )
             )
-            conn.execute(
-                update(sources)
-                .where(sources.c.id == source["id"])
-                .values(status="failed", error_code=RETRY_EXHAUSTED)
-            )
+            if stage == "extract":
+                conn.execute(
+                    update(sources)
+                    .where(sources.c.id == source["id"])
+                    .values(status="failed", error_code=code)
+                )
             return None
         token = str(uuid.uuid4())
         conn.execute(
@@ -103,17 +124,8 @@ def _complete_once(engine, job_id, token):
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL lock_timeout = '2s'"))
         source, job = _locked(conn, job_id, skip_locked=False)
-        if job is None:
-            return False
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
-        if (
-            not source["active"]
-            or source["generation"] != job["generation"]
-            or source["revision"] != job["revision"]
-            or job["status"] != "running"
-            or job["lease_token"] != token
-            or job["lease_until"] <= now
-        ):
+        if not _live_claim(source, job, token, now):
             return False
         SourceManifest.model_validate(source["manifest"])
         conn.execute(
@@ -135,28 +147,17 @@ def _complete_once(engine, job_id, token):
         return True
 
 
-def _fail_once(engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE", terminal=False):
-    from datetime import timedelta
-
+def _fail_once(engine, job_id, token, error_code, terminal, stage):
     error_code = _error_code(error_code)
 
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL lock_timeout = '2s'"))
-        source, job = _locked(conn, job_id, skip_locked=False)
-        if job is None:
-            return False
+        source, job = _locked(conn, job_id, stage=stage, skip_locked=False)
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
-        if (
-            not source["active"]
-            or source["generation"] != job["generation"]
-            or source["revision"] != job["revision"]
-            or job["status"] != "running"
-            or job["lease_token"] != token
-            or job["lease_until"] <= now
-        ):
+        if not _live_claim(source, job, token, now):
             return False
         if terminal or job["attempts"] >= MAX_ATTEMPTS:
-            final_code = error_code if terminal else RETRY_EXHAUSTED
+            final_code = error_code if terminal else exhausted_code(stage)
             conn.execute(
                 update(jobs)
                 .where(jobs.c.id == job_id)
@@ -168,11 +169,12 @@ def _fail_once(engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE", termi
                     updated_at=now,
                 )
             )
-            conn.execute(
-                update(sources)
-                .where(sources.c.id == source["id"])
-                .values(status="failed", error_code=final_code)
-            )
+            if stage == "extract":
+                conn.execute(
+                    update(sources)
+                    .where(sources.c.id == source["id"])
+                    .values(status="failed", error_code=final_code)
+                )
         else:
             delay = min(300, 2 ** job["attempts"])
             conn.execute(
@@ -205,23 +207,14 @@ def complete(engine, job_id, token):
     return _publish_with_lock_retry(_complete_once, engine, job_id, token)
 
 
-def _publish_extraction_once(engine, job_id, token, publication):
+def _publish_extraction_once(engine, job_id, token, publication, enqueue_index):
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL lock_timeout = '2s'"))
         source, job = _locked(conn, job_id, skip_locked=False)
-        if job is None:
-            return False
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
-        if (
-            not source["active"]
-            or source["generation"] != job["generation"]
-            or source["revision"] != job["revision"]
-            or job["status"] != "running"
-            or job["lease_token"] != token
-            or job["lease_until"] <= now
-        ):
+        if not _live_claim(source, job, token, now):
             return False
-        if not 0 <= publication["page_count"] <= 200 or len(publication["chunks"]) > 10000:
+        if not 0 <= publication["page_count"] <= 200 or len(publication["chunks"]) > MAX_CHUNKS:
             raise ValueError("Invalid extraction publication")
         artifact_id = conn.execute(
             insert(document_artifacts)
@@ -270,20 +263,26 @@ def _publish_extraction_once(engine, job_id, token, publication):
                 updated_at=func.clock_timestamp(),
             )
         )
+        if enqueue_index:
+            from kanzlei_ai.search.publication import queue_index
+
+            queue_index(conn, source, artifact_id)
         return True
 
 
-def publish_extraction(engine, job_id, token, publication):
+def publish_extraction(engine, job_id, token, publication, *, enqueue_index=False):
     """Atomically expose artifacts only while the claimed source is current."""
-    return _publish_with_lock_retry(_publish_extraction_once, engine, job_id, token, publication)
+    return _publish_with_lock_retry(
+        _publish_extraction_once, engine, job_id, token, publication, enqueue_index
+    )
 
 
-def fail(engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE"):
-    return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code)
+def fail(engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE", *, stage="extract"):
+    return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code, False, stage)
 
 
-def fail_terminal(engine, job_id, token, error_code):
-    return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code, True)
+def fail_terminal(engine, job_id, token, error_code, *, stage="extract"):
+    return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code, True, stage)
 
 
 def source_for_claim(engine, job_id, token):
@@ -291,16 +290,7 @@ def source_for_claim(engine, job_id, token):
     with engine.connect() as conn:
         source, job = _locked(conn, job_id, skip_locked=False)
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
-        if (
-            source is None
-            or job is None
-            or not source["active"]
-            or source["generation"] != job["generation"]
-            or source["revision"] != job["revision"]
-            or job["status"] != "running"
-            or job["lease_token"] != token
-            or job["lease_until"] <= now
-        ):
+        if not _live_claim(source, job, token, now):
             return None
         return {
             "connector_id": source["connector_id"],

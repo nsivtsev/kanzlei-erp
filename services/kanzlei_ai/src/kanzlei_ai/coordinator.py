@@ -2,9 +2,11 @@
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
 import time
+from dataclasses import asdict
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from kanzlei_ai import outbox, sync
 from kanzlei_ai.connectors.frappe import FrappeConnector
 from kanzlei_ai.db import engine_from_settings, migrate
 from kanzlei_ai.models import connectors
+from kanzlei_ai.search.publication import MAX_REINDEX_LIMIT, reindex
 from kanzlei_ai.settings import Settings
 from kanzlei_ai.worker import app
 
@@ -67,22 +70,49 @@ def sync_once(engine, settings):
     )
 
 
+def _dispatch(engine, settings):
+    def publish_extract(job_id):
+        app.send_task("kanzlei_ai.stage_metadata", args=[job_id])
+
+    def publish_index(job_id):
+        app.send_task("kanzlei_ai.index_document", args=[job_id])
+
+    if settings.search_index_enabled:
+        return outbox.dispatch(engine, publish_extract, publish_index=publish_index)
+    return outbox.dispatch(engine, publish_extract)
+
+
+def _recover(engine, settings):
+    if settings.search_index_enabled:
+        return outbox.recover(engine, include_index=True)
+    return outbox.recover(engine)
+
+
 def run_cycle(engine, settings):
-    outbox.recover(engine)
-    outbox.dispatch(
-        engine, lambda job_id: app.send_task("kanzlei_ai.stage_metadata", args=[job_id])
-    )
+    _recover(engine, settings)
+    _dispatch(engine, settings)
     if settings.ingestion_enabled:
         sync_once(engine, settings)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "command", choices=["migrate", "scan", "sync-once", "recover", "dispatch", "run"]
-    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    for command in ("migrate", "scan", "sync-once", "recover", "dispatch", "run"):
+        commands.add_parser(command)
+    reindex_parser = commands.add_parser("reindex")
+    reindex_parser.add_argument("--connector")
+    reindex_parser.add_argument("--cursor", type=int, default=0)
+    reindex_parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
     settings = Settings()
+    if args.command == "reindex":
+        if not settings.search_index_enabled:
+            parser.error("Reindex requires AI_SEARCH_INDEX_ENABLED")
+        if args.cursor < 0 or not 1 <= args.limit <= MAX_REINDEX_LIMIT:
+            reindex_parser.error(
+                f"Cursor must be nonnegative and limit must be 1–{MAX_REINDEX_LIMIT}"
+            )
     engine = engine_from_settings(settings)
     try:
         if args.command == "migrate":
@@ -92,11 +122,17 @@ def main():
         elif args.command == "sync-once":
             sync_once(engine, settings)
         elif args.command == "recover":
-            outbox.recover(engine)
+            _recover(engine, settings)
         elif args.command == "dispatch":
-            outbox.dispatch(
-                engine, lambda job_id: app.send_task("kanzlei_ai.stage_metadata", args=[job_id])
+            _dispatch(engine, settings)
+        elif args.command == "reindex":
+            result = reindex(
+                engine,
+                args.connector or settings.ingestion_connector_id,
+                after=args.cursor,
+                limit=args.limit,
             )
+            print(json.dumps(asdict(result)))
         else:
             while True:
                 try:

@@ -56,6 +56,8 @@ jobs = Table(
     Column("revision", String(64), nullable=False),
     Column("pipeline_version", String(100), nullable=False),
     Column("generation", Integer, nullable=False),
+    Column("stage", String(16), nullable=False, server_default="extract"),
+    Column("artifact_id", ForeignKey("document_artifacts.id")),
     Column("status", String(32), nullable=False),
     Column("error_code", String(64)),
     Column("lease_token", String(36)),
@@ -63,7 +65,14 @@ jobs = Table(
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("retry_not_before", DateTime(timezone=True)),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    UniqueConstraint("source_id", "revision", "pipeline_version", "generation"),
+    UniqueConstraint(
+        "source_id",
+        "revision",
+        "pipeline_version",
+        "generation",
+        "stage",
+        name="uq_jobs_source_revision_pipeline_generation_stage",
+    ),
 )
 outbox = Table(
     "outbox",
@@ -123,4 +132,14 @@ document_chunks = Table(
     Column("ordinal", Integer, nullable=False),
     Column("text", Text, nullable=False),
     UniqueConstraint("source_id", "revision", "generation", "parser_version", "ordinal"),
+)
+index_publications = Table(
+    "index_publications",
+    metadata,
+    Column("source_id", ForeignKey("sources.id"), primary_key=True),
+    Column("publication_id", String(36), nullable=False, unique=True),
+    Column("artifact_id", ForeignKey("document_artifacts.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("profile", String(100), nullable=False),
 )

@@ -5,10 +5,10 @@ PostgreSQL, Qdrant and Redis. The local and production services share one Compos
 project and network with ERP, while keeping application code and storage separate.
 It does not import Frappe or read ERP database tables.
 
-The service provides health endpoints, a metadata-staging Celery worker, durable
-ingestion and an optional ERP connector with delegated identity, online permissions
-and original-file reads. Extraction, indexing and chat remain subsequent stages.
-No model API keys or real documents are needed with the default disabled connector.
+The service provides health endpoints, durable PDF extraction and indexing jobs,
+and an optional ERP connector with delegated identity and online permissions.
+Hybrid search is internal; the chat API and UI are later stages. No model API
+keys or real documents are needed for local tests.
 
 ## Start locally
 
@@ -132,9 +132,8 @@ See the [accepted design](../../docs/plans/2026-11-15-ai-service-design.md) and
 The [ERP connector contract](docs/erp-connector.md) describes optional setup,
 identity, source access, managed S3 Drive inventory/change feed and local acceptance.
 Durable consumption, ingestion jobs and recovery use PostgreSQL as the authority;
-Redis is a transport and Qdrant a rebuildable projection. The worker validates
-and stages metadata; native-text PDF extraction is a separate bounded stage and
-indexing is not yet implemented.
+Redis transports job IDs and Qdrant holds a rebuildable search projection.
+Native PDF extraction and indexing use separate leased jobs.
 
 ### Durable ingestion operations
 
@@ -176,7 +175,7 @@ expected revision and the existing 20 MiB connector bound. Docling uses native
 text with OCR disabled; page-aware chunks and private derived artifacts publish
 only while the source generation and worker lease remain current. Encrypted,
 unsupported, and size/page-limited input is terminal; connector and transient
-parser failures retry through the durable job policy. It does not index content.
+parser failures retry through the durable job policy.
 Configure the separate private S3-compatible artifact endpoint, bucket,
 credentials and `AI_ARTIFACT_S3_PREFIX` before enabling ingestion; the worker
 refuses extraction without all of them. Protect the database, artifacts and
@@ -207,3 +206,31 @@ uv run --locked pytest -m integration tests/integration/test_sync.py tests/integ
 These checks use synthetic metadata and a real broker/worker. They do not poll
 the live ERP, fetch document bytes or prove extraction quality. Keep connection
 diagnostics private; driver tracebacks can include connection parameters.
+
+### Hybrid search on synthetic data
+
+Keep `AI_SEARCH_INDEX_ENABLED=false` on existing and production stands. On an
+isolated local stand with synthetic inputs, migrate the AI database before
+enabling the flag for the coordinator and worker. Set `AI_SEARCH_COLLECTION`
+to a collection reserved for that stand. `AI_INGESTION_ENABLED` can stay off
+when indexing previously extracted fixtures.
+
+To enqueue stored chunks or rebuild a missing test collection, run
+`python -m kanzlei_ai.coordinator reindex --limit 100` against that stand.
+It defaults to `AI_INGESTION_CONNECTOR_ID`; use `--connector` for a different
+fixture connector. Continue with `--cursor <next_cursor>` until `next_cursor`
+is `null`. The coordinator and worker publish the queued jobs normally; the
+command does not reread originals or parse PDFs.
+
+The index job reads current chunks from PostgreSQL and stages dense, BM25 and
+exact identifier data in Qdrant. The dense provider is deterministic test code;
+it establishes retrieval mechanics without measuring semantic quality. PostgreSQL
+activates the staged publication only after all points are written. A replacement
+or deletion makes old points ineligible immediately, and an index failure does
+not require extracting the PDF again. Qdrant storage is private derived data;
+it can be rebuilt from the persisted chunks. Old points are not yet pruned.
+
+Internal retrieval filters every query by connector and allowed client IDs. It
+checks the current PostgreSQL publication and delegates authorization to the ERP
+under the caller's grant before returning text. A failed ERP check cannot produce
+partial output. There is no public search endpoint in this stage.
