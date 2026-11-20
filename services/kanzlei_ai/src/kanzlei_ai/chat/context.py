@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Literal
 
-from sqlalchemy import and_, func, select, tuple_
+from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 
 from kanzlei_ai.connectors.base import ConnectorError, ERPConnector
@@ -25,6 +26,11 @@ RETRIEVAL_LIMIT = 6
 RELATED_TABLE_LIMIT = 4
 CONTEXT_LIMIT = RETRIEVAL_LIMIT + RELATED_TABLE_LIMIT
 CHUNK_LIMIT = 1800
+PDF_MIME = "application/pdf"
+EMAIL_MIME = "application/vnd.kanzlei.email+json"
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+SourceKind = Literal["pdf", "email", "docx"]
+_SOURCE_KINDS: dict[str, SourceKind] = {PDF_MIME: "pdf", EMAIL_MIME: "email", DOCX_MIME: "docx"}
 
 
 @dataclass(frozen=True)
@@ -43,12 +49,16 @@ class Dependency:
 @dataclass(frozen=True)
 class Evidence:
     dependency: Dependency
-    page: int
+    page: int | None
     kind: str
     text: str = field(repr=False)
     title: str = "PDF"
-    mime_type: str = ""
+    mime_type: str = PDF_MIME
     content_sha256: str = ""
+
+    @property
+    def source_kind(self) -> SourceKind | None:
+        return _SOURCE_KINDS.get(self.mime_type)
 
 
 @dataclass(frozen=True)
@@ -144,6 +154,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
         )
     )
     version = (source.source_id, source.revision, source.generation)
+    mime = source.manifest["mime_type"].as_string()
     statement = (
         select(
             *version,
@@ -152,7 +163,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             chunk.kind,
             chunk.text,
             source.manifest["title"].as_string().label("title"),
-            source.manifest["mime_type"].as_string().label("mime_type"),
+            mime.label("mime_type"),
             artifact.content_sha256,
         )
         .select_from(joined)
@@ -160,7 +171,10 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             source.connector_id == session.connector_id,
             scope_relation.client_id == session.scope.client_id,
             source.active.is_(True),
-            chunk.page.between(1, artifact.page_count),
+            or_(
+                mime.in_((EMAIL_MIME, DOCX_MIME)),
+                chunk.page.between(1, artifact.page_count),
+            ),
             func.char_length(chunk.text).between(1, CHUNK_LIMIT),
         )
     )
@@ -193,11 +207,12 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             row.generation,
             row.id,
         )
+        page = None if row.mime_type in (EMAIL_MIME, DOCX_MIME) else row.page
         title = row.title
         if not title or len(title) > 500 or any(ord(char) < 32 for char in title):
-            title = "PDF"
+            title = "E-Mail" if row.mime_type == EMAIL_MIME else "PDF"
         result[dependency] = Evidence(
-            dependency, row.page, row.kind, row.text, title, row.mime_type, row.content_sha256
+            dependency, page, row.kind, row.text, title, row.mime_type, row.content_sha256
         )
     return result
 
@@ -236,7 +251,7 @@ async def retrieve_context(engine, index, session: Session, question: str) -> tu
         {
             dependency.version_key()
             for dependency, evidence in current.items()
-            if identifiers & exact_identifiers(evidence.text)
+            if evidence.source_kind == "pdf" and identifiers & exact_identifiers(evidence.text)
         }
     )
     # Tables may be on another page. Expand only within the exact authorized source version.

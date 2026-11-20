@@ -594,3 +594,60 @@ def test_migration_preserves_task6_rows(database):
         )
         assert connection.scalar(select(index_publications.c.publication_id)) == old.publication_id
         assert connection.scalar(select(document_chunks.c.id)) == old.chunk_id
+
+
+def test_email_excerpt_and_original_require_current_authorization(chat, database):
+    client, erp, runtime, conversation, _ = chat
+    text = "La réunion à Berlin est confirmée lundi."
+    message = add_source(database, "mail", ["A"], text, connector_id="fixture-erp")
+    with database.begin() as connection:
+        connection.execute(
+            sources.update()
+            .where(sources.c.id == message.source_pk)
+            .values(
+                source_id="email:Meeting #?",
+                manifest={
+                    "source_type": "email",
+                    "title": "Meeting",
+                    "mime_type": "application/vnd.kanzlei.email+json",
+                    "locator": "/untrusted-index-locator",
+                },
+            )
+        )
+    runtime.index = RankedIndex(dense=[message])
+    expected = "/desk/communication/Meeting%20%23%3F"
+    calls = []
+
+    async def resolve(access_token, scope, source):
+        calls.append((access_token, scope.client_id, source.source_id))
+        return expected
+
+    erp.resolve_source_locator = resolve
+    kind, answer = run_turn(client, conversation, "What does the email say about Berlin?")[-1]
+    assert kind == "answer"
+    assert answer["answer"] == f"The email says:\n\n{text}"
+    (citation,) = answer["citations"]
+    assert citation == {**citation, "title": "Meeting", "page": None, "source_kind": "email"}
+    assert set(citation) == {"id", "title", "page", "source_kind"}
+    assert calls == []
+    assert history(client, conversation).json()["items"] == [answer]
+
+    original = pdf_url(conversation, answer).removesuffix("/pdf") + "/original"
+    response = client.get(original)
+    assert response.status_code == 200
+    assert response.json() == {"source_kind": "email", "locator": expected}
+    assert response.headers["cache-control"] == "private, no-store"
+    assert calls == [("x" * 43, "A", "email:Meeting #?")]
+    assert client.get(pdf_url(conversation, answer)).status_code == 404
+    assert erp.reads == 0
+
+    async def revoke_during_resolve(*args):
+        erp.denied.add("email:Meeting #?")
+        return expected
+
+    erp.resolve_source_locator = revoke_during_resolve
+    assert client.get(original).status_code == 404
+    revoked = history(client, conversation).json()["items"][0]
+    assert revoked["status"] == "unavailable"
+    assert revoked["citations"] == []
+    assert revoked["answer"] is None

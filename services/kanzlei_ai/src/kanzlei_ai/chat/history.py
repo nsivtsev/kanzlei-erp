@@ -4,15 +4,16 @@ from threading import Lock
 from time import monotonic
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 from sqlalchemy import select, tuple_
 
-from kanzlei_ai.chat.citations import VerifiedAnswer
+from kanzlei_ai.chat.citations import VerifiedAnswer, render_answer
 from kanzlei_ai.chat.context import (
     CONTEXT_LIMIT,
     Dependency,
     Evidence,
     Session,
+    SourceKind,
     checked_evidence,
     configure_query,
     current_evidence,
@@ -30,8 +31,18 @@ class StoredCitation(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     id: str
     chunk_id: str
-    page: int
+    page: int | None
     title: str
+    source_kind: SourceKind = "pdf"
+
+    @model_validator(mode="after")
+    def check_page(self):
+        if self.source_kind == "pdf":
+            if self.page is None or self.page < 1:
+                raise ValueError("PDF citations require a positive page")
+        elif self.page is not None:
+            raise ValueError("Text citations have no page")
+        return self
 
 
 class TurnCommit:
@@ -129,6 +140,7 @@ def store_turn(
                 chunk_id=answer.evidence.dependency.chunk_id,
                 page=answer.evidence.page,
                 title=answer.evidence.title,
+                source_kind=answer.evidence.source_kind,
             )
         ]
     statement = (
@@ -138,7 +150,7 @@ def store_turn(
             conversation_id=conversation_id,
             status="answered" if answer is not None else "no_evidence",
             question=question,
-            answer=f"Der Betrag beträgt {answer.amount}." if answer is not None else None,
+            answer=render_answer(question, answer) if answer is not None else None,
             citations=[citation.model_dump() for citation in citations],
             dependencies=_dependencies.dump_python(dependencies, mode="json"),
         )
@@ -185,7 +197,11 @@ def _history_view(row, citations, *, available=True):
         "created_at": row.created_at.isoformat(),
         "status": row.status if available else "unavailable",
         "question": row.question if available else None,
-        "answer": row.answer if available else None,
+        "answer": (
+            (render_answer(row.question, None) if row.status == "no_evidence" else row.answer)
+            if available
+            else None
+        ),
         "citations": (
             [citation.model_dump(exclude={"chunk_id"}) for citation in citations]
             if available
@@ -253,7 +269,7 @@ async def check_citation(engine, session, dependencies, citation) -> Evidence:
             if (
                 dependency.chunk_id == citation.chunk_id
                 and evidence.page == citation.page
-                and evidence.mime_type == "application/pdf"
+                and evidence.source_kind == citation.source_kind
             ):
                 return evidence
     raise ConnectorError("NOT_FOUND", 404)

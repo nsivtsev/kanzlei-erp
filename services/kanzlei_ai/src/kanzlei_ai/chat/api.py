@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 from typing import Annotated, Literal
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -14,12 +15,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import and_, select, tuple_
 from sqlalchemy.engine import Engine
 from starlette.requests import ClientDisconnect
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from kanzlei_ai.auth import AccessToken, Adapter
 from kanzlei_ai.chat import history
 from kanzlei_ai.chat.citations import ChatProvider, validate_answer
 from kanzlei_ai.chat.context import (
+    EMAIL_MIME,
+    PDF_MIME,
     Session,
     checked_evidence,
     configure_query,
@@ -301,7 +304,7 @@ async def _list_source_page(service, session, cursor, query="", status="all"):
     entries = [
         doc
         for doc in page.items
-        if doc.mime_type == "application/pdf" and query.casefold() in doc.title.casefold()
+        if doc.mime_type in (PDF_MIME, EMAIL_MIME) and query.casefold() in doc.title.casefold()
     ]
     statuses = (
         await database_call(_source_status, service.engine, session, entries) if entries else {}
@@ -450,6 +453,8 @@ async def citation_pdf(
     deps, citation, evidence = await history.find_citation(
         service.engine, session, conversation_id, _id(turn_id), _id(citation_id)
     )
+    if citation.source_kind != "pdf":
+        raise ConnectorError("NOT_FOUND", 404)
     try:
         content = await adapter.read_source(access_token, session.scope, evidence.dependency.source)
     except ConnectorError as error:
@@ -474,4 +479,44 @@ async def citation_pdf(
             "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+@router.get("/{conversation_id}/turns/{turn_id}/citations/{citation_id}/original")
+async def citation_original(
+    conversation_id: str,
+    turn_id: str,
+    citation_id: str,
+    adapter: Adapter,
+    access_token: AccessToken,
+    service: Runtime,
+):
+    session = await _session(adapter, access_token, service, conversation_id=conversation_id)
+    deps, citation, evidence = await history.find_citation(
+        service.engine, session, conversation_id, _id(turn_id), _id(citation_id)
+    )
+    source = evidence.dependency.source
+    prefix, _, name = source.source_id.partition(":")
+    if (
+        citation.source_kind != "email"
+        or prefix != "email"
+        or name in ("", ".", "..")
+        or any(ord(char) < 32 or ord(char) == 127 for char in name)
+    ):
+        raise ConnectorError("NOT_FOUND", 404)
+    expected = "/desk/communication/" + quote(name, safe="")
+    try:
+        locator = await adapter.resolve_source_locator(access_token, session.scope, source)
+    except ConnectorError as error:
+        if error.status in (403, 404, 409):
+            raise ConnectorError("NOT_FOUND", 404) from None
+        raise
+    if locator != expected:
+        raise ConnectorError("NOT_FOUND", 404)
+    await _verify_session(session)
+    if await history.check_citation(service.engine, session, deps, citation) != evidence:
+        raise ConnectorError("NOT_FOUND", 404)
+    return JSONResponse(
+        {"source_kind": "email", "locator": locator},
+        headers={"Cache-Control": "private, no-store"},
     )

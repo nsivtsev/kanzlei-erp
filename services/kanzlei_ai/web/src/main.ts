@@ -3,7 +3,9 @@ import { themeSwitcher } from './theme';
 import './style.css';
 
 type Client = { id: string; label: string };
-type Citation = { id: string; title: string; page: number };
+type Citation =
+  | { id: string; title: string; page: number; source_kind?: 'pdf' }
+  | { id: string; title: string; page: null; source_kind: 'email' | 'docx' };
 type Item = {
   id: string;
   created_at: string;
@@ -17,7 +19,7 @@ type Source = { source_id: string; title: string; status: Processing };
 type Filters = { query: string; status: 'all' | Processing };
 type Conversation = { id: string; client_id: string; created_at: string };
 type Grant = { access_token: string; token_type: string; identity: { expires_at: number } };
-type Lease = { token: string; expiry: number; controller: AbortController };
+type Lease = { token: string; expiry: number; erpOrigin: string; controller: AbortController };
 type Page<T> = { items: T[]; next_cursor: string | null };
 type Viewer = { citation: Citation; canvas: HTMLCanvasElement; pages: number; zoom: number };
 type CitationRequest = { turn: string; citation: Citation; controller: AbortController; focus: string };
@@ -242,7 +244,7 @@ async function login() {
       if (attempt !== loginGeneration) return;
       if (grant.token_type !== 'bearer' || typeof grant.access_token !== 'string'
           || !Number.isFinite(grant.identity?.expires_at) || grant.identity.expires_at * 1000 <= Date.now()) throw Error();
-      const session = { token: grant.access_token, expiry: grant.identity.expires_at * 1000, controller: new AbortController() };
+      const session = { token: grant.access_token, expiry: grant.identity.expires_at * 1000, erpOrigin: origin, controller: new AbortController() };
       lease = session;
       window.clearTimeout(expiryTimer);
       expiryTimer = window.setTimeout(() => {
@@ -508,13 +510,27 @@ async function openCitation(turn: string, citation: Citation, focus: string) {
   const controller = new AbortController();
   const request = { turn, citation, controller, focus };
   citationRequest = request;
-  status = 'Dokument wird geladen …';
-  render();
+  status = citation.source_kind === 'email' ? 'E-Mail wird geprüft …' : 'Dokument wird geladen …';
+  render(focus);
   const valid = () => current(session, sequence) && citationRequest === request && !controller.signal.aborted;
   try {
-    const response = await api(session, `${conversationPath()}/turns/${encodeURIComponent(turn)}/citations/${encodeURIComponent(citation.id)}/pdf`, {
-      signal: controller.signal,
-    }, sequence);
+    const path = `${conversationPath()}/turns/${encodeURIComponent(turn)}/citations/${encodeURIComponent(citation.id)}`;
+    if (citation.source_kind === 'email') {
+      const response = await api(session, `${path}/original`, {
+        signal: controller.signal, redirect: 'error', cache: 'no-store',
+      }, sequence);
+      const { locator, source_kind: kind } = await response.json();
+      if (!valid()) return;
+      if (kind !== 'email' || typeof locator !== 'string'
+          || !/^\/desk\/communication\/(?:[A-Za-z0-9._~-]|%[0-9A-F]{2})+$/.test(locator)) throw Error();
+      const target = new URL(locator, session.erpOrigin);
+      if (target.origin !== session.erpOrigin || target.pathname !== locator) throw Error();
+      location.assign(target.href);
+      return;
+    }
+    const pageNumber = citation.page;
+    if (typeof pageNumber !== 'number' || !Number.isSafeInteger(pageNumber) || pageNumber < 1) throw Error();
+    const response = await api(session, `${path}/pdf`, { signal: controller.signal }, sequence);
     if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/pdf')
         || Number(response.headers.get('content-length')) > 25_000_000 || !response.body) throw Error();
     const reader = response.body.getReader();
@@ -547,7 +563,7 @@ async function openCitation(turn: string, citation: Citation, focus: string) {
     pdfTask = pdfjs.getDocument({ data, enableXfa: false });
     const pdf = await pdfTask.promise;
     if (!valid()) return;
-    const page = await pdf.getPage(citation.page);
+    const page = await pdf.getPage(pageNumber);
     if (!valid()) return;
     const canvas = el('canvas');
     canvas.id = 'pdf-canvas';
@@ -566,7 +582,7 @@ async function openCitation(turn: string, citation: Citation, focus: string) {
     if (valid()) {
       clearViewer();
       status = 'Die Quelle ist veraltet oder nicht verfügbar.';
-      render();
+      render(focus);
     }
   }
 }
@@ -652,6 +668,12 @@ function renderSidebar() {
   return aside;
 }
 
+function citationLabel(citation: Citation) {
+  if (citation.source_kind === 'email') return 'E-Mail im ERP öffnen';
+  if (citation.source_kind === 'docx') return 'Word-Dokument';
+  return `Seite ${citation.page}`;
+}
+
 function renderTurn(item: Item) {
   const article = el('article', undefined, 'turn');
   if (item.status === 'unavailable') {
@@ -660,7 +682,7 @@ function renderTurn(item: Item) {
   }
   article.append(el('p', item.question || '', 'question'));
   if (item.status === 'no_evidence') {
-    article.append(el('p', 'Keine ausreichenden Belege gefunden. Versuchen Sie es mit einem Dokumentnamen, einer Nummer oder einem Zeitraum.', 'turn-notice'));
+    article.append(el('p', item.answer || 'Keine ausreichenden Belege gefunden. Versuchen Sie es mit einem Dokumentnamen, einer Nummer oder einem Zeitraum.', 'turn-notice'));
     return article;
   }
   const answer = el('p', item.answer || '', 'answer');
@@ -668,7 +690,7 @@ function renderTurn(item: Item) {
     const citation = item.citations[0];
     const focus = `inline-${citationFocus(item.id, citation)}`;
     const marker = button('[1]', () => void openCitation(item.id, citation, focus), 'citation-marker', focus);
-    marker.setAttribute('aria-label', `Beleg 1: ${citation.title}, Seite ${citation.page}`);
+    marker.setAttribute('aria-label', `Beleg 1: ${citation.title}, ${citationLabel(citation)}`);
     answer.append(' ', marker);
   }
   article.append(answer);
@@ -677,11 +699,12 @@ function renderTurn(item: Item) {
     const row = el('li');
     const focus = citationFocus(item.id, citation);
     const control = button('', () => void openCitation(item.id, citation, focus), 'citation', focus);
-    control.setAttribute('aria-label', `${citation.title} · Seite ${citation.page}`);
+    control.setAttribute('aria-label', `${citation.title} · ${citationLabel(citation)}`);
     if (citationRequest?.turn === item.id && citationRequest.citation.id === citation.id) {
-      control.setAttribute('aria-expanded', String(!!viewer));
+      control.setAttribute('aria-busy', String(!viewer));
+      if (citation.page !== null) control.setAttribute('aria-expanded', String(!!viewer));
     }
-    control.append(el('span', citation.title, 'citation-title'), el('small', `Seite ${citation.page}`, 'citation-page'));
+    control.append(el('span', citation.title, 'citation-title'), el('small', citationLabel(citation), 'citation-page'));
     row.append(control);
     list.append(row);
   }

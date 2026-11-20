@@ -22,3 +22,48 @@ for (const width of [1100, 390]) test(`German chat flow at ${width}px`,async ({p
   await page.getByRole('button',{name:'Abmelden'}).click(); await expect(page.getByRole('button',{name:'Mit ERP anmelden'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+test('opens an email citation via fresh authorization and keeps German controls', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
+  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByRole('button', { name: 'Neues Gespräch' }).click();
+  const question = page.getByLabel('Ihre Frage');
+  await question.fill('Когда встреча?');
+  await page.getByRole('button', { name: 'Senden' }).click();
+  await expect(page.getByText('Не найдено достаточных подтверждений.')).toBeVisible();
+
+  await question.fill('What does the email say about Berlin?');
+  await page.getByRole('button', { name: 'Senden' }).click();
+  await expect(page.getByText('The email says:', { exact: false })).toBeVisible();
+  await expect(page.getByText('Die Besprechung in Berlin ist am Montag.', { exact: false })).toBeVisible();
+  const citation = page.getByRole('button', { name: 'Termin · E-Mail im ERP öffnen', exact: true });
+  await expect(citation).toBeVisible();
+  const request = page.waitForRequest(req => req.url().endsWith('/email/original'));
+  const destination = page.waitForRequest(req => new URL(req.url()).pathname.startsWith('/desk/communication/'));
+  await citation.click();
+  expect((await request).headers().authorization).toMatch(/^Bearer /);
+  const navigation = await destination;
+  expect(navigation.url()).toBe('http://127.0.0.1:19991/desk/communication/Test%20%23%3F');
+  expect(navigation.headers().authorization).toBeUndefined();
+  await expect(page.getByText('ERP communication fixture')).toBeVisible();
+});
+
+for (const rejected of ['permission', 'locator']) {
+  test(`email citation does not navigate after rejected ${rejected}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
+    await page.getByLabel('Suchbereich').selectOption('a');
+    await page.getByRole('button', { name: 'Neues Gespräch' }).click();
+    await page.getByLabel('Ihre Frage').fill('What does the email say about Berlin?');
+    await page.getByRole('button', { name: 'Senden' }).click();
+    await page.route('**/email/original', route => rejected === 'permission'
+      ? route.fulfill({ status: 404 })
+      : route.fulfill({ json: { source_kind: 'email', locator: '/desk/communication/%2E%2E' } }));
+    await page.getByRole('button', { name: 'Termin · E-Mail im ERP öffnen', exact: true }).click();
+    await expect(page.locator('#chat-status')).toContainText(rejected === 'permission'
+      ? 'nicht mehr verfügbar' : 'veraltet oder nicht verfügbar');
+    await expect(page).toHaveURL('http://127.0.0.1:19992/');
+  });
+}

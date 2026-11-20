@@ -9,7 +9,7 @@ const examplePdf = Buffer.from(
 );
 const json=(res,data)=>{res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
 function pdf(){const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>','<< /Length 42 >>\nstream\nBT /F1 12 Tf 20 100 Td (Synthetic) Tj ET\nendstream','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];let s='%PDF-1.4\n';const offsets=[0];for(let i=0;i<objects.length;i++){offsets.push(Buffer.byteLength(s));s+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;}const x=Buffer.byteLength(s);s+=`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n ').join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${x}\n%%EOF`;return s;}
-http.createServer((req,res)=>{const u=new URL(req.url,`http://127.0.0.1:${port}`);let body='';req.on('data',x=>body+=x);req.on('end',()=>{if(u.pathname==='/kanzlei-ai-connect'){res.writeHead(200,{'Content-Type':'text/html'});res.end(`<script>opener.postMessage({type:'kanzlei-ai:ticket',state:new URL(location.href).searchParams.get('state'),ticket:'fixture'},'http://127.0.0.1:19992')</script>`);return;}
+http.createServer((req,res)=>{const u=new URL(req.url,`http://127.0.0.1:${port}`);let body='';req.on('data',x=>body+=x);req.on('end',()=>{if(u.pathname==='/kanzlei-ai-connect'){res.writeHead(200,{'Content-Type':'text/html','Set-Cookie':'erp_fixture=active; Path=/; HttpOnly; SameSite=Lax'});res.end(`<script>opener.postMessage({type:'kanzlei-ai:ticket',state:new URL(location.href).searchParams.get('state'),ticket:'fixture'},'http://127.0.0.1:19992')</script>`);return;}
 if(u.pathname==='/v1/auth/browser/config')return json(res,{version:1,erp_origin:`http://127.0.0.1:${port}`});
 if(u.pathname==='/v1/auth/browser/exchange')return json(res,{access_token:randomUUID(),token_type:'bearer',identity:{expires_at:Math.floor(Date.now()/1000)+300}});
 if(u.pathname==='/v1/auth/logout')return json(res,{});
@@ -40,19 +40,38 @@ if (u.pathname.endsWith('/history')) return json(res, { items: thread?.turns ?? 
 if (u.pathname.endsWith('/turns')) {
   const { question } = JSON.parse(body);
   const invoice = /RE-2026-0042/iu.test(question);
-  const answered = thread?.conversation.client_id !== 'b';
+  const email = question === 'What does the email say about Berlin?';
+  const russian = question === 'Когда встреча?';
+  const answered = thread?.conversation.client_id !== 'b' && !russian;
   const answer = {
     id: thread?.turns.length ? randomUUID() : 't',
     created_at: new Date().toISOString(),
     status: answered ? 'answered' : 'no_evidence',
     question,
-    answer: answered ? invoice ? 'Der Rechnungsbetrag beträgt 1.249,50 EUR.' : 'Testantwort' : null,
-    citations: answered ? [{ id: invoice ? 'invoice' : 'x', title: invoice ? 'Rechnung RE-2026-0042.pdf' : 'Testdokument', page: invoice ? 2 : 1 }] : [],
+    answer: russian ? 'Не найдено достаточных подтверждений.' : !answered ? null
+      : email ? 'The email says:\n\nDie Besprechung in Berlin ist am Montag.'
+      : invoice ? 'Der Rechnungsbetrag beträgt 1.249,50 EUR.' : 'Testantwort',
+    citations: email ? [{ id: 'email', title: 'Termin', page: null, source_kind: 'email' }]
+      : answered ? [{ id: invoice ? 'invoice' : 'x', title: invoice ? 'Rechnung RE-2026-0042.pdf' : 'Testdokument', page: invoice ? 2 : 1 }] : [],
   };
   thread?.turns.push(answer);
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
   res.write('event: status\ndata: {"phase":"retrieving"}\n\n');
   res.end('event: answer\ndata: ' + JSON.stringify(answer) + '\n\n');
+  return;
+}
+if (u.pathname.endsWith('/email/original')) {
+  if (owner !== thread?.owner) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  return json(res, { source_kind: 'email', locator: '/desk/communication/Test%20%23%3F' });
+}
+if (u.pathname === '/desk/communication/Test%20%23%3F') {
+  const hasSession = req.headers.cookie?.split('; ').includes('erp_fixture=active');
+  res.writeHead(hasSession ? 200 : 403, { 'Content-Type': 'text/plain' });
+  res.end(hasSession ? 'ERP communication fixture' : 'ERP session missing');
   return;
 }
 if (u.pathname.endsWith('/pdf')) {
