@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from kanzlei_ai.connectors.contracts import SourceManifest
 from kanzlei_ai.db import migrate
+from kanzlei_ai.documents.docx import DOCX_MIME_TYPE
 from kanzlei_ai.jobs import clear_index_batches
 from kanzlei_ai.models import (
     connectors,
@@ -195,9 +196,10 @@ def _receipt(conn, connector_id, epoch, phase, expected_cursor, page):
         )
 
 
-def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
+def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile, *, docx_enabled):
     manifest = SourceManifest.model_validate(manifest).model_dump(mode="json", exclude_none=True)
     is_email = manifest["source_type"] == "email"
+    is_docx = manifest["mime_type"] == DOCX_MIME_TYPE
     row = (
         conn.execute(
             select(sources)
@@ -225,10 +227,21 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
     same_revision = row is not None and row["active"] and row["revision"] == manifest["revision"]
     needs_local_ocr = (
         same_revision
+        and manifest["mime_type"] == "application/pdf"
         and ocr_profile == "paddle"
         and existing is not None
         and existing["ocr_profile"] == "native"
         and row["error_code"] == "OCR_REQUIRED"
+    )
+    needs_docx = (
+        is_docx
+        and docx_enabled
+        and same_revision
+        and existing is not None
+        and (
+            row["error_code"] in {"UNSUPPORTED_MEDIA", "INVALID_EXTRACTION_PROFILE"}
+            or (existing["ocr_profile"] != "native" and existing["status"] in {"queued", "running"})
+        )
     )
     changed = (
         not same_revision
@@ -238,6 +251,7 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
         or existing["pipeline_version"] != pipeline_version
         or (is_email and existing["ocr_profile"] != "native")
         or needs_local_ocr
+        or needs_docx
     )
     incoming_clients = manifest["client_ids"]
     manifest["client_ids"] = sorted(current_clients | set(incoming_clients))
@@ -285,7 +299,7 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
             if same_revision and existing and not needs_local_ocr
             else ocr_profile
         )
-        if is_email:
+        if is_email or is_docx:
             selected_profile = "native"
         _enqueue(
             conn, source_id, manifest["revision"], generation, pipeline_version, selected_profile
@@ -323,7 +337,7 @@ def _remove_relation(conn, source_id, client_id, pipeline_version, ocr_profile):
     if clients:
         existing = _latest_extract(conn, source_id, source["revision"])
         selected_profile = existing["ocr_profile"] if existing else ocr_profile
-        if manifest["source_type"] == "email":
+        if manifest["source_type"] == "email" or manifest["mime_type"] == DOCX_MIME_TYPE:
             selected_profile = "native"
         _enqueue(
             conn, source_id, source["revision"], generation, pipeline_version, selected_profile
@@ -339,6 +353,7 @@ def apply_inventory(
     pipeline_version=PIPELINE_VERSION,
     *,
     ocr_profile="native",
+    docx_enabled=False,
 ):
     with engine.begin() as conn:
         state = (
@@ -360,7 +375,15 @@ def apply_inventory(
             raise ValueError("Inventory watermark changed")
         profile = _effective_ocr_profile(state, ocr_profile)
         for manifest in page["items"]:
-            _upsert(conn, connector_id, epoch, manifest, pipeline_version, profile)
+            _upsert(
+                conn,
+                connector_id,
+                epoch,
+                manifest,
+                pipeline_version,
+                profile,
+                docx_enabled=docx_enabled,
+            )
         next_cursor = page["next_cursor"]
         if next_cursor is None:
             unseen = conn.execute(
@@ -401,6 +424,7 @@ def apply_changes(
     pipeline_version=PIPELINE_VERSION,
     *,
     ocr_profile="native",
+    docx_enabled=False,
 ):
     with engine.begin() as conn:
         state = (
@@ -425,7 +449,15 @@ def apply_changes(
                     or item["client_id"] not in item["manifest"]["client_ids"]
                 ):
                     raise ValueError("Mismatched change")
-                _upsert(conn, connector_id, epoch, item["manifest"], pipeline_version, profile)
+                _upsert(
+                    conn,
+                    connector_id,
+                    epoch,
+                    item["manifest"],
+                    pipeline_version,
+                    profile,
+                    docx_enabled=docx_enabled,
+                )
             elif item["operation"] == "delete" and item["manifest"] is None:
                 source = conn.execute(
                     select(sources.c.id)

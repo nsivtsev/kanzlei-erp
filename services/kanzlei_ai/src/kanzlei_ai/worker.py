@@ -344,6 +344,7 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
     from kanzlei_ai.connectors.contracts import EMAIL_MIME_TYPE, SourceRef
     from kanzlei_ai.documents.artifacts import LimitExceeded
     from kanzlei_ai.documents.chunk import ChunkInput, OversizedTable, deterministic_chunks
+    from kanzlei_ai.documents.docx import DOCX_MIME_TYPE, parse_docx
     from kanzlei_ai.documents.parse import ExtractionError, TerminalExtractionError
     from kanzlei_ai.search.publication import configured_index_profile
 
@@ -353,7 +354,8 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
     manifest = context["manifest"]
     mime_type = manifest["mime_type"]
     is_email = manifest.get("source_type") == "email" and mime_type == EMAIL_MIME_TYPE
-    if not is_email and mime_type != "application/pdf":
+    is_docx = mime_type == DOCX_MIME_TYPE and getattr(settings, "ingestion_docx_enabled", False)
+    if not (is_email or is_docx) and mime_type != "application/pdf":
         fail_terminal(engine, job_id, token, "UNSUPPORTED_MEDIA")
         return False
     source = SourceRef(
@@ -362,13 +364,18 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
         client_id=sorted(manifest["client_ids"])[0],
     )
     try:
-        if is_email:
+        artifact = None
+        if is_email or is_docx:
             from kanzlei_ai.documents.email import parse_email
 
             if context["ocr_profile"] != "native":
                 raise TerminalExtractionError("INVALID_EXTRACTION_PROFILE")
             content = asyncio.run(_background_connector(settings).read_background_source(source))
-            parsed = parse_email(content)
+            parsed = parse_docx(content) if is_docx else parse_email(content)
+            if is_docx:
+                artifact = parsed.artifact_bytes()
+                if len(artifact) > settings.artifact_max_bytes:
+                    raise LimitExceeded
         else:
             parsed = _process_extraction_portion(
                 engine,
@@ -397,14 +404,14 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
                 ],
             )
         )
-        if is_email and len(chunks) > MAX_CHUNKS:
+        if (is_email or is_docx) and len(chunks) > MAX_CHUNKS:
             raise TerminalExtractionError("CHUNK_LIMIT_EXCEEDED")
         if not extraction_claim_is_live(engine, job_id, token):
             return False
         store = _artifact_store(settings)
         key = store.put(
             f"{context['connector_id']}/{source.source_id}/{source.revision}/{context['generation']}",
-            parsed.artifact_bytes(),
+            parsed.artifact_bytes() if artifact is None else artifact,
         )
         published = publish_extraction(
             engine,

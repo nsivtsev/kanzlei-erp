@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     erp_allow_insecure_http: bool = False
     erp_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     ingestion_enabled: bool = False
+    ingestion_docx_enabled: bool = False
     ingestion_key: SecretStr | None = None
     ingestion_connector_id: str = "kanzlei-erp"
     ingestion_poll_seconds: int = Field(default=30, ge=5, le=3600)

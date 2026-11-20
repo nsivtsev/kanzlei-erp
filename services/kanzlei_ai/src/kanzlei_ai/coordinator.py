@@ -68,6 +68,7 @@ def sync_once(engine, settings):
             page,
             settings.ingestion_pipeline_version,
             ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
+            docx_enabled=settings.ingestion_docx_enabled,
         )
     cursor = state["changes_cursor"]
     page = asyncio.run(client.changes(cursor)).model_dump(mode="json")
@@ -79,6 +80,7 @@ def sync_once(engine, settings):
         page,
         settings.ingestion_pipeline_version,
         ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
+        docx_enabled=settings.ingestion_docx_enabled,
     )
 
 
