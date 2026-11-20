@@ -1,27 +1,29 @@
-"""POST-only connector endpoints with a uniform, content-free HTTP error boundary."""
+"""Connector RPCs and session-authenticated originals with content-free HTTP errors."""
 
 import hashlib
 import inspect
 import json
-from functools import wraps
+from functools import partial, wraps
 
 import frappe
 from werkzeug.wrappers import Response
 
-from kanzlei_erp.ai_connector import auth, policy
+from kanzlei_erp.ai_connector import auth, mail, policy
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail
 
 HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"}
 
 
-def endpoint(function):
+def endpoint(function=None, *, method="POST"):
+	if function is None:
+		return partial(endpoint, method=method)
 	allowed = set(inspect.signature(function).parameters) - {"extra"}
 
 	@wraps(function)
 	def guarded(*args, **kwargs):
 		try:
 			request = getattr(frappe.local, "request", None)
-			if request and request.method != "POST":
+			if request and request.method != method:
 				fail("METHOD_NOT_ALLOWED", 405)
 			# Frappe's RPC dispatcher adds its resolved command to form_dict.
 			# Accept only this exact endpoint, retaining strict application fields.
@@ -115,6 +117,12 @@ def list_documents(access_token=None, client_id=None, cursor=None, limit=50, que
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
 def authorize_sources(access_token=None, scope=None, sources=None, version=1, **extra):
+	if mail.enabled():
+		from kanzlei_erp.ai_connector import inventory
+
+		with inventory.current_permission_context(), auth.principal(access_token) as record:
+			inventory.refresh_principal_permissions(record["subject"])
+			return policy.authorize_sources(scope, sources)
 	with auth.principal(access_token):
 		return policy.authorize_sources(scope, sources)
 
@@ -129,12 +137,49 @@ def check_processing_policy(operation=None, scope=None, sources=None, access_tok
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
+def resolve_source_locator(access_token=None, scope=None, source=None, version=1, **extra):
+	from kanzlei_erp.ai_connector import inventory
+
+	with inventory.current_permission_context(), auth.principal(access_token) as record:
+		inventory.refresh_principal_permissions(record["subject"])
+		return policy.resolve_source_locator(scope, source)
+
+
+@frappe.whitelist(methods=["GET"])
+@endpoint(method="GET")
+def download_mail_attachment(customer=None, file_id=None, revision=None, **extra):
+	from kanzlei_erp.ai_connector import inventory
+	from kanzlei_erp.ai_connector.errors import text
+
+	source = {"source_id": "file:" + text(file_id), "revision": revision, "client_id": text(customer)}
+	user, sid = frappe.session.user, frappe.session.sid
+
+	def refresh():
+		auth._live_session(user, sid)
+		inventory.refresh_principal_permissions(user)
+
+	with inventory.current_permission_context():
+		refresh()
+		content = mail.read_current(source, before_final_projection=refresh)
+	return Response(
+		content,
+		mimetype="application/pdf",
+		headers={**HEADERS, "Content-Disposition": 'inline; filename="attachment.pdf"'},
+	)
+
+
+def _source_mimetype(source):
+	return mail.MIME_TYPE if source["source_id"].startswith("email:") else "application/octet-stream"
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
 def read_source(access_token=None, scope=None, source=None, version=1, **extra):
 	with auth.principal(access_token):
 		content = policy.read_source(scope, source, authenticate_current=lambda: auth.resolve(access_token))
 	return Response(
 		content,
-		mimetype="application/octet-stream",
+		mimetype=_source_mimetype(source),
 		headers={
 			**HEADERS,
 			"X-AI-Revision": source["revision"],
@@ -162,7 +207,7 @@ def background_read_source(source=None, version=1, **extra):
 			value = policy.reference(source)
 	return Response(
 		content,
-		mimetype="application/octet-stream",
+		mimetype=_source_mimetype(value),
 		headers={
 			**HEADERS,
 			"X-AI-Revision": value["revision"],

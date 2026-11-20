@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import frappe
 
-from kanzlei_erp.ai_connector import auth, native_drive
+from kanzlei_erp.ai_connector import auth, mail, native_drive
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail, text
 from kanzlei_erp.ai_connector.native_drive import MAX_BYTES
 from kanzlei_erp.mandant_documents import _require_customer, get_authorized_document_files, get_documents
@@ -58,7 +58,8 @@ def reference(value):
 		fail()
 	text(value["client_id"])
 	text(value["source_id"])
-	if not value["source_id"].startswith("file:") or len(value["source_id"]) <= 5:
+	kind, _, name = value["source_id"].partition(":")
+	if kind not in {"file", "email"} or not name:
 		fail()
 	import re
 
@@ -140,7 +141,13 @@ def clients(page_limit=50, cursor=None):
 
 def _file(client_id, file_id):
 	_, files = get_authorized_document_files(client_id, [file_id])
-	return _eligible(files[file_id])
+	return _ordinary_file(files[file_id])
+
+
+def _ordinary_file(file):
+	if mail.is_attachment(file):
+		fail("FORBIDDEN", 403)
+	return _eligible(file)
 
 
 def _eligible(file):
@@ -221,14 +228,20 @@ def manifest(file, client_id, *, managed_only=False, locked=False):
 		or mimetypes.guess_type(file.file_name)[0]
 		or "application/octet-stream",
 		"source_modified_at": str(file.modified),
-		"locator": "/api/method/kanzlei_erp.mandant_documents.download_document?customer="
-		+ quote(client_id, safe="")
-		+ "&file_id="
-		+ quote(file.name, safe="")
-		+ "&disposition=inline",
+		"locator": _file_locator(client_id, file.name),
 		"byte_size": state.byte_size,
 		"active": True,
 	}
+
+
+def _file_locator(client_id, file_id):
+	return (
+		"/api/method/kanzlei_erp.mandant_documents.download_document?customer="
+		+ quote(client_id, safe="")
+		+ "&file_id="
+		+ quote(file_id, safe="")
+		+ "&disposition=inline"
+	)
 
 
 @native_drive.bounded
@@ -236,9 +249,33 @@ def documents(client_id, page_limit=50, cursor=None, *, query=None):
 	text(client_id)
 	limit(page_limit)
 	scope({"kind": "client", "client_id": client_id})
-	underlying = _cursor(cursor, "documents:" + client_id)
 	if query is not None:
 		text(query)
+	binding = "documents:" + client_id
+	underlying = _cursor(cursor, binding)
+	email_enabled = mail.enabled()
+	email_after = None
+	if isinstance(underlying, dict):
+		if underlying == {"files": True}:
+			pass
+		elif set(underlying) == {"email_after", "query"} and query == underlying["query"] and email_enabled:
+			email_after = text(underlying["email_after"])
+		else:
+			fail()
+		underlying = None
+	if email_enabled and (cursor is None or email_after is not None):
+		names = mail.message_names(client_id, after=email_after, query=query, page_limit=page_limit + 1)
+		if names:
+			continuation = {"files": True}
+			if len(names) > page_limit:
+				continuation = {"email_after": names[page_limit - 1], "query": query}
+			return {
+				"version": 1,
+				"items": [
+					item for name in names[:page_limit] if (item := mail.project("email:" + name, client_id))
+				],
+				"next_cursor": _encode_cursor(continuation, binding),
+			}
 	page = get_documents(
 		client_id,
 		filters={"query": query} if query is not None else None,
@@ -252,7 +289,12 @@ def documents(client_id, page_limit=50, cursor=None, *, query=None):
 		if row["file_id"] not in files:
 			continue
 		try:
-			items.append(manifest(_eligible(files[row["file_id"]]), client_id))
+			file = files[row["file_id"]]
+			if mail.is_attachment(file):
+				if email_enabled and (item := mail.project("file:" + file.name, client_id)):
+					items.append(item)
+			else:
+				items.append(manifest(_eligible(file), client_id))
 		except ConnectorError as error:
 			if error.status == 503:
 				raise
@@ -261,7 +303,7 @@ def documents(client_id, page_limit=50, cursor=None, *, query=None):
 	return {
 		"version": 1,
 		"items": items,
-		"next_cursor": _encode_cursor(page["next_cursor"], "documents:" + client_id),
+		"next_cursor": _encode_cursor(page["next_cursor"], binding),
 	}
 
 
@@ -275,15 +317,53 @@ def _authorized(value, requested_scope, *, managed_only=False):
 	return file, state
 
 
+def _mail_ids(values):
+	attachments = mail.attachment_ids(
+		{value["source_id"][5:] for value in values if value["source_id"].startswith("file:")}
+	)
+	return {
+		value["source_id"]
+		for value in values
+		if value["source_id"].startswith("email:") or value["source_id"][5:] in attachments
+	}
+
+
 @native_drive.bounded
-def authorize_sources(requested_scope, sources):
+def resolve_source_locator(requested_scope, source):
+	requested_scope = scope(requested_scope)
+	value = reference(source)
+	client_id, source_id = value["client_id"], value["source_id"]
+	if requested_scope["kind"] == "client" and client_id != requested_scope["client_id"]:
+		fail("FORBIDDEN", 403)
+	if source_id in _mail_ids([value]):
+		item = mail.project(source_id, client_id)
+		if item is None:
+			fail("FORBIDDEN", 403)
+		if item["revision"] != value["revision"]:
+			fail("STALE_SOURCE", 409)
+		locator = item["locator"]
+	else:
+		file, _ = _authorized(value, requested_scope)
+		locator = _file_locator(client_id, file.name)
+	return {"version": 1, "locator": locator}
+
+
+@native_drive.bounded
+def authorize_sources(requested_scope, sources, *, expected_mail_ids=None):
 	requested_scope = scope(requested_scope)
 	if not isinstance(sources, list) or not 1 <= len(sources) <= MAX_BATCH:
 		fail()
 	values = [reference(value) for value in sources]
+
+	def in_scope(value):
+		return requested_scope["kind"] == "general" or value["client_id"] == requested_scope["client_id"]
+
+	mail_ids = _mail_ids([value for value in values if in_scope(value)])
+	if expected_mail_ids is not None and mail_ids != expected_mail_ids:
+		fail("FORBIDDEN", 403)
 	groups = {}
 	for value in values:
-		if requested_scope["kind"] == "general" or value["client_id"] == requested_scope["client_id"]:
+		if in_scope(value) and value["source_id"] not in mail_ids:
 			groups.setdefault(value["client_id"], set()).add(value["source_id"][5:])
 	files = {}
 	for client_id, ids in groups.items():
@@ -295,12 +375,17 @@ def authorize_sources(requested_scope, sources):
 	decisions = []
 	revisions = {}
 	for value in values:
-		key = value["client_id"], value["source_id"][5:]
+		source_id, client_id = value["source_id"], value["client_id"]
+		key = client_id, source_id
 		try:
 			if key not in revisions:
-				file = files.get(key)
-				revisions[key] = _source_state(_eligible(file), key[0]).revision if file else None
-			allowed = revisions[key] == value["revision"]
+				if source_id in mail_ids and in_scope(value):
+					item = mail.project(source_id, client_id)
+					revisions[key] = item["revision"] if item else None
+				else:
+					file = files.get((client_id, source_id[5:]))
+					revisions[key] = _source_state(_ordinary_file(file), client_id).revision if file else None
+			allowed = in_scope(value) and revisions[key] == value["revision"]
 		except ConnectorError as error:
 			if error.status == 503:
 				raise
@@ -320,12 +405,38 @@ def read_source(requested_scope, source, *, lock_current=True, managed_only=Fals
 
 	requested_scope = scope(requested_scope)
 	value = reference(source)
+	if value["source_id"] in _mail_ids([value]):
+		if requested_scope["kind"] == "client" and value["client_id"] != requested_scope["client_id"]:
+			fail("FORBIDDEN", 403)
+		if managed_only:
+			fail("FORBIDDEN", 403)
+		if authenticate_current is None:
+			return mail.read_current(value)
+		from kanzlei_erp.ai_connector.inventory import (
+			current_permission_context,
+			refresh_principal_permissions,
+		)
+
+		user = frappe.session.user
+
+		def refresh():
+			if authenticate_current()["subject"] != user:
+				fail("UNAUTHENTICATED", 401)
+			refresh_principal_permissions(user)
+			scope(requested_scope)
+
+		with current_permission_context():
+			refresh()
+			return mail.read_current(value, before_final_projection=refresh)
 	file, state = _authorized(value, requested_scope, managed_only=managed_only)
 	if state.native:
 		content = state.native.read()
 		invalidate()
 		if authenticate_current is not None:
-			from kanzlei_erp.ai_connector.inventory import current_permission_context, refresh_principal_permissions
+			from kanzlei_erp.ai_connector.inventory import (
+				current_permission_context,
+				refresh_principal_permissions,
+			)
 
 			user = frappe.session.user
 			with current_permission_context():

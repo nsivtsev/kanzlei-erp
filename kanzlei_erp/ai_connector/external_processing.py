@@ -1,6 +1,6 @@
 """Online Mandant policy for sending data to external AI providers."""
 
-from kanzlei_erp.ai_connector import auth, inventory, native_drive, policy
+from kanzlei_erp.ai_connector import auth, inventory, mail, native_drive, policy
 from kanzlei_erp.ai_connector.errors import fail
 
 OPERATIONS = ("ocr", "embed", "generate")
@@ -41,23 +41,34 @@ def _check_current(operation, scope, references, *, background_clients=None):
 		if client_ids - {client_id}:
 			fail("FORBIDDEN", 403)
 		client_ids.add(client_id)
+	mail_ids = policy._mail_ids(references)
+	for reference in references:
+		if reference["source_id"] in mail_ids:
+			client_ids.update(
+				mail.external_clients(
+					reference["source_id"], client_id=reference["client_id"], revision=reference["revision"]
+				)
+			)
 	grants = auth.config().get("external_processing")
 	for customer in client_ids:
 		operations = grants.get(customer) if isinstance(grants, dict) else None
 		if not isinstance(operations, dict) or operations.get(operation) is not True:
 			fail("FORBIDDEN", 403)
 	if references:
-		_require_sources(scope, references)
+		_require_sources(scope, references, mail_ids)
 	if background_clients is not None:
-		# Ingestion only reads from the fixed identity's managed Drive projection.
+		# Mail was checked against its current direct ties and allowed scope.
+		# Ordinary ingestion files must also belong to managed Drive.
 		for reference in references:
+			if reference["source_id"] in mail_ids:
+				continue
 			current = inventory.project(reference["source_id"][5:], client_id, background_clients)
 			if not current or current.get("revision") != reference["revision"]:
 				fail("FORBIDDEN", 403)
 
 
-def _require_sources(scope, references):
-	result = policy.authorize_sources(scope, references)
+def _require_sources(scope, references, mail_ids):
+	result = policy.authorize_sources(scope, references, expected_mail_ids=mail_ids)
 	decisions = result.get("decisions") if _version_one(result) else None
 	if not isinstance(decisions, list) or len(decisions) != len(references):
 		fail("FORBIDDEN", 403)
