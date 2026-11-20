@@ -32,7 +32,7 @@ class Chunk:
     generation: int
     parser_version: str
     content_sha256: str
-    page: int
+    page: int | None
     kind: str
     ordinal: int
     text: str

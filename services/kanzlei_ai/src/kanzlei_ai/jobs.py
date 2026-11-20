@@ -237,7 +237,8 @@ def _publish_extraction_once(engine, job_id, token, publication, enqueue_index, 
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
         if not _live_claim(source, job, token, now):
             return False
-        if not 0 <= publication["page_count"] <= 200 or len(publication["chunks"]) > MAX_CHUNKS:
+        page_count = publication["page_count"]
+        if not 0 <= page_count <= 200 or len(publication["chunks"]) > MAX_CHUNKS:
             raise ValueError("Invalid extraction publication")
         artifact_id = conn.execute(
             insert(document_artifacts)
@@ -248,13 +249,16 @@ def _publish_extraction_once(engine, job_id, token, publication, enqueue_index, 
                 parser_version=publication["parser_version"],
                 content_sha256=publication["content_sha256"],
                 artifact_key=publication["artifact_key"],
-                page_count=publication["page_count"],
+                page_count=page_count,
             )
             .returning(document_artifacts.c.id)
         ).scalar_one()
         for chunk in publication["chunks"]:
-            if not 1 <= chunk["page"] <= publication["page_count"]:
+            page = chunk["page"]
+            if page_count and (type(page) is not int or not 1 <= page <= page_count):
                 raise ValueError("Invalid chunk page")
+            if not page_count and page is not None:
+                raise ValueError("A nonpaginated chunk must not have a page")
             conn.execute(
                 insert(document_chunks).values(
                     id=chunk["id"],
@@ -264,7 +268,7 @@ def _publish_extraction_once(engine, job_id, token, publication, enqueue_index, 
                     generation=job["generation"],
                     parser_version=publication["parser_version"],
                     content_sha256=publication["content_sha256"],
-                    page=chunk["page"],
+                    page=page,
                     kind=chunk["kind"],
                     ordinal=chunk["ordinal"],
                     text=chunk["text"],

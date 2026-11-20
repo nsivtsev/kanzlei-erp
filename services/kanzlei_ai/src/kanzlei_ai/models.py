@@ -161,7 +161,7 @@ document_chunks = Table(
     Column("generation", Integer, nullable=False),
     Column("parser_version", String(100), nullable=False),
     Column("content_sha256", String(64), nullable=False),
-    Column("page", Integer, nullable=False),
+    Column("page", Integer),
     Column("kind", String(20), nullable=False),
     Column("ordinal", Integer, nullable=False),
     Column("text", Text, nullable=False),

@@ -162,6 +162,54 @@ def test_extraction_publication_is_fenced_and_keeps_page_chunks(database):
         assert chunk["page"] == 2 and chunk["kind"] == "table"
 
 
+def test_nonpaginated_extraction_commits_without_inventing_a_page(database):
+    from kanzlei_ai import jobs as job_service
+    from kanzlei_ai.models import document_artifacts, document_chunks
+
+    sync.initialize(database)
+    epoch = sync.start_scan(database, "erp")
+    manifest = {
+        "version": 1,
+        "source_id": "file:notes",
+        "source_type": "file",
+        "revision": "a" * 64,
+        "client_ids": ["client"],
+        "title": "Notizen.docx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "source_modified_at": "2026-01-01",
+        "locator": "/file",
+        "byte_size": 1,
+        "active": True,
+    }
+    sync.apply_inventory(
+        database,
+        "erp",
+        epoch,
+        None,
+        {"items": [manifest], "next_cursor": None, "changes_cursor": "w"},
+    )
+    with database.connect() as conn:
+        job = conn.scalar(select(jobs.c.id))
+    token = job_service.claim(database, job)
+    assert job_service.publish_extraction(
+        database,
+        job,
+        token,
+        {
+            "parser_version": "test-docx-v1",
+            "content_sha256": "b" * 64,
+            "artifact_key": "private/hash",
+            "page_count": 0,
+            "chunks": [
+                {"id": "c" * 64, "page": None, "kind": "text", "ordinal": 0, "text": "Notizen"}
+            ],
+        },
+    )
+    with database.connect() as conn:
+        assert conn.execute(select(document_chunks.c.page)).one() == (None,)
+        assert conn.scalar(select(document_artifacts.c.page_count)) == 0
+
+
 def test_outbox_republishes_unclaimed_job_and_expired_lease(database):
     from kanzlei_ai import outbox
 

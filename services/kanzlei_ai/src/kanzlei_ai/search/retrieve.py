@@ -52,7 +52,7 @@ _RRF_K = 60
 class SearchHit:
     source: SourceRef
     generation: int
-    page: int
+    page: int | None
     chunk_id: str
     text: str = field(repr=False)
 
