@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -95,6 +95,14 @@ class TurnBody(BaseModel):
     question: Annotated[str, Field(min_length=1, max_length=1000, repr=False)]
 
 
+class SourcePageBody(CreateBody):
+    cursor: Annotated[str, Field(min_length=1, max_length=4096)] | None = Field(
+        default=None, repr=False
+    )
+    query: Annotated[str, Field(max_length=200, pattern=r"^[^\x00-\x1f]*$", repr=False)] = ""
+    status: Literal["all", "ready", "pending", "failed"] = "all"
+
+
 async def _body(request, model):
     data = bytearray()
     try:
@@ -124,14 +132,6 @@ async def _identity(adapter, access_token):
     return identity
 
 
-async def _probe_scope(session):
-    documents = await session.connector.list_documents(
-        session.token, session.scope.client_id, limit=1
-    )
-    if not isinstance(documents, DocumentPage) or len(documents.items) > 1:
-        raise ConnectorError()
-
-
 async def _session(adapter, access_token, service, *, client_id=None, conversation_id=None):
     identity = await _identity(adapter, access_token)
     if conversation_id is not None:
@@ -151,7 +151,7 @@ async def _session(adapter, access_token, service, *, client_id=None, conversati
         identity.subject,
         Scope(kind="client", client_id=client_id),
     )
-    await _probe_scope(session)
+    await adapter.check_scope(access_token, session.scope)
     return session
 
 
@@ -159,7 +159,7 @@ async def _verify_session(session):
     identity = await _identity(session.connector, session.token)
     if (identity.connector_id, identity.subject) != (session.connector_id, session.subject):
         raise ConnectorError("UNAUTHENTICATED", 401)
-    await _probe_scope(session)
+    await session.connector.check_scope(session.token, session.scope)
 
 
 @router.post("", status_code=201)
@@ -269,8 +269,25 @@ async def source_list(
     cursor: SourceCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    page = await adapter.list_documents(
-        access_token, session.scope.client_id, _SOURCE_PAGE_SIZE, cursor
+    return await _list_source_page(service, session, cursor)
+
+
+@router.post("/sources")
+async def source_catalogue(
+    request: Request, adapter: Adapter, access_token: AccessToken, service: Runtime
+):
+    body = await _body(request, SourcePageBody)
+    session = await _session(adapter, access_token, service, client_id=body.client_id)
+    return await _list_source_page(service, session, body.cursor, body.query.strip(), body.status)
+
+
+async def _list_source_page(service, session, cursor, query="", status="all"):
+    page = await session.connector.list_documents(
+        session.token,
+        session.scope.client_id,
+        _SOURCE_PAGE_SIZE,
+        cursor,
+        **({"query": query} if query else {}),
     )
     if (
         not isinstance(page, DocumentPage)
@@ -280,21 +297,20 @@ async def source_list(
         or any(session.scope.client_id not in doc.client_ids for doc in page.items)
     ):
         raise ConnectorError()
-    entries = [doc for doc in page.items if doc.mime_type == "application/pdf"]
+    entries = [
+        doc
+        for doc in page.items
+        if doc.mime_type == "application/pdf" and query.casefold() in doc.title.casefold()
+    ]
     statuses = (
         await database_call(_source_status, service.engine, session, entries) if entries else {}
     )
-    return {
-        "items": [
-            {
-                "source_id": doc.source_id,
-                "title": doc.title,
-                "status": statuses.get((doc.source_id, doc.revision), "pending"),
-            }
-            for doc in entries
-        ],
-        "next_cursor": page.next_cursor,
-    }
+    items = []
+    for doc in entries:
+        processing = statuses.get((doc.source_id, doc.revision), "pending")
+        if status == "all" or status == processing:
+            items.append({"source_id": doc.source_id, "title": doc.title, "status": processing})
+    return {"items": items, "next_cursor": page.next_cursor}
 
 
 def _sse(event, payload):

@@ -18,6 +18,38 @@ from kanzlei_erp.tests import test_mandant_documents as document_fixtures
 
 
 class TestPermissionContext(FrappeTestCase):
+	def test_scope_check_authorizes_current_staff_without_listing_documents(self):
+		from kanzlei_erp.ai_connector import policy
+		from kanzlei_erp.ai_connector.errors import ConnectorError
+
+		original_user = frappe.session.user
+		frappe.set_user("Administrator")
+		try:
+			with patch("frappe.core.doctype.user.user.throttle_user_creation"):
+				staff = frappe.get_doc(
+					{
+						"doctype": "User",
+						"email": f"ai-scope-{frappe.generate_hash(length=8)}@example.invalid",
+						"first_name": "AI scope fixture",
+						"send_welcome_email": 0,
+						"roles": [{"role": "Projects User"}],
+					}
+				).insert()
+			allowed = TestAIConnector.customer_fixture(self, "AI scope A")
+			denied = TestAIConnector.customer_fixture(self, "AI scope B")
+			frappe.share.add("Customer", allowed.name, staff.name, read=1)
+			frappe.set_user(staff.name)
+			with patch.object(policy, "get_documents", side_effect=AssertionError):
+				self.assertEqual(
+					policy.check_scope({"kind": "client", "client_id": allowed.name}),
+					{"version": 1, "allowed": True},
+				)
+				with self.assertRaises(ConnectorError) as result:
+					policy.check_scope({"kind": "client", "client_id": denied.name})
+				self.assertEqual(result.exception.status, 403)
+		finally:
+			frappe.set_user(original_user)
+
 	def test_restores_request_locals_when_close_fails(self):
 		from kanzlei_erp.ai_connector import inventory
 

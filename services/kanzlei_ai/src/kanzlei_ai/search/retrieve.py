@@ -17,7 +17,6 @@ from kanzlei_ai.connectors.contracts import (
     AuthorizationResult,
     ClientPage,
     Decision,
-    DocumentPage,
     Identity,
     Scope,
     SourceRef,
@@ -62,9 +61,7 @@ async def _scope_clients(
 ) -> tuple[str, ...]:
     if scope.kind == "client":
         assert scope.client_id is not None
-        probe = await connector.list_documents(access_token, scope.client_id, limit=1)
-        if not isinstance(probe, DocumentPage):
-            raise ConnectorError()
+        await connector.check_scope(access_token, scope)
         return (scope.client_id,)
     if not identity.general_access:
         raise ConnectorError("FORBIDDEN", 403)

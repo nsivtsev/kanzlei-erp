@@ -39,6 +39,10 @@ class SourceRef(BaseModel):
     client_id: Identifier
 
 
+class ScopeCheck(Contract):
+    allowed: bool
+
+
 class SourceManifest(Contract):
     source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
     source_type: Literal["file"]

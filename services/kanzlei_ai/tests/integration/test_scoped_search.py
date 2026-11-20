@@ -12,7 +12,6 @@ from kanzlei_ai.connectors.contracts import (
     ClientPage,
     ClientRecord,
     Decision,
-    DocumentPage,
     Identity,
     Scope,
 )
@@ -46,9 +45,8 @@ class DelegatedConnector:
         assert access_token == "synthetic"
         return Identity(subject="person", connector_id="origin", expires_at=1, general_access=True)
 
-    async def list_documents(self, access_token, client_id, limit):
-        assert access_token == "synthetic" and limit == 1
-        return DocumentPage(items=[], next_cursor=None)
+    async def check_scope(self, access_token, scope):
+        assert access_token == "synthetic" and scope.client_id in {"A", "B"}
 
     async def list_clients(self, access_token, limit=50, cursor=None):
         assert access_token == "synthetic"

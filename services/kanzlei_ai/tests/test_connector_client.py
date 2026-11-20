@@ -71,6 +71,29 @@ def test_incompatible_identity_response_is_rejected():
     assert type(result.value).__name__ == "ConnectorError"
 
 
+@pytest.mark.parametrize("allowed", [True, False, 1])
+def test_scope_check_requires_an_explicit_erp_grant_without_listing_documents(allowed):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope
+
+    def handler(request):
+        assert request.url.path.endswith(".check_scope")
+        assert json.loads(request.content) == {
+            "version": 1,
+            "access_token": "g" * 43,
+            "scope": {"kind": "client", "client_id": "A"},
+        }
+        return httpx.Response(200, json={"message": {"version": 1, "allowed": allowed}})
+
+    adapter = client(handler)
+    scope = Scope(kind="client", client_id="A")
+    if allowed is True:
+        asyncio.run(adapter.check_scope("g" * 43, scope))
+    else:
+        with pytest.raises(ConnectorError):
+            asyncio.run(adapter.check_scope("g" * 43, scope))
+
+
 @pytest.mark.parametrize("fail_last", [False, True])
 def test_source_authorization_checks_complete_result_in_small_ordered_batches(fail_last):
     from kanzlei_ai.connectors.base import ConnectorError

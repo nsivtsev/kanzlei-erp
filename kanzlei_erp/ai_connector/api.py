@@ -100,9 +100,16 @@ def list_clients(access_token=None, cursor=None, limit=50, version=1, **extra):
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
-def list_documents(access_token=None, client_id=None, cursor=None, limit=50, version=1, **extra):
+def check_scope(access_token=None, scope=None, version=1, **extra):
 	with auth.principal(access_token):
-		return policy.documents(client_id, limit, cursor)
+		return policy.check_scope(scope)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
+def list_documents(access_token=None, client_id=None, cursor=None, limit=50, query=None, version=1, **extra):
+	with auth.principal(access_token):
+		return policy.documents(client_id, limit, cursor, query=query)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])

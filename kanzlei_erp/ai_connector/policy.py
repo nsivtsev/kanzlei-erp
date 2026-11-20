@@ -14,7 +14,7 @@ import frappe
 from kanzlei_erp.ai_connector import auth, native_drive
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail, text
 from kanzlei_erp.ai_connector.native_drive import MAX_BYTES
-from kanzlei_erp.mandant_documents import get_authorized_document_files, get_documents
+from kanzlei_erp.mandant_documents import _require_customer, get_authorized_document_files, get_documents
 
 MAX_BATCH = 50
 DELEGATED_DOCUMENT_PAGE_SIZE = 4
@@ -44,6 +44,13 @@ def scope(value):
 	else:
 		fail()
 	return value
+
+
+def check_scope(value):
+	checked = scope(value)
+	if checked["kind"] == "client":
+		_require_customer(checked["client_id"])
+	return {"version": 1, "allowed": True}
 
 
 def reference(value):
@@ -225,12 +232,19 @@ def manifest(file, client_id, *, managed_only=False, locked=False):
 
 
 @native_drive.bounded
-def documents(client_id, page_limit=50, cursor=None):
+def documents(client_id, page_limit=50, cursor=None, *, query=None):
 	text(client_id)
 	limit(page_limit)
 	scope({"kind": "client", "client_id": client_id})
 	underlying = _cursor(cursor, "documents:" + client_id)
-	page = get_documents(client_id, cursor=underlying, page_length=min(page_limit, DELEGATED_DOCUMENT_PAGE_SIZE))
+	if query is not None:
+		text(query)
+	page = get_documents(
+		client_id,
+		filters={"query": query} if query is not None else None,
+		cursor=underlying,
+		page_length=min(page_limit, DELEGATED_DOCUMENT_PAGE_SIZE),
+	)
 	items = []
 	ids = [row["file_id"] for row in page["items"] if row["can_download"]]
 	files = get_authorized_document_files(client_id, ids, allow_partial=True)[1] if ids else {}

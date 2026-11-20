@@ -19,6 +19,7 @@ from kanzlei_ai.connectors.contracts import (
     InventoryPage,
     Revoked,
     Scope,
+    ScopeCheck,
     SourceRef,
 )
 
@@ -143,7 +144,13 @@ class FrappeConnector:
         )
 
     async def list_documents(
-        self, access_token: str, client_id: str, limit: int = 50, cursor: str | None = None
+        self,
+        access_token: str,
+        client_id: str,
+        limit: int = 50,
+        cursor: str | None = None,
+        *,
+        query: str | None = None,
     ) -> DocumentPage:
         return await self._typed(
             DocumentPage,
@@ -152,7 +159,18 @@ class FrappeConnector:
             client_id=client_id,
             limit=limit,
             cursor=cursor,
+            **({"query": query} if query else {}),
         )
+
+    async def check_scope(self, access_token: str, scope: Scope) -> None:
+        result = await self._typed(
+            ScopeCheck,
+            "check_scope",
+            access_token=access_token,
+            scope=scope.model_dump(exclude_none=True, exclude={"version"}),
+        )
+        if not result.allowed:
+            raise ConnectorError()
 
     async def authorize_sources(
         self, access_token: str, scope: Scope, sources: list[SourceRef]

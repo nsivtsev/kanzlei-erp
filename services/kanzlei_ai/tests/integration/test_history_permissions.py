@@ -53,13 +53,19 @@ class Delegation:
         self.reads = 0
         self.on_read = None
         self.on_authorize = None
+        self.document_requests = []
 
     async def identity(self, access_token):
         return Identity(
             connector_id=self.connector_id, subject=self.subject, expires_at=1, general_access=True
         )
 
-    async def list_documents(self, access_token, client_id, limit=50, cursor=None):
+    async def check_scope(self, access_token, scope):
+        if self.scope_denied:
+            raise ConnectorError("FORBIDDEN", 403)
+
+    async def list_documents(self, access_token, client_id, limit=50, cursor=None, *, query=None):
+        self.document_requests.append((client_id, cursor, query))
         if self.scope_denied:
             raise ConnectorError("FORBIDDEN", 403)
         if client_id != "A":
@@ -308,11 +314,30 @@ def test_live_scope_and_immutable_client(chat):
         f"{_PREFIX}/{conversation}/turns", json={"question": _QUESTION, "client_id": "B"}
     )
     assert response.status_code == 422
+    assert erp.document_requests == []
     assert client.get(f"{_PREFIX}/{conversation}/sources").json()["items"] == [
         {"source_id": "file:invoice", "title": "Testrechnung.pdf", "status": "ready"}
     ]
     erp.scope_denied = True
     assert history(client, conversation).status_code == 403
+
+
+def test_catalogue_filters_one_live_delegated_page_and_fails_closed(chat):
+    client, erp, _, _, _ = chat
+    path = f"{_PREFIX}/sources"
+    body = {"client_id": "A", "query": "rechnung", "status": "ready"}
+    response = client.post(path, json=body)
+    assert response.json() == {
+        "items": [{"source_id": "file:invoice", "title": "Testrechnung.pdf", "status": "ready"}],
+        "next_cursor": None,
+    }
+    assert erp.document_requests == [("A", None, "rechnung")]
+    assert client.post(path, json={**body, "status": "failed"}).json()["items"] == []
+    assert client.post(path, json={**body, "query": "different"}).json()["items"] == []
+    assert client.post(path, json={**body, "client_id": "B"}).json()["items"] == []
+    erp.scope_denied = True
+    assert client.post(path, json=body).status_code == 403
+    assert len(erp.document_requests) == 4
 
 
 def test_source_listing_reports_only_the_current_index_failure_status(chat, database):

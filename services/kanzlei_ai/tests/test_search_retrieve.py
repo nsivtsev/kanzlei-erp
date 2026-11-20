@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from kanzlei_ai.connectors.base import ConnectorError
-from kanzlei_ai.connectors.contracts import ClientPage, ClientRecord, DocumentPage, Identity, Scope
+from kanzlei_ai.connectors.contracts import ClientPage, ClientRecord, Identity, Scope
 
 
 class EmptyIndex:
@@ -36,12 +36,11 @@ class ScopeConnector:
         self.cursors.append(cursor)
         return next(self.pages)
 
-    async def list_documents(self, access_token, client_id, limit=50, cursor=None):
+    async def check_scope(self, access_token, scope):
         assert access_token == "synthetic"
-        self.probes.append((client_id, limit, cursor))
-        if client_id != "A":
+        self.probes.append(scope.client_id)
+        if scope.client_id != "A":
             raise ConnectorError("FORBIDDEN", 403)
-        return DocumentPage(items=[], next_cursor=None)
 
 
 def search(query, scope, connector, index, limit=10):
@@ -59,10 +58,10 @@ def page(ids, cursor):
     )
 
 
-def test_client_permissions_are_probed_before_search_even_for_empty_documents():
+def test_client_permissions_are_checked_before_search_without_listing_documents():
     connector, index = ScopeConnector(), EmptyIndex()
     assert search("synthetic", Scope(kind="client", client_id="A"), connector, index) == []
-    assert connector.probes == [("A", 1, None)]
+    assert connector.probes == ["A"]
     assert index.calls[0]["connector_id"] == "origin"
     assert tuple(index.calls[0]["client_ids"]) == ("A",)
 
@@ -120,12 +119,12 @@ def test_invalid_search_bounds_fail_before_search(query, limit):
     assert index.calls == []
 
 
-def test_malformed_client_permission_probe_fails_before_search():
-    class MalformedProbe(ScopeConnector):
-        async def list_documents(self, access_token, client_id, limit=50, cursor=None):
-            return None
+def test_scope_check_outage_fails_before_search():
+    class UnavailableScope(ScopeConnector):
+        async def check_scope(self, access_token, scope):
+            raise ConnectorError()
 
     index = EmptyIndex()
     with pytest.raises(ConnectorError):
-        search("synthetic", Scope(kind="client", client_id="A"), MalformedProbe(), index)
+        search("synthetic", Scope(kind="client", client_id="A"), UnavailableScope(), index)
     assert index.calls == []

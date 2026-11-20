@@ -31,8 +31,15 @@ class ERPConnector(Protocol):
         self, access_token: str, limit: int = 50, cursor: str | None = None
     ) -> ClientPage: ...
     async def list_documents(
-        self, access_token: str, client_id: str, limit: int = 50, cursor: str | None = None
+        self,
+        access_token: str,
+        client_id: str,
+        limit: int = 50,
+        cursor: str | None = None,
+        *,
+        query: str | None = None,
     ) -> DocumentPage: ...
+    async def check_scope(self, access_token: str, scope: Scope) -> None: ...
     async def authorize_sources(
         self, access_token: str, scope: Scope, sources: list[SourceRef]
     ) -> AuthorizationResult: ...

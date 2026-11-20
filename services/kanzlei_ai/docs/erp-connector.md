@@ -101,12 +101,19 @@ unexpected privilege fields and invalid batches are rejected.
 | `identity` | `GET /v1/auth/me` |
 | `revoke` | `POST /v1/auth/logout` |
 | `list_clients` | `POST /v1/connector/clients` |
+| `check_scope` | Private delegated chat/search check |
 | `list_documents` | `POST /v1/connector/documents` |
 | `authorize_sources` | `POST /v1/connector/authorize` |
 | `read_source` | `POST /v1/connector/read` |
 | `background_read_source` | private ingestion worker only; no browser grant |
 
-Document listing takes `client_id`, `limit` (1–100) and optional `cursor`. Cursors
+`check_scope` takes the delegated grant and scope and returns `allowed: true`
+only after checking the current ERP principal. Client checks enforce the staff
+and Customer read permissions used by document listing without enumerating
+files. Deploy the updated ERP connector and AI service together for this route.
+
+Document listing takes `client_id`, `limit` (1–100) and optional `cursor`.
+The private catalogue uses an optional `query` on the ERP RPC. Cursors
 are signed, expire after five minutes, and bind to the user and operation/client.
 An empty eligible page can still have a next cursor. Listings use existing ERP
 document membership, File permissions and active Drive ancestry. Remote links and
