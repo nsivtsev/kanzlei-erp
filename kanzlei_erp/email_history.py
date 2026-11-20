@@ -160,6 +160,10 @@ def link_communication(name, contact=None):
 	for doctype, docname in sorted(links - existing):
 		mail.add_link(doctype, docname)
 		mail.timeline_links[-1].db_insert()
+	if ("Customer", customer) not in existing:
+		from kanzlei_erp.ai_connector.events import communication_linked
+
+		communication_linked(mail)
 	frappe.clear_document_cache("Communication", name)
 	frappe.db.after_commit.add(partial(frappe.clear_document_cache, "Communication", name))
 	return "linked", len(links - existing)

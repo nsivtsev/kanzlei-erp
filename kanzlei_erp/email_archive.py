@@ -541,9 +541,11 @@ def _link_pending_replies(journal, account_name: str) -> int:
 		)
 		if not parent_name or parent_name == communication_name:
 			continue
-		current = frappe.db.get_value("Communication", communication_name, "in_reply_to")
-		if current != parent_name:
-			frappe.db.set_value("Communication", communication_name, "in_reply_to", parent_name, update_modified=False)
+		current = frappe.db.get_value("Communication", communication_name, ["name", "in_reply_to"], as_dict=True)
+		if current and current.in_reply_to != parent_name:
+			frappe.get_doc("Communication", communication_name).db_set(
+				"in_reply_to", parent_name, update_modified=False
+			)
 			linked += 1
 	return linked
 

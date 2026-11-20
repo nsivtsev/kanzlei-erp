@@ -1,4 +1,4 @@
-"""Bounded Drive inventory and current-state invalidation projection."""
+"""Bounded source inventory and current-state invalidation projection."""
 
 import base64
 import hashlib
@@ -13,7 +13,10 @@ import frappe
 
 from kanzlei_erp.ai_connector import auth, native_drive, policy
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail, text
+from kanzlei_erp.ai_connector.events import ATTACHMENT_EVENT_PREFIX
 from kanzlei_erp.posteingang_permissions import staff
+
+INVENTORY_PHASES = ("drive", "email", "attachment")
 
 
 def settings():
@@ -159,6 +162,34 @@ def require_clients(clients):
 			fail("FORBIDDEN", 403)
 
 
+def _feed_binding(binding, email_enabled):
+	# Leave all Drive-only cursors valid when mail is off.
+	return hashlib.sha256(f"{binding}:mail:v1".encode()).hexdigest() if email_enabled else binding
+
+
+def _has_mail_parent(name):
+	return bool(
+		frappe.db.sql(
+			"""SELECT 1 FROM `tabFile` f JOIN `tabCommunication` c ON c.name=f.attached_to_name
+		WHERE f.name=%s AND f.attached_to_doctype='Communication' AND c.communication_medium='Email'""",
+			name,
+		)
+	)
+
+
+def _project_event(source_id, client, clients, email_enabled):
+	from kanzlei_erp.ai_connector import mail
+
+	if source_id.startswith("email:"):
+		return mail.project(source_id, client) if email_enabled else None
+	if not source_id.startswith("file:"):
+		return None
+	name = source_id[5:]
+	if email_enabled and _has_mail_parent(name):
+		return mail.project(source_id, client)
+	return project(name, client, clients)
+
+
 def _drive_file(name, client, clients, *, locked=False):
 	if client not in clients or not frappe.has_permission("Customer", "read", doc=client):
 		return None
@@ -202,12 +233,23 @@ def project(name, client, clients, locked=False):
 
 @native_drive.bounded
 def read_current(source, clients, *, before_final_projection=None):
-	"""Current background projection; never infer access from S3 alone."""
+	"""Read current bytes under the background identity."""
+	from kanzlei_erp.ai_connector import mail
+
 	value = policy.reference(source)
 	if value["client_id"] not in clients:
 		fail("FORBIDDEN", 403)
 	require_clients(clients)
-	file = _drive_file(value["source_id"][5:], value["client_id"], clients)
+	source_id = value["source_id"]
+	email_enabled = mail.enabled()
+	if source_id.startswith("email:"):
+		if not email_enabled:
+			fail("STALE_SOURCE", 409)
+		return mail.read_current(value, before_final_projection=before_final_projection)
+	name = source_id[5:]
+	if email_enabled and _has_mail_parent(name):
+		return mail.read_current(value, before_final_projection=before_final_projection)
+	file = _drive_file(name, value["client_id"], clients)
 	if not file:
 		fail("STALE_SOURCE", 409)
 	content = policy.read_source(
@@ -223,46 +265,121 @@ def read_current(source, clients, *, before_final_projection=None):
 		from kanzlei_erp.drive_storage import invalidate
 
 		invalidate()
-	manifest = project(value["source_id"][5:], value["client_id"], clients)
+	if email_enabled and _has_mail_parent(name):
+		fail("STALE_SOURCE", 409)
+	manifest = project(name, value["client_id"], clients)
 	if not manifest or manifest["revision"] != value["revision"]:
 		fail("STALE_SOURCE", 409)
 	return content
 
 
+def _mail_candidates(phase, clients, after, after_client, limit):
+	# Seek on the source/client pair because one message can belong to multiple
+	# clients. Deduplicate direct and explicit relationships before paging.
+	if phase == "attachment":
+		source = "f.name"
+		attachment_join = """
+			JOIN `tabFile` f ON f.attached_to_doctype='Communication'
+				AND f.attached_to_name=c.name AND f.is_folder=0
+		"""
+	else:
+		source = "c.name"
+		attachment_join = ""
+	mail_filter = """
+		c.communication_type='Communication' AND c.communication_medium='Email'
+		AND c.sent_or_received IN ('Received', 'Sent')
+	"""
+	return frappe.db.sql(
+		f"""
+		(SELECT {source} AS name, c.reference_name AS client_id
+		FROM `tabCommunication` c {attachment_join}
+		WHERE {mail_filter} AND c.reference_doctype='Customer' AND c.reference_name IN %(clients)s
+			AND ({source} > %(after)s OR ({source} = %(after)s AND c.reference_name > %(after_client)s))
+		ORDER BY name, client_id LIMIT %(limit)s)
+		UNION DISTINCT
+		(SELECT DISTINCT {source} AS name, l.link_name AS client_id
+		FROM `tabCommunication Link` l
+		JOIN `tabCommunication` c ON c.name=l.parent {attachment_join}
+		WHERE {mail_filter} AND l.parenttype='Communication' AND l.parentfield='timeline_links'
+			AND l.link_doctype='Customer' AND l.link_name IN %(clients)s
+			AND ({source} > %(after)s OR ({source} = %(after)s AND l.link_name > %(after_client)s))
+		ORDER BY name, client_id LIMIT %(limit)s)
+		ORDER BY name, client_id LIMIT %(limit)s
+		""",
+		{"clients": tuple(sorted(clients)), "after": after, "after_client": after_client, "limit": limit},
+		as_dict=True,
+	)
+
+
+def _drive_candidates(clients, after, limit, email_enabled):
+	fields = ["name", "kanzlei_drive_customer AS client_id"]
+	if email_enabled:
+		fields.append("attached_to_doctype")
+	return frappe.get_all(
+		"File",
+		filters={"name": [">", after], "kanzlei_drive_customer": ["in", list(clients)]},
+		fields=fields,
+		order_by="name asc",
+		limit=limit,
+	)
+
+
 @native_drive.bounded
 def inventory(cursor=None, limit=50):
+	from kanzlei_erp.ai_connector import mail
+
 	limit = policy.limit(limit)
 	user, clients, binding = settings()
+	email_enabled = mail.enabled()
+	binding = _feed_binding(binding, email_enabled)
+	phases = INVENTORY_PHASES if email_enabled else INVENTORY_PHASES[:1]
 	with principal(user):
 		require_clients(clients)
+		phase, after, after_client = "drive", "", ""
 		if cursor:
 			data = decode(cursor, binding, "inventory")
 			watermark, after = data["watermark"], data["after"]
+			if email_enabled:
+				phase, after_client = data["phase"], data["after_client"]
 		else:
 			# Ordinary consistent read: W and the candidate rows share this snapshot.
 			rows = frappe.db.sql("SELECT `sequence` FROM `tabAI Source State` WHERE name='drive'")
-			watermark, after = int(rows[0][0]) if rows else 0, ""
+			watermark = int(rows[0][0]) if rows else 0
+		if phase not in phases:
+			fail()
 		items = []
-		rows = frappe.get_all(
-			"File",
-			filters={"name": [">", after], "kanzlei_drive_customer": ["in", list(clients)]},
-			fields=["name", "kanzlei_drive_customer"],
-			order_by="name asc",
-			limit=limit,
+		rows = (
+			_drive_candidates(clients, after, limit, email_enabled)
+			if phase == "drive"
+			else _mail_candidates(phase, clients, after, after_client, limit)
 		)
 		scanned = 0
 		for row in rows:
 			if scanned and native_drive.page_should_yield():
 				break
-			item = project(row.name, row.kanzlei_drive_customer, clients)
+			if phase == "drive":
+				# Current Communication attachments are handled in their own phase.
+				attached = row.get("attached_to_doctype") == "Communication" and _has_mail_parent(row.name)
+				item = None if attached else project(row.name, row.client_id, clients)
+			else:
+				prefix = "email:" if phase == "email" else "file:"
+				item = mail.project(prefix + row.name, row.client_id)
 			if item:
 				items.append(item)
 			scanned += 1
-		next_cursor = (
-			encode({"kind": "inventory", "watermark": watermark, "after": rows[scanned - 1].name}, binding)
-			if scanned and (len(rows) == limit or scanned < len(rows))
-			else None
-		)
+		next_position = None
+		if scanned and (len(rows) == limit or scanned < len(rows)):
+			last = rows[scanned - 1]
+			next_position = phase, last.name, last.client_id
+		elif phase != phases[-1]:
+			next_position = phases[phases.index(phase) + 1], "", ""
+		next_cursor = None
+		if next_position:
+			phase, after, after_client = next_position
+			payload = {"kind": "inventory", "watermark": watermark, "after": after}
+			if email_enabled:
+				payload.update(phase=phase, after_client=after_client)
+			next_cursor = encode(payload, binding)
 		return {
 			"version": 1,
 			"items": items,
@@ -273,16 +390,23 @@ def inventory(cursor=None, limit=50):
 
 @native_drive.bounded
 def changes(cursor, limit=50):
+	from kanzlei_erp.ai_connector import mail
+
 	limit = policy.limit(limit)
 	user, clients, binding = settings()
+	email_enabled = mail.enabled()
+	binding = _feed_binding(binding, email_enabled)
 	data = decode(cursor, binding, "changes")
 	if type(data.get("after")) is not int or data["after"] < 0:
 		fail()
 	with principal(user):
 		require_clients(clients)
+		filters = {"sequence": [">", data["after"]], "client_id": ["in", list(clients)]}
+		if not email_enabled:
+			filters["source_id"] = ["like", "file:%"]
 		rows = frappe.get_all(
 			"AI Source Event",
-			filters={"sequence": [">", data["after"]], "client_id": ["in", list(clients)]},
+			filters=filters,
 			fields=["sequence", "source_id", "client_id"],
 			order_by="sequence asc",
 			limit=limit,
@@ -292,10 +416,13 @@ def changes(cursor, limit=50):
 		for row in rows:
 			if items and native_drive.page_should_yield():
 				break
-			manifest = project(row.source_id[5:], row.client_id, clients)
+			source_id = row.source_id
+			if source_id.startswith(ATTACHMENT_EVENT_PREFIX):
+				source_id = "file:" + source_id.removeprefix(ATTACHMENT_EVENT_PREFIX)
+			manifest = _project_event(source_id, row.client_id, clients, email_enabled)
 			items.append(
 				{
-					"source_id": row.source_id,
+					"source_id": source_id,
 					"client_id": row.client_id,
 					"operation": "upsert" if manifest else "delete",
 					"manifest": manifest,

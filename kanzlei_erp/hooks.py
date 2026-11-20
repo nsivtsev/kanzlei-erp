@@ -17,6 +17,8 @@ override_whitelisted_methods = {
 	"suite.slides.doctype.presentation.presentation.create_presentation": "kanzlei_erp.mandant_drive.create_presentation",
 }
 extend_doctype_class = {"File": ["kanzlei_erp.suite_file.ERPAttachmentGuard"]}
+extend_doctype_class["File"].append("kanzlei_erp.ai_connector.events.FileMailCapture")
+extend_doctype_class["Communication"] = ["kanzlei_erp.ai_connector.events.CommunicationCapture"]
 extend_doctype_class["Customer"] = ["kanzlei_erp.ai_connector.events.CustomerCapture"]
 extend_doctype_class["Email Account"] = ["kanzlei_erp.email_archive_jobs.ArchiveReceiverGuard"]
 write_file = "kanzlei_erp.object_storage.write_file"
@@ -80,6 +82,10 @@ doctype_js = {
 doctype_calendar_js = {"Task": "public/js/task_calendar.js"}
 doc_events = {
 	"Contact": {"on_update": "kanzlei_erp.email_history.contact_updated"},
+	"Communication": {
+		"on_update": "kanzlei_erp.ai_connector.events.communication_changed",
+		"on_trash": "kanzlei_erp.ai_connector.events.communication_deleting",
+	},
 	"Drive Disk Settings": {"validate": "kanzlei_erp.object_storage.validate_settings", "on_update": "kanzlei_erp.drive_storage.invalidate"},
 	"S3 File Object": {"validate": "kanzlei_erp.object_storage.protect_binding", "on_trash": "kanzlei_erp.object_storage.protect_binding"},
 	"ToDo": {"validate": "kanzlei_erp.fibu_questions.validate_question_assignment"},
@@ -95,7 +101,7 @@ doc_events = {
 	"File": {
 		"before_validate": ["kanzlei_erp.drive_storage.validate_binding_event", "kanzlei_erp.mandant_drive.prepare_file"],
 		"validate": "kanzlei_erp.fibu_materials.validate_fibu_attachment",
-		"on_trash": ["kanzlei_erp.fibu_materials.validate_fibu_attachment", "kanzlei_erp.mandant_drive.protect_root"],
+		"on_trash": ["kanzlei_erp.fibu_materials.validate_fibu_attachment", "kanzlei_erp.mandant_drive.protect_root", "kanzlei_erp.ai_connector.events.attachment_deleting"],
 		"after_insert": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation", "kanzlei_erp.ai_connector.events.file_changed"],
 		"on_update": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation", "kanzlei_erp.ai_connector.events.file_changed"],
 		"after_delete": ["kanzlei_erp.drive_realtime.changed", "kanzlei_erp.object_storage.mark_mutation", "kanzlei_erp.ai_connector.events.file_changed"],
