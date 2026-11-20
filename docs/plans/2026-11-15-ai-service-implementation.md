@@ -191,10 +191,15 @@ index from saved chunks. ERP authorizes each external processing operation for t
 Mandant and source revision. See the [rollout instructions](../../services/kanzlei_ai/docs/ocr-rollout.md).
 
 PaddleOCR passed seven German fixture checks on Apple Silicon. The isolated service checks
-exercised durable recovery and reindexing through the Mistral adapter with synthetic HTTP
-responses. Live Mistral quality, latency and billing remain unmeasured. The current chat
-verifier still limits answers to supported invoice amounts with exact evidence. The production
-VPN and client archive belong to the pilot.
+exercised durable recovery and reindexing with synthetic HTTP responses. A separate live
+smoke on 2026-11-20 used two synthetic German invoices, a fixture ERP connector and isolated
+PostgreSQL, Redis and Qdrant. The archive stayed local during Paddle bootstrap and was
+embedded after cutover without another OCR call. Mistral OCR read `680,00 EUR` from the new
+scan, and the chat returned `1.249,50 EUR` from the archive with a citation to page 2 that
+opened the original PDF. The five live requests took 2.504 seconds in total and used one
+OCR page, 272 embedding input tokens and 503 chat input plus 23 output tokens. Estimated
+cost at standard list prices was USD 0.00412. This smoke covers exact invoice amounts and
+citations on two fixtures. The production VPN and client archive belong to the pilot.
 
 ## Task 9: Email and broader source coverage
 
