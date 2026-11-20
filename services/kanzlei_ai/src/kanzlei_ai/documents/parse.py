@@ -9,6 +9,10 @@ import time
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from io import BytesIO
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from docling_core.types.doc import DoclingDocument
 
 PARSER_VERSION = "docling-native-v1"
 MAX_SOURCE_BYTES = 20 * 1024 * 1024
@@ -59,6 +63,7 @@ class ParsedPdf:
     content_sha256: str
     page_count: int
     blocks: list[Block]
+    ocr_pages: tuple[int, ...] = ()
 
     def artifact_bytes(self) -> bytes:
         import json
@@ -158,6 +163,36 @@ def _text_blocks(page: int, parts: list[str]) -> list[Block]:
     return blocks
 
 
+def document_blocks(document: DoclingDocument) -> list[Block]:
+    """Export page-provenanced prose and tables from a Docling document."""
+    blocks: list[Block] = []
+    page_text: dict[int, list[str]] = {}
+    for item, _level in document.iterate_items():
+        provenance = getattr(item, "prov", ())
+        if not provenance:
+            continue
+        if type(item).__name__ == "TableItem":
+            # The Docling table exporter retains the header/row shape as
+            # Markdown instead of turning cells into unrelated sentences.
+            text = item.export_to_markdown(document).strip()
+            if text:
+                blocks.append(Block(page=provenance[0].page_no, kind="table", text=text))
+            continue
+        text = getattr(item, "text", "")
+        for source_span in provenance:
+            start, end = source_span.charspan
+            part = text[start:end].strip()
+            if part:
+                page_text.setdefault(source_span.page_no, []).append(part)
+    for page, parts in page_text.items():
+        # TableItem carries the preferred structure. Some Docling backends
+        # instead emit adjacent pipe-delimited text rows within one or more
+        # provenance spans; require matching neighbours so one prose
+        # separator cannot change a whole page.
+        blocks.extend(_text_blocks(page, parts))
+    return blocks
+
+
 def _converter():
     try:
         from docling.datamodel.base_models import InputFormat
@@ -176,7 +211,11 @@ def _converter():
 
 
 def parse_pdf(
-    content: bytes, *, converter=None, deadline_seconds: int = MAX_PARSE_SECONDS
+    content: bytes,
+    *,
+    allow_missing_text: bool = False,
+    converter=None,
+    deadline_seconds: int = MAX_PARSE_SECONDS,
 ) -> ParsedPdf:
     if not 0 < deadline_seconds <= MAX_PARSE_SECONDS:
         raise ValueError("Invalid parse deadline")
@@ -208,44 +247,29 @@ def parse_pdf(
         page_count = int(document.num_pages())
         if page_count != expected_page_count:
             raise TerminalExtractionError("PARSE_INCOMPLETE")
-        blocks: list[Block] = []
-        page_text: dict[int, list[str]] = {}
-        for item, _level in document.iterate_items():
-            provenance = getattr(item, "prov", ())
-            if not provenance:
-                continue
-            if type(item).__name__ == "TableItem":
-                # The Docling table exporter retains the header/row shape as
-                # Markdown instead of turning cells into unrelated sentences.
-                text = item.export_to_markdown(document).strip()
-                if text:
-                    blocks.append(Block(page=provenance[0].page_no, kind="table", text=text))
-                continue
-            text = getattr(item, "text", "")
-            for source_span in provenance:
-                start, end = source_span.charspan
-                part = text[start:end].strip()
-                if part:
-                    page_text.setdefault(source_span.page_no, []).append(part)
-        for page, parts in page_text.items():
-            # TableItem carries the preferred structure. Some Docling backends
-            # instead emit adjacent pipe-delimited text rows within one or more
-            # provenance spans; require matching neighbours so one prose
-            # separator cannot change a whole page.
-            blocks.extend(_text_blocks(page, parts))
+        blocks = document_blocks(document)
         if time.monotonic() - started > deadline_seconds:
             raise TerminalExtractionError("PARSE_TIMEOUT")
         extracted = extract_blocks(blocks, page_count=page_count)
-        # OCR is deliberately disabled for this milestone.  A visual-only PDF
-        # is not a successful native-text extraction and must never publish an
-        # empty, apparently usable result.
-        if not extracted:
+        ocr_pages: tuple[int, ...] = ()
+        if allow_missing_text:
+            # A blank page or a broken layer made of replacement glyphs cannot
+            # substitute for OCR. Keep provenance and order on native pages.
+            readable_pages = {
+                block.page for block in extracted if any(char.isalnum() for char in block.text)
+            }
+            ocr_pages = tuple(
+                page for page in range(1, page_count + 1) if page not in readable_pages
+            )
+            extracted = [block for block in extracted if block.page in readable_pages]
+        elif not extracted:
             raise TerminalExtractionError("OCR_REQUIRED")
         return ParsedPdf(
             parser_version=PARSER_VERSION,
             content_sha256=hashlib.sha256(content).hexdigest(),
             page_count=page_count,
             blocks=extracted,
+            ocr_pages=ocr_pages,
         )
     except _ParseDeadline:
         raise TerminalExtractionError("PARSE_TIMEOUT") from None

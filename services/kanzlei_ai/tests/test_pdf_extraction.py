@@ -190,3 +190,37 @@ def test_s3_artifact_write_is_atomic_and_never_uses_a_shared_temp_key():
     assert (
         client.calls[0]["Metadata"]["sha256"] == hashlib.sha256(b"synthetic artifact").hexdigest()
     )
+
+
+@pytest.mark.parametrize("native_pages", [(1, 3), ()])
+def test_native_parse_reports_pages_without_usable_text_when_opted_in(native_pages):
+    from types import SimpleNamespace
+
+    from docling.datamodel.document import ConversionStatus
+
+    from kanzlei_ai.documents.parse import Block, parse_pdf
+
+    class Document:
+        def num_pages(self):
+            return 3
+
+        def iterate_items(self):
+            for page in (1, 2, 3):
+                text = "Gebühren 42 EUR" if page in native_pages else "\ufffd\ufffd"
+                prov = SimpleNamespace(page_no=page, charspan=(0, len(text)))
+                yield SimpleNamespace(text=text, prov=[prov]), 0
+
+    class Converter:
+        def convert(self, *_args, **_kwargs):
+            return SimpleNamespace(status=ConversionStatus.SUCCESS, document=Document())
+
+    content = base64.b64decode((FIXTURES / "synthetic-german-native.pdf.b64").read_text())
+    converter = Converter()
+    parsed = parse_pdf(content, converter=converter, allow_missing_text=True)
+
+    assert parsed.ocr_pages == tuple(page for page in (1, 2, 3) if page not in native_pages)
+    assert parsed.blocks == [Block(page, "text", "Gebühren 42 EUR") for page in native_pages]
+    # A replacement-only layer was previously accepted. Keep default behavior for it.
+    default = parse_pdf(content, converter=converter)
+    assert default.ocr_pages == ()
+    assert [block.page for block in default.blocks] == [1, 2, 3]
