@@ -173,6 +173,26 @@ def download_mail_attachment(customer=None, file_id=None, revision=None, **extra
 	)
 
 
+@frappe.whitelist(methods=["GET"])
+@endpoint(method="GET")
+def download_drive_docx(customer=None, file_id=None, revision=None, **extra):
+	from kanzlei_erp.ai_connector import inventory
+
+	user, sid = frappe.session.user, frappe.session.sid
+
+	def refresh():
+		auth._live_session(user, sid)
+		inventory.refresh_principal_permissions(user)
+
+	with inventory.current_permission_context():
+		content = policy.read_drive_docx(customer, file_id, revision, refresh=refresh)
+	return Response(
+		content,
+		mimetype=mail.DOCX_MIME_TYPE,
+		headers={**HEADERS, "Content-Disposition": 'attachment; filename="dokument.docx"'},
+	)
+
+
 def _source_mimetype(source):
 	return mail.MIME_TYPE if source["source_id"].startswith("email:") else "application/octet-stream"
 

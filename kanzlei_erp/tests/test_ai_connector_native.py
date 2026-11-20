@@ -187,10 +187,10 @@ class TestAIConnectorNative(FrappeTestCase):
 		self.assertEqual(manifest["mime_type"], mail_fixtures.DOCX_MIME)
 		self.assertNotIn("parent_message_id", manifest)
 		locator = urlsplit(manifest["locator"])
-		self.assertEqual(locator.path, "/api/method/kanzlei_erp.mandant_documents.download_document")
+		self.assertEqual(locator.path, "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx")
 		self.assertEqual(
 			parse_qs(locator.query),
-			{"customer": [self.customer.name], "file_id": [file.name], "disposition": ["attachment"]},
+			{"customer": [self.customer.name], "file_id": [file.name], "revision": [manifest["revision"]]},
 		)
 		ref = {
 			"source_id": manifest["source_id"],

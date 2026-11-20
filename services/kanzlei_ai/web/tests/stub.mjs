@@ -5,12 +5,12 @@ const port=Number(process.env.STUB_PORT||19991);
 const conversations = new Map();
 const downloadPaths = {
   attachment: '/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment',
-  drive: '/api/method/kanzlei_erp.mandant_documents.download_document',
+  drive: '/api/method/kanzlei_erp.ai_connector.api.download_drive_docx',
 };
-const downloadQuery = kind => new URLSearchParams({
+const downloadQuery = new URLSearchParams({
   customer: 'a',
   file_id: 'Agenda + #?.docx',
-  ...(kind === 'attachment' ? { revision: 'a'.repeat(64) } : { disposition: 'attachment' }),
+  revision: 'a'.repeat(64),
 }).toString();
 const examplePdf = Buffer.from(
   readFileSync(new URL('../../tests/fixtures/documents/synthetic-german-native.pdf.b64', import.meta.url), 'utf8'),
@@ -79,12 +79,12 @@ if (u.pathname.endsWith('/original') && Object.hasOwn(downloadPaths, citationKin
     res.end();
     return;
   }
-  return json(res, { source_kind: 'docx', locator: downloadPaths[citationKind] + '?' + downloadQuery(citationKind) });
+  return json(res, { source_kind: 'docx', locator: downloadPaths[citationKind] + '?' + downloadQuery });
 }
 const downloadKind = Object.keys(downloadPaths).find(kind => downloadPaths[kind] === u.pathname);
 if (downloadKind) {
   const hasSession = req.headers.cookie?.split('; ').includes('erp_fixture=active');
-  if (!hasSession || owner || u.searchParams.toString() !== downloadQuery(downloadKind)) {
+  if (!hasSession || owner || u.searchParams.toString() !== downloadQuery) {
     res.writeHead(403);
     res.end();
     return;

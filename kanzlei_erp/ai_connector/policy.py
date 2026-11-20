@@ -7,7 +7,7 @@ import json
 import mimetypes
 import time
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import frappe
 
@@ -237,21 +237,23 @@ def manifest(file, client_id, *, managed_only=False, locked=False):
 		if mail.is_docx(file.file_name)
 		else (file.get("mime_type") or mimetypes.guess_type(file.file_name)[0] or "application/octet-stream"),
 		"source_modified_at": str(file.modified),
-		"locator": _file_locator(client_id, file),
+		"locator": _file_locator(client_id, file, state.revision),
 		"byte_size": state.byte_size,
 		"active": True,
 	}
 
 
-def _file_locator(client_id, file):
-	disposition = "attachment" if mail.is_docx(file.file_name) else "inline"
+def _file_locator(client_id, file, revision):
+	if mail.is_docx(file.file_name):
+		return "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx?" + urlencode(
+			{"customer": client_id, "file_id": file.name, "revision": revision}
+		)
 	return (
 		"/api/method/kanzlei_erp.mandant_documents.download_document?customer="
 		+ quote(client_id, safe="")
 		+ "&file_id="
 		+ quote(file.name, safe="")
-		+ "&disposition="
-		+ disposition
+		+ "&disposition=inline"
 	)
 
 
@@ -358,9 +360,37 @@ def resolve_source_locator(requested_scope, source):
 			fail("STALE_SOURCE", 409)
 		locator = item["locator"]
 	else:
-		file, _ = _authorized(value, requested_scope)
-		locator = _file_locator(client_id, file)
+		file, state = _authorized(value, requested_scope)
+		locator = _file_locator(client_id, file, state.revision)
 	return {"version": 1, "locator": locator}
+
+
+@native_drive.bounded
+def read_drive_docx(client_id, file_id, revision, *, refresh):
+	"""Read a cited DOCX in the caller's isolated READ COMMITTED transaction."""
+	from kanzlei_erp.drive_storage import invalidate
+	from kanzlei_erp.object_storage import open_file
+
+	value = reference({"source_id": "file:" + text(file_id), "client_id": client_id, "revision": revision})
+	requested_scope = {"kind": "client", "client_id": client_id}
+	refresh()
+	file, state = _authorized(value, requested_scope)
+	if not mail.is_docx(file.file_name):
+		fail("FORBIDDEN", 403)
+	if state.native:
+		content = state.native.read()
+	else:
+		with open_file(file) as stream:
+			content = stream.read(MAX_BYTES + 1)
+	if len(content) > MAX_BYTES:
+		fail("LIMIT_EXCEEDED", 413)
+	if len(content) != state.byte_size:
+		fail("STALE_SOURCE", 409)
+	mail.require_docx(content)
+	invalidate()
+	refresh()
+	_authorized(value, requested_scope)
+	return content
 
 
 @native_drive.bounded

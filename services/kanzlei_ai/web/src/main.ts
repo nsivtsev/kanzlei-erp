@@ -517,10 +517,9 @@ function originalTarget(lease: Lease, kind: 'email' | 'docx', locator: unknown) 
   const params = target.searchParams;
   if (path !== target.pathname || params.size !== 3 || !params.get('customer') || !params.get('file_id')
       || [...params.values()].some(value => value.includes(lease.token))) throw Error();
-  if (path === '/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment'
+  if ((path === '/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment'
+      || path === '/api/method/kanzlei_erp.ai_connector.api.download_drive_docx')
       && /^[0-9a-f]{64}$/.test(params.get('revision') ?? '')) return target;
-  if (path === '/api/method/kanzlei_erp.mandant_documents.download_document'
-      && params.get('disposition') === 'attachment') return target;
   throw Error();
 }
 

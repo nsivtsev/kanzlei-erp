@@ -687,13 +687,10 @@ def test_docx_original_is_bound_to_the_cited_source_and_current_permissions(
     method = (
         "kanzlei_erp.ai_connector.api.download_mail_attachment"
         if mail_attachment
-        else "kanzlei_erp.mandant_documents.download_document"
+        else "kanzlei_erp.ai_connector.api.download_drive_docx"
     )
     path = f"/api/method/{method}"
-    params = {"customer": "A", "file_id": name}
-    params.update(
-        {"revision": document.revision} if mail_attachment else {"disposition": "attachment"}
-    )
+    params = {"customer": "A", "file_id": name, "revision": document.revision}
     locator = f"{path}?{urlencode(params)}"
     original = pdf_url(conversation, answer).removesuffix("/pdf") + "/original"
 
@@ -722,9 +719,10 @@ def test_docx_original_is_bound_to_the_cited_source_and_current_permissions(
         approved + "&token=" + "x" * 43,
         approved.replace("customer=A", "customer=B"),
         approved.replace(urlencode({"file_id": name}), "file_id=other.docx"),
-        approved.replace(document.revision, "f" * 64)
-        if mail_attachment
-        else approved.replace("disposition=attachment", "disposition=inline"),
+        approved.replace(document.revision, "f" * 64),
+        approved.replace("&revision=" + document.revision, ""),
+        "/api/method/kanzlei_erp.mandant_documents.download_document?"
+        + urlencode({"customer": "A", "file_id": name, "disposition": "attachment"}),
     ):
         locator = denied_locator
         assert client.get(original).status_code == 404

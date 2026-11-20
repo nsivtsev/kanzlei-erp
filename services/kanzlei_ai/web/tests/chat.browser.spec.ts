@@ -86,6 +86,13 @@ for (const routeKind of ['drive', 'attachment']) {
       await page.getByRole('button', { name: 'Agenda.docx · Word-Dokument herunterladen', exact: true }).click();
       await expect(page.locator('#chat-status')).toContainText('veraltet oder nicht verfügbar');
       await expect(page).toHaveURL('http://127.0.0.1:19992/');
+    } else {
+      await page.route('**/drive/original', route => route.fulfill({
+        json: { source_kind: 'docx', locator: '/api/method/kanzlei_erp.ai_connector.api.download_drive_docx?customer=a&file_id=fixture' },
+      }), { times: 1 });
+      await page.getByRole('button', { name: 'Agenda.docx · Word-Dokument herunterladen', exact: true }).click();
+      await expect(page.locator('#chat-status')).toContainText('veraltet oder nicht verfügbar');
+      await expect(page).toHaveURL('http://127.0.0.1:19992/');
     }
     const original = page.waitForRequest(req => req.url().endsWith(`/${routeKind}/original`));
     const navigation = page.waitForRequest(req => new URL(req.url()).pathname.includes('/api/method/'));
@@ -95,6 +102,9 @@ for (const routeKind of ['drive', 'attachment']) {
     const erpRequest = await navigation;
     expect(erpRequest.headers().authorization).toBeUndefined();
     expect(new URL(erpRequest.url()).origin).toBe('http://127.0.0.1:19991');
+    expect(Object.fromEntries(new URL(erpRequest.url()).searchParams)).toEqual({
+      customer: 'a', file_id: 'Agenda + #?.docx', revision: 'a'.repeat(64),
+    });
     expect((await download).suggestedFilename()).toBe('Agenda.docx');
     await expect(page.getByText('The document says:', { exact: false })).toBeVisible();
   });

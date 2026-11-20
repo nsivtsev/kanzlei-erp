@@ -31,6 +31,7 @@ _AUTHORIZATION_BATCH_SIZE = 4
 _MAX_AUTHORIZATION_REFERENCES = 50
 _DOCUMENT_DOWNLOAD = "/api/method/kanzlei_erp.mandant_documents.download_document"
 _ATTACHMENT_DOWNLOAD = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
+_DRIVE_DOCX_DOWNLOAD = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
 
 
 class FrappeConnector:
@@ -269,11 +270,13 @@ class FrappeConnector:
             expected = {"customer": [source.client_id], "file_id": [name]}
             if parts.path == _DOCUMENT_DOWNLOAD:
                 expected["disposition"] = ["inline"]
-            elif parts.path == _ATTACHMENT_DOWNLOAD:
+            elif parts.path in {_ATTACHMENT_DOWNLOAD, _DRIVE_DOCX_DOWNLOAD}:
                 expected["revision"] = [source.revision]
-            allowed = parts.path in {_DOCUMENT_DOWNLOAD, _ATTACHMENT_DOWNLOAD} and (
-                parse_qs(parts.query, keep_blank_values=True) == expected
-            )
+            allowed = parts.path in {
+                _DOCUMENT_DOWNLOAD,
+                _ATTACHMENT_DOWNLOAD,
+                _DRIVE_DOCX_DOWNLOAD,
+            } and (parse_qs(parts.query, keep_blank_values=True) == expected)
         if not allowed or access_token in unquote(locator):
             raise ConnectorError()
         return locator

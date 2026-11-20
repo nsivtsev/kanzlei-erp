@@ -280,6 +280,8 @@ def test_locator_resolver_uses_fixed_rpc_and_bounds_relative_navigation(locator)
         "?customer=A&file_id=attachment&disposition=inline",
         "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
         "?customer=A&file_id=attachment&revision=" + "a" * 64,
+        "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
+        "?customer=A&file_id=attachment&revision=" + "a" * 64,
     ],
 )
 def test_file_locator_resolver_preserves_fixed_erp_download_paths(locator):
@@ -291,3 +293,24 @@ def test_file_locator_resolver_preserves_fixed_erp_download_paths(locator):
         lambda _: httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
     )
     assert asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source)) == locator
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "customer=A&file_id=attachment",
+        "customer=A&file_id=attachment&revision=" + "b" * 64,
+    ],
+)
+def test_drive_docx_locator_requires_the_exact_revision(query):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    scope = Scope(kind="client", client_id="A")
+    source = SourceRef(source_id="file:attachment", revision="a" * 64, client_id="A")
+    locator = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx?" + query
+    adapter = client(
+        lambda _: httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+    )
+    with pytest.raises(ConnectorError):
+        asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source))

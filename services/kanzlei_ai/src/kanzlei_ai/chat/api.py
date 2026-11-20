@@ -46,7 +46,7 @@ _MAX_ACTIVE_TURNS = 4
 _PDF_LIMIT = 20 * 1024 * 1024
 _SOURCE_PAGE_SIZE = 25
 _MAIL_ATTACHMENT_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
-_DRIVE_DOWNLOAD_PATH = "/api/method/kanzlei_erp.mandant_documents.download_document"
+_DRIVE_DOWNLOAD_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
 
 
 class ChatRuntime:
@@ -505,13 +505,9 @@ def _valid_original_locator(kind: str, source: SourceRef, locator: str, token: s
     if kind != "docx" or prefix != "file" or not name:
         return False
     path, _, query = locator.partition("?")
-    expected = {"customer": source.client_id, "file_id": name}
-    if path == _MAIL_ATTACHMENT_PATH:
-        expected["revision"] = source.revision
-    elif path == _DRIVE_DOWNLOAD_PATH:
-        expected["disposition"] = "attachment"
-    else:
+    if path not in {_MAIL_ATTACHMENT_PATH, _DRIVE_DOWNLOAD_PATH}:
         return False
+    expected = {"customer": source.client_id, "file_id": name, "revision": source.revision}
     try:
         pairs = parse_qsl(
             query,
