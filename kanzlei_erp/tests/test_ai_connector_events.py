@@ -128,6 +128,116 @@ class TestAIConnectorEvents(FrappeTestCase):
 		changes = self.call("changes", cursor=page["changes_cursor"], limit=10)
 		self.assertIn("file:" + self.file.name, [item["source_id"] for item in changes["items"]])
 
+	def attach_email(self, customer):
+		frappe.set_user("Administrator")
+		message = frappe.get_doc(
+			{
+				"doctype": "Communication",
+				"communication_type": "Communication",
+				"communication_medium": "Email",
+				"sent_or_received": "Received",
+				"reference_doctype": "Customer",
+				"reference_name": customer.name,
+				"sender": "fixture@example.invalid",
+				"recipients": "office@example.invalid",
+				"subject": "Synthetic Drive attachment",
+				"content": "Synthetic message",
+			}
+		).insert()
+		self.file.db_set({"attached_to_doctype": "Communication", "attached_to_name": message.name})
+		frappe.share.add("Communication", message.name, self.reader.name, read=1)
+		return message
+
+	def test_classic_s3_attachment_cannot_be_reprojected_in_another_customers_scope(self):
+		from kanzlei_erp.ai_connector import inventory, mail, native_drive
+		from kanzlei_erp.drive_storage import require_storage_access
+
+		self.config["email_enabled"] = True
+		message = self.attach_email(self.other)
+		frappe.share.add("Customer", self.other.name, self.reader.name, read=1)
+		source_id = "file:" + self.file.name
+		self.assertTrue(self.storage.get_binding(self.file.file_url))
+		self.assertFalse(native_drive.is_native(self.file))
+		with inventory.principal(self.reader.name):
+			self.assertTrue(frappe.has_permission("Communication", "read", doc=message))
+			self.assertTrue(frappe.has_permission("File", "read", doc=self.file))
+			require_storage_access(self.file)
+			self.assertIsNone(mail.project(source_id, self.other.name))
+
+	def test_classic_s3_attachment_owner_and_all_direct_customers_must_grant_egress(self):
+		from kanzlei_erp.ai_connector import external_processing, inventory, mail
+		from kanzlei_erp.ai_connector.errors import ConnectorError
+
+		self.config["email_enabled"] = True
+		message = self.attach_email(self.customer)
+		message.add_link("Customer", self.other.name, autosave=True)
+		frappe.share.add("Customer", self.other.name, self.reader.name, read=1)
+		owner = self.customer.name
+		scope = {"kind": "client", "client_id": owner}
+		with inventory.principal(self.reader.name):
+			manifest = mail.project("file:" + self.file.name, owner)
+			ref = {"source_id": manifest["source_id"], "revision": manifest["revision"], "client_id": owner}
+			self.assertEqual(mail.read_current(ref), self.original)
+			with self.assertRaises(ConnectorError) as wrong_owner:
+				mail.read_current({**ref, "client_id": self.other.name})
+			self.assertEqual(wrong_owner.exception.status, 403)
+			for grants in (
+				{owner: {"embed": True}},
+				{owner: {"embed": True}, self.other.name: {"embed": 1}},
+				{self.other.name: {"embed": True}},
+			):
+				self.config["external_processing"] = grants
+				with self.assertRaises(ConnectorError) as denied:
+					external_processing._check_current("embed", scope, [ref], background_clients={owner})
+				self.assertEqual(denied.exception.status, 403)
+			self.config["external_processing"] = {owner: {"embed": True}, self.other.name: {"embed": True}}
+			external_processing._check_current("embed", scope, [ref], background_clients={owner})
+
+	def test_disabled_mail_feed_preserves_classic_managed_pdf_in_delegated_and_background_routes(self):
+		import hashlib
+		from contextlib import nullcontext
+		from unittest.mock import patch
+
+		from kanzlei_erp.ai_connector import inventory
+
+		self.config["email_enabled"] = False
+		message = self.attach_email(self.customer)
+		message.add_link("Customer", self.other.name, autosave=True)
+		owner = self.customer.name
+		scope = {"kind": "client", "client_id": owner}
+		docs = self.call("inventory")
+		manifest = next(item for item in docs["items"] if item["source_id"] == "file:" + self.file.name)
+		self.assertNotIn("parent_message_id", manifest)
+		ref = {"source_id": manifest["source_id"], "revision": manifest["revision"], "client_id": owner}
+		self.file.db_set("file_name", "synthetic-renamed.pdf", update_modified=False)
+		changes = self.call("changes", cursor=docs["changes_cursor"])
+		changed = next(item for item in changes["items"] if item["source_id"] == ref["source_id"])
+		self.assertEqual(changed["operation"], "upsert")
+		ref["revision"] = changed["manifest"]["revision"]
+		# Use the fixture transaction for the read-only RPCs so their database rows need no commit.
+		with patch.object(inventory, "current_permission_context", side_effect=nullcontext):
+			background = self.call("background_read_source", source=ref)
+			self.assertEqual(background.status_code, 200)
+			self.assertEqual(background.get_data(), self.original)
+			self.config["external_processing"] = {owner: {"embed": True}}
+			check = {"operation": "embed", "scope": scope, "sources": [ref]}
+			self.assertEqual(self.call("check_processing_policy", **check).status_code, 403)
+			self.config["external_processing"][self.other.name] = {"embed": True}
+			self.assertEqual(self.call("check_processing_policy", **check), {"version": 1, "allowed": True})
+		service_key = "fixture-delegated-key-" + frappe.generate_hash(length=30)
+		self.config["service_key_sha256"] = hashlib.sha256(service_key.encode()).hexdigest()
+		with inventory.principal(self.reader.name), patch.object(self, "key", service_key):
+			frappe.session.sid = self.sid
+			ticket = self.call("issue_ticket", service=False)["ticket"]
+			token = self.call("exchange_ticket", ticket=ticket)["access_token"]
+			page = self.call("list_documents", access_token=token, client_id=owner)
+			self.assertTrue(any(item["source_id"] == ref["source_id"] for item in page["items"]))
+			authorized = self.call("authorize_sources", access_token=token, scope=scope, sources=[ref])
+			self.assertEqual(authorized["decisions"], [{**ref, "allowed": True}])
+			delegated = self.call("read_source", access_token=token, scope=scope, source=ref)
+			self.assertEqual(delegated.status_code, 200)
+			self.assertEqual(delegated.get_data(), self.original)
+
 	def test_rollback_duplicates_trash_restore_and_delete(self):
 		page = self.call("inventory")
 		cursor = page["changes_cursor"]

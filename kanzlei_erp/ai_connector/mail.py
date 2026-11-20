@@ -95,6 +95,18 @@ def _direct_clients(message):
 	return clients
 
 
+def attachment_clients(file):
+	"""Current direct ties of a previously authorized legacy Drive attachment."""
+	if file.attached_to_doctype != "Communication" or not file.attached_to_name:
+		fail("FORBIDDEN", 403)
+	message = frappe.get_doc("Communication", file.attached_to_name)
+	if message.communication_medium != "Email" or not frappe.has_permission(
+		"Communication", "read", doc=message
+	):
+		fail("FORBIDDEN", 403)
+	return _direct_clients(message)
+
+
 def _json(value):
 	return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
@@ -205,22 +217,17 @@ def _source(source_id, client_id=None):
 	):
 		fail("FORBIDDEN", 403)
 	clients = _direct_clients(message)
+	owner = file.get(drive_storage.MARKER) if file is not None else None
 	if client_id is None:
-		# Native storage has exactly one owning Drive, even when the message
-		# itself has several direct ties.
-		if file is not None and native_drive.is_native(file):
-			client_id = file.kanzlei_drive_customer
-		else:
-			client_id = next(
-				(
-					client
-					for client in sorted(clients)
-					if frappe.has_permission("Customer", "read", doc=client)
-				),
-				None,
-			)
+		# A managed File retains its owning Drive even when its message
+		# has several direct ties.
+		client_id = owner or next(
+			(client for client in sorted(clients) if frappe.has_permission("Customer", "read", doc=client)),
+			None,
+		)
 	if (
 		client_id not in clients
+		or (owner and client_id != owner)
 		or not frappe.has_permission("Customer", "read", doc=client_id)
 		or not frappe.has_permission("Communication", "read", doc=message)
 	):
@@ -246,8 +253,10 @@ def _source(source_id, client_id=None):
 		return _Source(manifest, clients, content=content)
 
 	mime_type = _check_file(file)
-	# A native object must also belong to the selected Customer's active Drive.
-	# For local and classic S3 attachments, the actual parent binding is enough.
+	# Native inspection checks Drive ancestry itself. Apply that same ownership
+	# boundary to classic bindings and stored local files with a Drive marker.
+	if owner and not native_drive.is_native(file) and not native_drive.in_drive(file, owner):
+		fail("FORBIDDEN", 403)
 	state = policy._source_state(file, client_id)
 	if state.byte_size > MAX_BYTES:
 		fail("LIMIT_EXCEEDED", 413)

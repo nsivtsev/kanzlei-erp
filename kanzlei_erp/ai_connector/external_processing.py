@@ -49,11 +49,7 @@ def _check_current(operation, scope, references, *, background_clients=None):
 					reference["source_id"], client_id=reference["client_id"], revision=reference["revision"]
 				)
 			)
-	grants = auth.config().get("external_processing")
-	for customer in client_ids:
-		operations = grants.get(customer) if isinstance(grants, dict) else None
-		if not isinstance(operations, dict) or operations.get(operation) is not True:
-			fail("FORBIDDEN", 403)
+	_require_grants(operation, client_ids)
 	if references:
 		_require_sources(scope, references, mail_ids)
 	if background_clients is not None:
@@ -65,6 +61,24 @@ def _check_current(operation, scope, references, *, background_clients=None):
 			current = inventory.project(reference["source_id"][5:], client_id, background_clients)
 			if not current or current.get("revision") != reference["revision"]:
 				fail("FORBIDDEN", 403)
+	# Legacy Drive references have no mail revision, but their current
+	# Communication links still determine the required consents.
+	legacy_attachments = policy._mail_ids(references, include_disabled_attachments=True) - mail_ids
+	legacy_clients = set()
+	for reference in references:
+		if reference["source_id"] in legacy_attachments:
+			file, _ = policy._authorized(reference, scope, managed_only=True)
+			legacy_clients.update(mail.attachment_clients(file))
+	if legacy_attachments:
+		_require_grants(operation, client_ids | legacy_clients)
+
+
+def _require_grants(operation, client_ids):
+	grants = auth.config().get("external_processing")
+	for customer in client_ids:
+		operations = grants.get(customer) if isinstance(grants, dict) else None
+		if not isinstance(operations, dict) or operations.get(operation) is not True:
+			fail("FORBIDDEN", 403)
 
 
 def _require_sources(scope, references, mail_ids):

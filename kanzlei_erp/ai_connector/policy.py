@@ -141,12 +141,21 @@ def clients(page_limit=50, cursor=None):
 
 def _file(client_id, file_id):
 	_, files = get_authorized_document_files(client_id, [file_id])
-	return _ordinary_file(files[file_id])
+	return _ordinary_file(files[file_id], client_id)
 
 
-def _ordinary_file(file):
+def _ordinary_file(file, client_id):
 	if mail.is_attachment(file):
-		fail("FORBIDDEN", 403)
+		from kanzlei_erp.object_storage import get_binding
+
+		# Mail is opt-in, but an existing managed Drive source retains its
+		# ordinary access path and revision while mail is off.
+		if (
+			mail.enabled()
+			or not native_drive.in_drive(file, client_id)
+			or not (native_drive.is_native(file) or get_binding(file.file_url))
+		):
+			fail("FORBIDDEN", 403)
 	return _eligible(file)
 
 
@@ -292,11 +301,11 @@ def documents(client_id, page_limit=50, cursor=None, *, query=None):
 			continue
 		try:
 			file = files[row["file_id"]]
-			if mail.is_attachment(file):
-				if email_enabled and (item := mail.project("file:" + file.name, client_id)):
+			if email_enabled and mail.is_attachment(file):
+				if item := mail.project("file:" + file.name, client_id):
 					items.append(item)
 			else:
-				items.append(manifest(_eligible(file), client_id))
+				items.append(manifest(_ordinary_file(file, client_id), client_id))
 		except ConnectorError as error:
 			if error.status == 503:
 				raise
@@ -319,9 +328,13 @@ def _authorized(value, requested_scope, *, managed_only=False):
 	return file, state
 
 
-def _mail_ids(values):
-	attachments = mail.attachment_ids(
-		{value["source_id"][5:] for value in values if value["source_id"].startswith("file:")}
+def _mail_ids(values, *, include_disabled_attachments=False):
+	attachments = (
+		mail.attachment_ids(
+			{value["source_id"][5:] for value in values if value["source_id"].startswith("file:")}
+		)
+		if include_disabled_attachments or mail.enabled()
+		else set()
 	)
 	return {
 		value["source_id"]
@@ -386,7 +399,9 @@ def authorize_sources(requested_scope, sources, *, expected_mail_ids=None):
 					revisions[key] = item["revision"] if item else None
 				else:
 					file = files.get((client_id, source_id[5:]))
-					revisions[key] = _source_state(_ordinary_file(file), client_id).revision if file else None
+					revisions[key] = (
+						_source_state(_ordinary_file(file, client_id), client_id).revision if file else None
+					)
 			allowed = in_scope(value) and revisions[key] == value["revision"]
 		except ConnectorError as error:
 			if error.status == 503:
