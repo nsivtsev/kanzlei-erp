@@ -38,6 +38,7 @@ def payload(**overrides):
 MULTILINGUAL = json.loads(
     (Path(__file__).parent / "fixtures/email/multilingual.json").read_text(encoding="utf-8")
 )
+SUBJECT = "Müller – проверка AB-2026-001"
 
 
 @pytest.mark.parametrize("fixture", MULTILINGUAL, ids=lambda fixture: fixture["source_id"])
@@ -46,7 +47,10 @@ def test_native_extraction_and_scoped_search_send_only_current_message_to_provid
     fixture, monkeypatch, allowed
 ):
     content = payload(
-        direction=fixture["direction"], body=fixture["body"], body_format=fixture["format"]
+        subject=SUBJECT,
+        direction=fixture["direction"],
+        body=fixture["body"],
+        body_format=fixture["format"],
     )
     reads = []
     artifacts = []
@@ -100,9 +104,21 @@ def test_native_extraction_and_scoped_search_send_only_current_message_to_provid
     assert len(publications) == 1
     assert publications[0]["page_count"] == 0
     assert [(c["page"], c["kind"], c["text"]) for c in publications[0]["chunks"]] == [
+        (None, "text", SUBJECT),
         (None, "text", fixture["active"]),
     ]
-    assert artifacts[0]["blocks"] == [{"page": None, "kind": "text", "text": fixture["active"]}]
+    wire = json.loads(content)
+    assert artifacts[0]["envelope"] == {
+        field: wire[field]
+        for field in ("subject", "sender", "recipients", "direction", "sent_at", "reply_to")
+    }
+    assert artifacts[0]["blocks"] == [
+        {"page": None, "kind": "text", "text": SUBJECT},
+        {"page": None, "kind": "text", "text": fixture["active"]},
+    ]
+    artifact_json = json.dumps(artifacts[0])
+    assert "body" not in artifacts[0]["envelope"]
+    assert "SECRET" not in artifact_json and "HIDDEN-CUSTOMER" not in artifact_json
 
     source = SourceRef(
         source_id=fixture["source_id"], client_id="current-client", revision="a" * 64
@@ -120,9 +136,17 @@ def test_native_extraction_and_scoped_search_send_only_current_message_to_provid
 
     def embed(request):
         body = json.loads(request.content)
-        assert body["input"] in [[fixture["active"]], [fixture["question"]]]
+        assert body["input"] in [[SUBJECT, fixture["active"]], [fixture["question"]]]
         calls.append("embed")
-        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0] + [0.0] * 1023}]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": i, "embedding": [1.0] + [0.0] * 1023}
+                    for i in range(len(body["input"]))
+                ]
+            },
+        )
 
     connector = FrappeConnector(
         "https://erp.example.invalid",
@@ -171,7 +195,9 @@ def test_native_extraction_and_scoped_search_send_only_current_message_to_provid
         limit=3,
         before_query_embed=authorize,
     )
-    assert [result.chunk_id for result in results["sparse"]] == [publications[0]["chunks"][0]["id"]]
+    assert results["sparse"][0].chunk_id == publications[0]["chunks"][1]["id"]
+    points, _ = index.client.scroll(index.collection, with_payload=True)
+    assert all(wire["reply_to"] not in json.dumps(point.payload) for point in points)
     outside_scope = index.candidates(
         query=fixture["question"],
         connector_id="fixture-erp",
@@ -233,11 +259,99 @@ def test_quote_only_or_hidden_body_has_no_searchable_content(body, body_format):
     from kanzlei_ai.documents.email import parse_email
 
     with pytest.raises(parse.TerminalExtractionError, match="EMAIL_NO_TEXT"):
-        parse_email(payload(body=body, body_format=body_format))
+        parse_email(payload(subject="", body=body, body_format=body_format))
 
 
 def test_nullable_metadata_and_unicode_identifiers_are_preserved():
     from kanzlei_ai.documents.email import parse_email
 
-    parsed = parse_email(payload(sent_at=None, reply_to=None, body="An Büßer: И-000 27"))
+    parsed = parse_email(
+        payload(subject="", sent_at=None, reply_to=None, body="An Büßer: И-000 27")
+    )
     assert parsed.blocks[0].text == "An Büßer: И-000 27"
+    envelope = json.loads(parsed.artifact_bytes())["envelope"]
+    assert envelope["sent_at"] is None and envelope["reply_to"] is None
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "Subject\r\nFrom: foreign",
+        "Subject\u2028foreign",
+        "Subject\u202eforeign",
+        "<blockquote>foreign</blockquote>",
+        "&lt;blockquote&gt;foreign&lt;/blockquote&gt;",
+        "> foreign",
+    ],
+)
+def test_unsafe_subject_is_omitted_from_searchable_blocks(subject):
+    from kanzlei_ai.documents.email import parse_email
+
+    parsed = parse_email(payload(subject=subject, body="Current"))
+    assert [block.text for block in parsed.blocks] == ["Current"]
+
+
+def test_safe_subject_can_stand_alone_without_quoted_body():
+    from kanzlei_ai.documents.email import parse_email
+
+    parsed = parse_email(payload(subject=SUBJECT, body="> foreign"))
+    assert [block.text for block in parsed.blocks] == [SUBJECT]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "<style>.hiddenQuote{display:none}</style><p>Current</p>"
+        '<div class="hiddenQuote">foreign quote</div>',
+        '<p>Current</p><blockquote id="foreign">foreign quote</blockquote>'
+        "<style>#foreign, span { visibility: /* CSS */ hidden !important }</style>",
+        "<style>p{color:#333;font:16px sans-serif}</style><p>Current</p>",
+        "<style>/* unfinished comment</style>"
+        "<style>.hiddenQuote{display:none}</style><p>Current</p>"
+        '<div class="hiddenQuote">foreign quote</div>',
+    ],
+)
+def test_local_styles_keep_current_text_and_remove_hidden_body(body):
+    from kanzlei_ai.documents.email import parse_email
+
+    parsed = parse_email(payload(subject="", body_format="html", body=body))
+    assert [block.text for block in parsed.blocks] == ["Current"]
+    assert "foreign quote" not in parsed.artifact_bytes().decode()
+
+
+@pytest.mark.parametrize(
+    "stylesheet",
+    [
+        "<style>.outer .hiddenQuote {display:none}</style>",
+        "<style>@media screen {.hiddenQuote {display:none}}</style>",
+        "<style>.hiddenQuote {display:var(--hidden)}</style>",
+        "<style>@import 'https://example.invalid/remote.css';</style>",
+        '<link rel="stylesheet" href="https://example.invalid/remote.css">',
+    ],
+)
+def test_unresolved_hiding_css_disables_html_body(stylesheet):
+    from kanzlei_ai.documents.email import parse_email
+
+    parsed = parse_email(
+        payload(
+            subject=SUBJECT,
+            body_format="html",
+            body=stylesheet + '<div class="hiddenQuote">foreign quote</div>',
+        )
+    )
+    assert [block.text for block in parsed.blocks] == [SUBJECT]
+    assert "foreign quote" not in parsed.artifact_bytes().decode()
+
+
+def test_stylesheet_budget_fails_closed(monkeypatch):
+    from kanzlei_ai.documents import email
+
+    monkeypatch.setattr(email, "_MAX_STYLESHEET_CHARS", 20)
+    with pytest.raises(parse.TerminalExtractionError, match="EMAIL_NO_TEXT"):
+        email.parse_email(
+            payload(
+                subject="",
+                body_format="html",
+                body="<style>p{font:16px sans-serif}</style><p>Current</p>",
+            )
+        )

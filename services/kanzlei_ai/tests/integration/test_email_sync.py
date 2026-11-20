@@ -148,8 +148,12 @@ def test_mail_worker_publishes_nonpaginated_chunks_and_queues_index(database, mo
 
     class Store:
         def put(self, key, artifact):
-            assert json.loads(artifact)["blocks"] == [
-                {"page": None, "kind": "text", "text": "Freigegeben unter AZ-00615."}
+            parsed = json.loads(artifact)
+            assert parsed["envelope"]["reply_to"] == "email:foreign"
+            assert parsed["envelope"]["subject"] == "Bestätigung"
+            assert parsed["blocks"] == [
+                {"page": None, "kind": "text", "text": "Bestätigung"},
+                {"page": None, "kind": "text", "text": "Freigegeben unter AZ-00615."},
             ]
             return key
 
@@ -166,10 +170,11 @@ def test_mail_worker_publishes_nonpaginated_chunks_and_queues_index(database, mo
     )
     with database.connect() as conn:
         assert conn.execute(select(document_artifacts.c.page_count)).scalar_one() == 0
-        assert conn.execute(select(document_chunks.c.page, document_chunks.c.text)).one() == (
-            None,
-            "Freigegeben unter AZ-00615.",
-        )
+        assert conn.execute(
+            select(document_chunks.c.page, document_chunks.c.text).order_by(
+                document_chunks.c.ordinal
+            )
+        ).all() == [(None, "Bestätigung"), (None, "Freigegeben unter AZ-00615.")]
         assert conn.execute(select(jobs.c.status).where(jobs.c.stage == "index")).scalar_one() == (
             "queued"
         )
