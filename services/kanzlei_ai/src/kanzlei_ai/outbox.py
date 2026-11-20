@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from sqlalchemy import and_, func, insert, or_, select, text, update
 
-from kanzlei_ai.jobs import MAX_ATTEMPTS, exhausted_code
+from kanzlei_ai.jobs import MAX_ATTEMPTS, clear_index_batches, exhausted_code
 from kanzlei_ai.models import jobs, outbox, sources
 
 
@@ -163,6 +163,8 @@ def recover(engine, limit=100, *, include_index=False, index_profile=None):
                     .where(jobs.c.id == job_id)
                     .values(status="superseded", lease_token=None, lease_until=None, updated_at=now)
                 )
+                if job["stage"] == "index":
+                    clear_index_batches(conn, job_id)
                 continue
             if job["attempts"] >= MAX_ATTEMPTS:
                 error_code = exhausted_code(job["stage"])
@@ -183,6 +185,8 @@ def recover(engine, limit=100, *, include_index=False, index_profile=None):
                         .where(sources.c.id == source_id)
                         .values(status="failed", error_code=error_code)
                     )
+                else:
+                    clear_index_batches(conn, job_id)
                 continue
             conn.execute(
                 update(jobs)

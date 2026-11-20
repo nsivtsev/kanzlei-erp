@@ -827,3 +827,50 @@ def test_embedding_response_cannot_checkpoint_a_replaced_source(database):
     with database.connect() as conn:
         assert conn.execute(select(index_embedding_batches)).all() == []
         assert conn.execute(select(index_publications)).all() == []
+
+
+@pytest.mark.parametrize("action", ["replacement", "exhaustion", "requeue"])
+def test_abandoned_index_jobs_delete_temporary_vectors(database, action):
+    from kanzlei_ai.models import index_embedding_batches
+
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract = _jobs(database)[0]
+    assert job_service.publish_extraction(
+        database,
+        extract["id"],
+        job_service.claim(database, extract["id"]),
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [],
+        },
+        enqueue_index=True,
+        index_profile="mistral-embed-v1",
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    with database.begin() as conn:
+        conn.execute(index_embedding_batches.insert().values(job_id=job_id, offset=0, vectors=b"v"))
+        conn.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                updated_at=text("clock_timestamp() - interval '2 minutes'"),
+                attempts=job_service.MAX_ATTEMPTS,
+            )
+        )
+
+    if action == "requeue":
+        assert sync.requeue_extract(database, "synthetic", "file:ocr")
+    else:
+        if action == "replacement":
+            _inventory(database, _manifest(revision="b"))
+        outbox.recover(database, include_index=True)
+
+    with database.connect() as conn:
+        assert conn.execute(select(index_embedding_batches)).all() == []
+    assert _jobs(database, "index")[0]["status"] == (
+        "failed" if action == "exhaustion" else "superseded"
+    )

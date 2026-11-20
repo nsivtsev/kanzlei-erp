@@ -68,8 +68,9 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
 3. Run `python -m kanzlei_ai.coordinator reindex --missing-only` and repeat
    with `--cursor <next_cursor>` until there is no continuation. The index
    worker builds the separate 1024-dimensional Mistral collection directly from
-   current artifacts. Check index job results and verify citations before setting
-   `AI_CHAT_ENABLED=true`.
+   current artifacts. Successful embedding batches survive retries while the
+   search build is in progress. Check index job results and verify citations
+   before setting `AI_CHAT_ENABLED=true`.
 4. To stop external processing, revoke the affected Mandant policy immediately
    and stop the Mistral consumers and API before changing their model profile.
    Keep artifacts, leases, and cursors so interrupted jobs can resume when

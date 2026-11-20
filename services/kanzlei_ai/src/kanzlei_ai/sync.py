@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from kanzlei_ai.connectors.contracts import SourceManifest
 from kanzlei_ai.db import migrate
+from kanzlei_ai.jobs import clear_index_batches
 from kanzlei_ai.models import (
     connectors,
     inbox_items,
@@ -150,7 +151,7 @@ def requeue_extract(
             and existing["ocr_profile"] == profile
         ):
             return None
-        conn.execute(
+        superseded = conn.execute(
             update(jobs)
             .where(
                 jobs.c.source_id == pk,
@@ -163,7 +164,11 @@ def requeue_extract(
                 lease_until=None,
                 updated_at=func.clock_timestamp(),
             )
-        )
+            .returning(jobs.c.id, jobs.c.stage)
+        ).all()
+        for job_id, stage in superseded:
+            if stage == "index":
+                clear_index_batches(conn, job_id)
         conn.execute(
             update(sources)
             .where(sources.c.id == pk)
