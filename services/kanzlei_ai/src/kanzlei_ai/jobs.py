@@ -1,4 +1,4 @@
-"""Short leased claims and generation-fenced metadata staging."""
+"""Short leased claims and generation-fenced extraction."""
 
 import re
 import time
@@ -9,7 +9,15 @@ from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.exc import OperationalError
 
 from kanzlei_ai.connectors.contracts import SourceManifest
-from kanzlei_ai.models import document_artifacts, document_chunks, jobs, sources
+from kanzlei_ai.models import (
+    document_artifacts,
+    document_chunks,
+    extraction_plans,
+    jobs,
+    ocr_page_checkpoints,
+    outbox,
+    sources,
+)
 
 LEASE_SECONDS = 120
 MAX_ATTEMPTS = 5
@@ -72,10 +80,14 @@ def exhausted_code(stage):
     return "INDEX_RETRY_EXHAUSTED" if stage == "index" else RETRY_EXHAUSTED
 
 
-def claim(engine, job_id, *, stage="extract"):
+def claim(engine, job_id, *, stage="extract", ocr_profile=None, pipeline_version=None):
     with engine.begin() as conn:
         source, job = _locked(conn, job_id, stage=stage)
-        if not _current(source, job):
+        if (
+            not _current(source, job)
+            or (ocr_profile is not None and job["ocr_profile"] != ocr_profile)
+            or (pipeline_version is not None and job["pipeline_version"] != pipeline_version)
+        ):
             return None
         now = conn.execute(select(func.clock_timestamp())).scalar_one()
         if job["status"] != "queued" and not (
@@ -207,7 +219,7 @@ def complete(engine, job_id, token):
     return _publish_with_lock_retry(_complete_once, engine, job_id, token)
 
 
-def _publish_extraction_once(engine, job_id, token, publication, enqueue_index):
+def _publish_extraction_once(engine, job_id, token, publication, enqueue_index, index_profile):
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL lock_timeout = '2s'"))
         source, job = _locked(conn, job_id, skip_locked=False)
@@ -266,14 +278,19 @@ def _publish_extraction_once(engine, job_id, token, publication, enqueue_index):
         if enqueue_index:
             from kanzlei_ai.search.publication import queue_index
 
-            queue_index(conn, source, artifact_id)
+            if index_profile is None:
+                queue_index(conn, source, artifact_id)
+            else:
+                queue_index(conn, source, artifact_id, profile=index_profile)
         return True
 
 
-def publish_extraction(engine, job_id, token, publication, *, enqueue_index=False):
+def publish_extraction(
+    engine, job_id, token, publication, *, enqueue_index=False, index_profile=None
+):
     """Atomically expose artifacts only while the claimed source is current."""
     return _publish_with_lock_retry(
-        _publish_extraction_once, engine, job_id, token, publication, enqueue_index
+        _publish_extraction_once, engine, job_id, token, publication, enqueue_index, index_profile
     )
 
 
@@ -285,15 +302,88 @@ def fail_terminal(engine, job_id, token, error_code, *, stage="extract"):
     return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code, True, stage)
 
 
-def source_for_claim(engine, job_id, token):
-    """Read the manifest only while its current claim is still live."""
+def _extraction_claim(conn, job_id, token):
+    conn.execute(text("SET LOCAL lock_timeout = '2s'"))
+    source, job = _locked(conn, job_id, skip_locked=False)
+    now = conn.execute(select(func.clock_timestamp())).scalar_one()
+    if not _live_claim(source, job, token, now):
+        return None, None
+    return source, job
+
+
+def _checkpoint_once(engine, job_id, token, table, values):
+    with engine.begin() as conn:
+        _, job = _extraction_claim(conn, job_id, token)
+        if job is None:
+            return False
+        conn.execute(insert(table).values(job_id=job_id, **values))
+        conn.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                status="queued",
+                attempts=0,
+                lease_token=None,
+                lease_until=None,
+                error_code=None,
+                updated_at=func.clock_timestamp(),
+            )
+        )
+        # The preceding delivery may still be marking its outbox row sent.
+        # Always give the newly committed portion its own durable message.
+        conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
+        return True
+
+
+def save_extraction_plan(engine, job_id, token, plan):
+    """Checkpoint the native parse and release the claim before OCR starts."""
+    return _publish_with_lock_retry(_checkpoint_once, engine, job_id, token, extraction_plans, plan)
+
+
+def save_ocr_page(engine, job_id, token, page):
+    """Commit a normalized page only while the extraction claim is current."""
+    return _publish_with_lock_retry(
+        _checkpoint_once, engine, job_id, token, ocr_page_checkpoints, page
+    )
+
+
+def extraction_claim_is_live(engine, job_id, token):
     with engine.connect() as conn:
-        source, job = _locked(conn, job_id, skip_locked=False)
-        now = conn.execute(select(func.clock_timestamp())).scalar_one()
-        if not _live_claim(source, job, token, now):
+        _, job = _extraction_claim(conn, job_id, token)
+        return job is not None
+
+
+def _source_for_claim_once(engine, job_id, token):
+    with engine.connect() as conn:
+        source, job = _extraction_claim(conn, job_id, token)
+        if job is None:
             return None
+        plan = (
+            conn.execute(select(extraction_plans).where(extraction_plans.c.job_id == job_id))
+            .mappings()
+            .first()
+        )
+        checkpoints = (
+            conn.execute(
+                select(ocr_page_checkpoints)
+                .where(ocr_page_checkpoints.c.job_id == job_id)
+                .order_by(ocr_page_checkpoints.c.page)
+            )
+            .mappings()
+            .all()
+            if plan
+            else []
+        )
         return {
             "connector_id": source["connector_id"],
             "manifest": source["manifest"],
             "generation": source["generation"],
+            "ocr_profile": job["ocr_profile"],
+            "plan": plan,
+            "checkpoints": checkpoints,
         }
+
+
+def source_for_claim(engine, job_id, token):
+    """Read the current manifest and completed OCR portions."""
+    return _publish_with_lock_retry(_source_for_claim_once, engine, job_id, token)

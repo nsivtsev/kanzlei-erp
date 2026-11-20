@@ -28,6 +28,7 @@ connectors = Table(
     Column("watermark", Text),
     Column("changes_cursor", Text),
     Column("scan_completed_at", DateTime(timezone=True)),
+    Column("ocr_profile_override", String(16)),
 )
 sources = Table(
     "sources",
@@ -59,6 +60,7 @@ jobs = Table(
     Column("pipeline_version", String(100), nullable=False),
     Column("generation", Integer, nullable=False),
     Column("stage", String(16), nullable=False, server_default="extract"),
+    Column("ocr_profile", String(16), nullable=False, server_default="native"),
     Column("artifact_id", ForeignKey("document_artifacts.id")),
     Column("status", String(32), nullable=False),
     Column("error_code", String(64)),
@@ -75,6 +77,24 @@ jobs = Table(
         "stage",
         name="uq_jobs_source_revision_pipeline_generation_stage",
     ),
+)
+extraction_plans = Table(
+    "extraction_plans",
+    metadata,
+    Column("job_id", ForeignKey("jobs.id"), primary_key=True),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("page_count", Integer, nullable=False),
+    Column("native_blocks", JSON, nullable=False),
+    Column("ocr_pages", JSON, nullable=False),
+)
+ocr_page_checkpoints = Table(
+    "ocr_page_checkpoints",
+    metadata,
+    Column("job_id", ForeignKey("extraction_plans.job_id"), primary_key=True),
+    Column("page", Integer, primary_key=True),
+    Column("provider_profile", String(100), nullable=False),
+    Column("blocks", JSON, nullable=False),
 )
 outbox = Table(
     "outbox",

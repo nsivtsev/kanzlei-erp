@@ -15,7 +15,7 @@ from kanzlei_ai import outbox, sync
 from kanzlei_ai.connectors.frappe import FrappeConnector
 from kanzlei_ai.db import engine_from_settings, migrate
 from kanzlei_ai.models import connectors
-from kanzlei_ai.search.publication import MAX_REINDEX_LIMIT, reindex
+from kanzlei_ai.search.publication import MAX_REINDEX_LIMIT, configured_index_profile, reindex
 from kanzlei_ai.settings import Settings
 from kanzlei_ai.worker import app
 
@@ -61,12 +61,24 @@ def sync_once(engine, settings):
         cursor = state["inventory_cursor"]
         page = asyncio.run(client.inventory(cursor)).model_dump(mode="json")
         return sync.apply_inventory(
-            engine, state["id"], state["epoch"], cursor, page, settings.ingestion_pipeline_version
+            engine,
+            state["id"],
+            state["epoch"],
+            cursor,
+            page,
+            settings.ingestion_pipeline_version,
+            ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
         )
     cursor = state["changes_cursor"]
     page = asyncio.run(client.changes(cursor)).model_dump(mode="json")
     return sync.apply_changes(
-        engine, state["id"], state["epoch"], cursor, page, settings.ingestion_pipeline_version
+        engine,
+        state["id"],
+        state["epoch"],
+        cursor,
+        page,
+        settings.ingestion_pipeline_version,
+        ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
     )
 
 
@@ -77,14 +89,25 @@ def _dispatch(engine, settings):
     def publish_index(job_id):
         app.send_task("kanzlei_ai.index_document", args=[job_id])
 
+    def publish_ocr(job_id, profile):
+        app.send_task(f"kanzlei_ai.extract_{profile}", args=[job_id], queue=f"ocr-{profile}")
+
     if settings.search_index_enabled:
-        return outbox.dispatch(engine, publish_extract, publish_index=publish_index)
-    return outbox.dispatch(engine, publish_extract)
+        return outbox.dispatch(
+            engine,
+            publish_extract,
+            publish_index=publish_index,
+            publish_ocr=publish_ocr,
+            index_profile=configured_index_profile(settings),
+        )
+    return outbox.dispatch(engine, publish_extract, publish_ocr=publish_ocr)
 
 
 def _recover(engine, settings):
     if settings.search_index_enabled:
-        return outbox.recover(engine, include_index=True)
+        return outbox.recover(
+            engine, include_index=True, index_profile=configured_index_profile(settings)
+        )
     return outbox.recover(engine)
 
 
@@ -100,10 +123,24 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     for command in ("migrate", "scan", "sync-once", "recover", "dispatch", "run"):
         commands.add_parser(command)
-    reindex_parser = commands.add_parser("reindex")
+    reindex_parser = commands.add_parser("reindex", help="Queue indexing of saved artifacts")
     reindex_parser.add_argument("--connector")
     reindex_parser.add_argument("--cursor", type=int, default=0)
     reindex_parser.add_argument("--limit", type=int, default=100)
+    reindex_parser.add_argument(
+        "--missing-only",
+        action="store_true",
+        help="Skip current artifacts already indexed under the configured model profile",
+    )
+    cutover_parser = commands.add_parser(
+        "cutover-ocr", help="Select Mistral OCR for new revisions of one connector"
+    )
+    cutover_parser.add_argument("--connector")
+    requeue_parser = commands.add_parser(
+        "requeue-extract", help="Re-extract one active PDF under the current OCR profile"
+    )
+    requeue_parser.add_argument("source_id")
+    requeue_parser.add_argument("--connector")
     args = parser.parse_args()
     settings = Settings()
     if args.command == "reindex":
@@ -131,8 +168,22 @@ def main():
                 args.connector or settings.ingestion_connector_id,
                 after=args.cursor,
                 limit=args.limit,
+                profile=configured_index_profile(settings),
+                missing_only=args.missing_only,
             )
             print(json.dumps(asdict(result)))
+        elif args.command == "cutover-ocr":
+            changed = sync.cutover_ocr(engine, args.connector or settings.ingestion_connector_id)
+            print(json.dumps({"changed": changed, "ocr_profile": "mistral"}))
+        elif args.command == "requeue-extract":
+            job_id = sync.requeue_extract(
+                engine,
+                args.connector or settings.ingestion_connector_id,
+                args.source_id,
+                settings.ingestion_pipeline_version,
+                ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
+            )
+            print(json.dumps({"job_id": job_id}))
         else:
             while True:
                 try:

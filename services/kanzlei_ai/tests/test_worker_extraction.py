@@ -19,6 +19,8 @@ def test_worker_marks_connector_source_limit_as_terminal(monkeypatch):
         lambda *_: {
             "connector_id": "erp",
             "generation": 1,
+            "ocr_profile": "native",
+            "plan": None,
             "manifest": {
                 "source_id": "file:limit",
                 "revision": "a" * 64,

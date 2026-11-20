@@ -137,7 +137,7 @@ def test_coordinator_recovers_and_dispatches_when_polling_disabled(monkeypatch):
         coordinator.outbox, "recover", lambda engine: events.append(("recover", engine))
     )
 
-    def dispatch(engine, publish):
+    def dispatch(engine, publish, *, publish_ocr):
         events.append(("dispatch", engine))
         publish("job-id")
 
@@ -163,7 +163,7 @@ def test_erp_failure_occurs_after_recovery_and_dispatch(monkeypatch):
     events = []
     monkeypatch.setattr(coordinator.outbox, "recover", lambda engine: events.append("recover"))
     monkeypatch.setattr(
-        coordinator.outbox, "dispatch", lambda engine, publish: events.append("dispatch")
+        coordinator.outbox, "dispatch", lambda engine, publish, **_: events.append("dispatch")
     )
 
     def fail(*_):

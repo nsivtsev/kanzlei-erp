@@ -94,6 +94,8 @@ def _expire(database, job_id):
 class Projection:
     """Capture confirmed external writes and allow changes during the write window."""
 
+    profile = "synthetic-v1"
+
     def __init__(self, during_stage=lambda: None):
         self.during_stage = during_stage
         self.staged = []

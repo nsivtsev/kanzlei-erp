@@ -574,6 +574,8 @@ def test_cancellation_respects_chat_commit_boundary(chat, database, monkeypatch,
 
 
 def test_migration_preserves_task6_rows(database):
+    from alembic.script import ScriptDirectory
+
     from kanzlei_ai import db
 
     config = Config()
@@ -587,6 +589,8 @@ def test_migration_preserves_task6_rows(database):
     with database.begin() as connection:
         assert "chat_conversations" in inspect(connection).get_table_names()
         assert "chat_turns" in inspect(connection).get_table_names()
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")).startswith("0005")
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            ScriptDirectory.from_config(config).get_current_head()
+        )
         assert connection.scalar(select(index_publications.c.publication_id)) == old.publication_id
         assert connection.scalar(select(document_chunks.c.id)) == old.chunk_id

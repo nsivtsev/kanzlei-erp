@@ -1,7 +1,9 @@
-"""Celery tasks for fenced native-PDF extraction and indexing."""
+"""Celery tasks for fenced PDF extraction and indexing."""
 
 import asyncio
 import logging
+from dataclasses import asdict, replace
+from hashlib import sha256
 
 from celery import Celery
 
@@ -9,9 +11,12 @@ from kanzlei_ai.db import engine_from_settings
 from kanzlei_ai.jobs import (
     claim,
     complete,
+    extraction_claim_is_live,
     fail,
     fail_terminal,
     publish_extraction,
+    save_extraction_plan,
+    save_ocr_page,
     source_for_claim,
 )
 from kanzlei_ai.settings import Settings
@@ -41,12 +46,28 @@ app.conf.update(
 
 @app.task(name="kanzlei_ai.stage_metadata")
 def stage_metadata(job_id):
+    _run_extraction(job_id, "native")
+
+
+@app.task(name="kanzlei_ai.extract_paddle")
+def extract_paddle(job_id):
+    _run_extraction(job_id, "paddle")
+
+
+@app.task(name="kanzlei_ai.extract_mistral")
+def extract_mistral(job_id):
+    _run_extraction(job_id, "mistral")
+
+
+def _run_extraction(job_id, profile):
     engine = None
     token = None
     try:
         settings = Settings()
+        if profile != "native" and not settings.ingestion_enabled:
+            return
         engine = engine_from_settings(settings)
-        token = claim(engine, job_id)
+        token = claim(engine, job_id, ocr_profile=profile)
         if token:
             _extract_or_stage(engine, job_id, token, settings)
     except Exception:
@@ -55,7 +76,7 @@ def stage_metadata(job_id):
                 fail(engine, job_id, token)
             except Exception:
                 pass  # Expired-lease recovery handles an unavailable database.
-        logging.getLogger(__name__).error("Metadata staging failed; recovery will retry")
+        logging.getLogger(__name__).error("Extraction task failed; recovery will retry")
     finally:
         if engine is not None:
             engine.dispose()
@@ -64,7 +85,12 @@ def stage_metadata(job_id):
 @app.task(name="kanzlei_ai.index_document")
 def index_document(job_id):
     from kanzlei_ai.search.index import SearchIndex
-    from kanzlei_ai.search.publication import INDEX_STAGE, INDEX_UNAVAILABLE, process
+    from kanzlei_ai.search.publication import (
+        INDEX_STAGE,
+        INDEX_UNAVAILABLE,
+        configured_index_profile,
+        process,
+    )
 
     engine = None
     token = None
@@ -73,9 +99,17 @@ def index_document(job_id):
         if not settings.search_index_enabled:
             return
         engine = engine_from_settings(settings)
-        token = claim(engine, job_id, stage=INDEX_STAGE)
+        token = claim(
+            engine, job_id, stage=INDEX_STAGE, pipeline_version=configured_index_profile(settings)
+        )
         if token:
-            process(engine, job_id, token, SearchIndex.from_settings(settings))
+            process(
+                engine,
+                job_id,
+                token,
+                SearchIndex.from_settings(settings),
+                authorize=_index_authorizer(settings),
+            )
     except Exception:
         if token and engine is not None:
             try:
@@ -100,6 +134,23 @@ def _background_connector(settings):
         site_name=settings.erp_site_name,
         timeout_seconds=settings.erp_timeout_seconds,
     )
+
+
+def _ocr_provider(settings, profile):
+    """Integration hook for the explicitly selected worker's OCR adapter."""
+    from kanzlei_ai.documents.parse import TerminalExtractionError
+
+    raise TerminalExtractionError("OCR_PROVIDER_UNCONFIGURED")
+
+
+def _authorize_ocr(settings, source):
+    """Integration hook for authorization immediately before external OCR."""
+    return False
+
+
+def _index_authorizer(settings):
+    """Integration hook for the external embedding processing policy."""
+    return None
 
 
 def _artifact_store(settings):
@@ -138,7 +189,91 @@ def _artifact_store(settings):
     )
 
 
-def _extract_or_stage(engine, job_id, token, settings):
+def _process_extraction_portion(engine, job_id, token, settings, source, context, factory):
+    from kanzlei_ai.documents.artifacts import LimitExceeded
+    from kanzlei_ai.documents.parse import Block, ParsedPdf, TerminalExtractionError, parse_pdf
+
+    plan = context["plan"]
+    profile = context["ocr_profile"]
+    if plan is None:
+        content = asyncio.run(_background_connector(settings).read_background_source(source))
+        parsed = parse_pdf(content, allow_missing_text=True)
+        if profile == "native":
+            if not parsed.blocks:
+                raise TerminalExtractionError("OCR_REQUIRED")
+            return parsed
+        if not parsed.ocr_pages:
+            return parsed
+        if len(parsed.artifact_bytes()) > settings.artifact_max_bytes:
+            raise LimitExceeded
+        save_extraction_plan(
+            engine,
+            job_id,
+            token,
+            {
+                "parser_version": parsed.parser_version,
+                "content_sha256": parsed.content_sha256,
+                "page_count": parsed.page_count,
+                "native_blocks": [asdict(block) for block in parsed.blocks],
+                "ocr_pages": list(parsed.ocr_pages),
+            },
+        )
+        return None
+
+    checkpoints = context["checkpoints"]
+    blocks = [Block(**block) for block in plan["native_blocks"]]
+    for checkpoint in checkpoints:
+        blocks.extend(Block(**block) for block in checkpoint["blocks"])
+    parsed = ParsedPdf(plan["parser_version"], plan["content_sha256"], plan["page_count"], blocks)
+    completed = {item["page"] for item in checkpoints}
+    pending = [page for page in plan["ocr_pages"] if page not in completed]
+    if pending:
+        content = asyncio.run(_background_connector(settings).read_background_source(source))
+        if sha256(content).hexdigest() != parsed.content_sha256:
+            raise TerminalExtractionError("SOURCE_CONTENT_CHANGED")
+        if not extraction_claim_is_live(engine, job_id, token):
+            return None
+        provider = factory(settings, profile)
+        adapter_profile = provider.profile
+        if not isinstance(adapter_profile, str) or not 1 <= len(adapter_profile) <= 100:
+            raise TerminalExtractionError("OCR_PROVIDER_UNCONFIGURED")
+        if checkpoints and adapter_profile != checkpoints[0]["provider_profile"]:
+            raise TerminalExtractionError("OCR_PROFILE_CHANGED")
+        page = pending[0]
+        if profile == "mistral":
+            if _authorize_ocr(settings, source) is not True:
+                raise TerminalExtractionError("OCR_PROCESSING_DENIED")
+            if not extraction_claim_is_live(engine, job_id, token):
+                return None
+        recognized = provider.recognize_page(content, page)
+        if not isinstance(recognized, list) or any(
+            not isinstance(block, Block)
+            or block.page != page
+            or block.kind not in ("text", "table")
+            or not isinstance(block.text, str)
+            or "\x00" in block.text
+            for block in recognized
+        ):
+            raise TerminalExtractionError("OCR_INVALID_RESULT")
+        page_blocks = [block for block in recognized if block.text.strip()]
+        parsed = replace(parsed, blocks=blocks + page_blocks)
+        if len(parsed.artifact_bytes()) > settings.artifact_max_bytes:
+            raise LimitExceeded
+        save_ocr_page(
+            engine,
+            job_id,
+            token,
+            {
+                "page": page,
+                "provider_profile": adapter_profile,
+                "blocks": [asdict(block) for block in page_blocks],
+            },
+        )
+        return None
+    return replace(parsed, blocks=sorted(parsed.blocks, key=lambda block: block.page))
+
+
+def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=None):
     # Keep the previous metadata-only mode available for recovery tests. A
     # configured ingestion worker uses only its fixed private key, never a grant.
     if not settings.ingestion_enabled:
@@ -147,7 +282,8 @@ def _extract_or_stage(engine, job_id, token, settings):
     from kanzlei_ai.connectors.contracts import SourceRef
     from kanzlei_ai.documents.artifacts import LimitExceeded
     from kanzlei_ai.documents.chunk import ChunkInput, OversizedTable, deterministic_chunks
-    from kanzlei_ai.documents.parse import ExtractionError, parse_pdf
+    from kanzlei_ai.documents.parse import ExtractionError, TerminalExtractionError
+    from kanzlei_ai.search.publication import configured_index_profile
 
     context = source_for_claim(engine, job_id, token)
     if context is None:
@@ -162,8 +298,19 @@ def _extract_or_stage(engine, job_id, token, settings):
         client_id=sorted(manifest["client_ids"])[0],
     )
     try:
-        content = asyncio.run(_background_connector(settings).read_background_source(source))
-        parsed = parse_pdf(content)
+        parsed = _process_extraction_portion(
+            engine,
+            job_id,
+            token,
+            settings,
+            source,
+            context,
+            ocr_provider_factory or _ocr_provider,
+        )
+        if parsed is None:
+            return False
+        if not parsed.blocks:
+            raise TerminalExtractionError("OCR_NO_TEXT")
         chunks = deterministic_chunks(
             ChunkInput(
                 connector_id=context["connector_id"],
@@ -178,6 +325,8 @@ def _extract_or_stage(engine, job_id, token, settings):
                 ],
             )
         )
+        if not extraction_claim_is_live(engine, job_id, token):
+            return False
         store = _artifact_store(settings)
         key = store.put(
             f"{context['connector_id']}/{source.source_id}/{source.revision}/{context['generation']}",
@@ -204,6 +353,9 @@ def _extract_or_stage(engine, job_id, token, settings):
                 ],
             },
             enqueue_index=settings.search_index_enabled,
+            index_profile=configured_index_profile(settings)
+            if settings.search_index_enabled
+            else None,
         )
         # Immutable unreferenced objects are left for a retention sweep.  A
         # stale claimant must never delete an object another claimant published.

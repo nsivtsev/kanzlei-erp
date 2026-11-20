@@ -1,0 +1,615 @@
+"""Durable extraction routing and page checkpoints against PostgreSQL."""
+
+from dataclasses import dataclass
+from hashlib import sha256
+from types import SimpleNamespace
+
+import pytest
+from sqlalchemy import select, text, update
+
+from kanzlei_ai import coordinator, outbox, sync, worker
+from kanzlei_ai import jobs as job_service
+from kanzlei_ai.documents.parse import Block, RetryableExtractionError
+from kanzlei_ai.models import document_chunks, jobs, sources
+from kanzlei_ai.search import publication
+
+pytestmark = pytest.mark.integration
+
+
+def _manifest(source="file:ocr", revision="a"):
+    return {
+        "version": 1,
+        "source_id": source,
+        "source_type": "file",
+        "revision": revision * 64,
+        "client_ids": ["synthetic-client"],
+        "title": "Synthetic",
+        "mime_type": "application/pdf",
+        "source_modified_at": "2026-01-01",
+        "locator": "/synthetic",
+        "byte_size": 1,
+        "active": True,
+    }
+
+
+def _inventory(database, *manifests, profile="paddle", pipeline_version=sync.PIPELINE_VERSION):
+    epoch = sync.start_scan(database, "synthetic")
+    assert sync.apply_inventory(
+        database,
+        "synthetic",
+        epoch,
+        None,
+        {"items": list(manifests), "next_cursor": None, "changes_cursor": "w"},
+        pipeline_version,
+        ocr_profile=profile,
+    )
+    return epoch
+
+
+def _jobs(database, stage="extract"):
+    with database.connect() as conn:
+        return (
+            conn.execute(
+                select(jobs, sources.c.source_id.label("external_id"))
+                .join(sources)
+                .where(jobs.c.stage == stage)
+                .order_by(sources.c.source_id, jobs.c.generation)
+            )
+            .mappings()
+            .all()
+        )
+
+
+def test_persisted_cutover_routes_only_new_revisions_and_explicit_requeue(database, monkeypatch):
+    sync.initialize(database)
+    original = _manifest()
+    other = _manifest("file:other")
+    _inventory(database, original, other)
+    assert sync.cutover_ocr(database, "synthetic")
+    assert not sync.cutover_ocr(database, "synthetic")
+
+    _inventory(database, original, _manifest("file:other", "b"), profile="native")
+    archive, previous, new = _jobs(database)
+    assert [(item["generation"], item["ocr_profile"]) for item in (archive, previous, new)] == [
+        (1, "paddle"),
+        (1, "paddle"),
+        (2, "mistral"),
+    ]
+
+    sent = []
+    monkeypatch.setattr(
+        coordinator.app, "send_task", lambda task, **kwargs: sent.append((task, kwargs))
+    )
+    assert coordinator._dispatch(database, SimpleNamespace(search_index_enabled=False)) == 3
+    routes = {kwargs["args"][0]: (task, kwargs["queue"]) for task, kwargs in sent}
+    assert routes[archive["id"]] == ("kanzlei_ai.extract_paddle", "ocr-paddle")
+    assert routes[new["id"]] == ("kanzlei_ai.extract_mistral", "ocr-mistral")
+    assert job_service.claim(database, archive["id"], ocr_profile="mistral") is None
+
+    assert sync.requeue_extract(database, "synthetic", original["source_id"]) is not None
+    assert sync.requeue_extract(database, "synthetic", original["source_id"]) is None
+    _inventory(database, original, _manifest("file:other", "b"))
+    archive, replacement, previous, new = _jobs(database)
+    assert archive["status"] == "superseded"
+    assert (replacement["generation"], replacement["ocr_profile"]) == (2, "mistral")
+    assert (previous["generation"], new["generation"]) == (1, 2)
+
+
+def test_explicit_pipeline_version_change_still_creates_new_generation(database):
+    sync.initialize(database)
+    original = _manifest()
+    _inventory(database, original, profile="native")
+    assert sync.cutover_ocr(database, "synthetic")
+    _inventory(database, original, pipeline_version="pdf-explicit-v2")
+
+    assert [(item["generation"], item["ocr_profile"]) for item in _jobs(database)] == [
+        (1, "native"),
+        (2, "native"),
+    ]
+
+
+@pytest.fixture
+def extraction(monkeypatch):
+    from kanzlei_ai.documents import parse
+
+    content = b"synthetic"
+    parse_calls = []
+    ocr_calls = []
+    uploads = []
+
+    @dataclass(frozen=True)
+    class PlannedPdf(parse.ParsedPdf):
+        ocr_pages: tuple[int, ...] = (2, 3)
+
+    class Connector:
+        async def read_background_source(self, _source):
+            return content
+
+    def parse_pdf(pdf, *, allow_missing_text=False):
+        assert pdf == content
+        assert allow_missing_text
+        parse_calls.append(pdf)
+        return PlannedPdf(
+            "synthetic-parser",
+            sha256(pdf).hexdigest(),
+            3,
+            [Block(1, "text", "Native text")],
+            ocr_pages=(2, 3),
+        )
+
+    class Provider:
+        profile = "paddle"
+
+        def recognize_page(self, pdf, page):
+            assert pdf == content
+            ocr_calls.append(page)
+            if page == 3 and ocr_calls.count(page) == 1:
+                raise RetryableExtractionError()
+            return [Block(page, "table", "| Betrag |\n| --- |\n| 120 EUR |")]
+
+    def put(_namespace, payload):
+        uploads.append(payload)
+        return "synthetic/artifact"
+
+    monkeypatch.setattr(worker, "_background_connector", lambda _settings: Connector())
+    monkeypatch.setattr(parse, "parse_pdf", parse_pdf)
+    monkeypatch.setattr(worker, "_artifact_store", lambda _settings: SimpleNamespace(put=put))
+    settings = SimpleNamespace(
+        ingestion_enabled=True, search_index_enabled=False, artifact_max_bytes=32_768
+    )
+    return SimpleNamespace(
+        parse_calls=parse_calls,
+        ocr_calls=ocr_calls,
+        uploads=uploads,
+        settings=settings,
+        provider=lambda _settings, _profile: Provider(),
+    )
+
+
+def test_resume_after_page_failure_reuses_completed_pages_without_duplicate_publish(
+    database,
+    extraction,
+):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+
+    def deliver():
+        token = job_service.claim(database, job_id, ocr_profile="paddle")
+        assert token
+        return worker._extract_or_stage(
+            database,
+            job_id,
+            token,
+            extraction.settings,
+            ocr_provider_factory=extraction.provider,
+        )
+
+    assert not deliver()  # Native planning is bounded independently of OCR.
+    assert not deliver()  # Page 2 durably commits and queues the next portion.
+    assert not deliver()  # Page 3 retry.
+    assert job_service.claim(database, job_id, ocr_profile="paddle") is None
+    with database.begin() as conn:
+        conn.execute(update(jobs).values(retry_not_before=text("clock_timestamp()")))
+    assert not deliver()  # Page 3 commits before a separate publication claim.
+    assert deliver()
+    assert not job_service.claim(database, job_id, ocr_profile="paddle")
+
+    assert len(extraction.parse_calls) == 1
+    assert extraction.ocr_calls == [2, 3, 3]
+    assert len(extraction.uploads) == 1
+    with database.connect() as conn:
+        chunks = conn.execute(
+            select(document_chunks.c.page, document_chunks.c.kind).order_by(document_chunks.c.page)
+        ).all()
+    assert chunks == [(1, "text"), (2, "table"), (3, "table")]
+
+
+@pytest.mark.parametrize("invalidate", ["lease", "revision"])
+def test_ocr_during_stale_claim_cannot_checkpoint_or_publish(database, extraction, invalidate):
+    from kanzlei_ai import models
+
+    sync.initialize(database)
+    original = _manifest()
+    _inventory(database, original)
+    job_id = _jobs(database)[0]["id"]
+    token = job_service.claim(database, job_id, ocr_profile="paddle")
+    assert not worker._extract_or_stage(
+        database,
+        job_id,
+        token,
+        extraction.settings,
+        ocr_provider_factory=extraction.provider,
+    )
+    token = job_service.claim(database, job_id, ocr_profile="paddle")
+
+    def recognize_page(_content, page):
+        if invalidate == "revision":
+            _inventory(database, _manifest(revision="b"))
+        else:
+            with database.begin() as conn:
+                conn.execute(
+                    update(jobs).values(lease_until=text("clock_timestamp() - interval '1s'"))
+                )
+        return [Block(page, "text", "stale")]
+
+    assert not worker._extract_or_stage(
+        database,
+        job_id,
+        token,
+        extraction.settings,
+        ocr_provider_factory=lambda *_: SimpleNamespace(
+            profile="paddle", recognize_page=recognize_page
+        ),
+    )
+    with database.connect() as conn:
+        assert conn.execute(select(models.ocr_page_checkpoints)).all() == []
+        assert conn.execute(select(document_chunks)).all() == []
+    assert extraction.uploads == []
+
+
+def test_profile_reindex_uses_saved_chunks_and_can_skip_current_publications(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract = _jobs(database)[0]
+    token = job_service.claim(database, extract["id"], ocr_profile="paddle")
+    assert job_service.publish_extraction(
+        database,
+        extract["id"],
+        token,
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [{"id": "chunk", "page": 1, "kind": "text", "ordinal": 0, "text": "saved"}],
+        },
+    )
+    live = "mistral-embed-v1"
+    assert publication.reindex(database, "synthetic", profile=live, missing_only=True).queued == 1
+    assert publication.reindex(database, "synthetic", profile=live, missing_only=True).queued == 0
+    index_job = _jobs(database, "index")[0]
+    staged = []
+    token = job_service.claim(database, index_job["id"], stage="index")
+    assert not publication.process(
+        database,
+        index_job["id"],
+        token,
+        SimpleNamespace(profile="synthetic-v1", stage=lambda **data: staged.append(data)),
+    )
+    assert staged == []
+
+    def stage(*, before_embed, **data):
+        before_embed()
+        staged.append(data)
+
+    assert publication.process(
+        database,
+        index_job["id"],
+        token,
+        SimpleNamespace(profile=live, stage=stage),
+        authorize=lambda **_: True,
+    )
+    assert staged[0]["chunks"][0]["text"] == "saved"
+    assert publication.reindex(database, "synthetic", profile=live, missing_only=True).queued == 0
+    assert len(_jobs(database)) == 1
+
+
+def test_native_default_routes_original_task_and_recovery_routes_ocr_profile(database):
+    sync.initialize(database)
+    _inventory(database, _manifest("file:native"), profile="native")
+    epoch = sync.start_scan(database, "paddle-archive")
+    assert sync.apply_inventory(
+        database,
+        "paddle-archive",
+        epoch,
+        None,
+        {"items": [_manifest("file:paddle")], "next_cursor": None, "changes_cursor": "w"},
+        ocr_profile="paddle",
+    )
+    native, paddle = _jobs(database)
+    native_sent, ocr_sent = [], []
+    assert (
+        outbox.dispatch(
+            database, native_sent.append, publish_ocr=lambda *args: ocr_sent.append(args)
+        )
+        == 2
+    )
+
+    with database.begin() as conn:
+        conn.execute(update(jobs).values(updated_at=text("clock_timestamp() - interval '61s'")))
+    assert outbox.recover(database) == 2
+    assert (
+        outbox.dispatch(
+            database, native_sent.append, publish_ocr=lambda *args: ocr_sent.append(args)
+        )
+        == 2
+    )
+    assert native_sent == [native["id"], native["id"]]
+    assert ocr_sent == [(paddle["id"], "paddle"), (paddle["id"], "paddle")]
+
+
+def test_usable_native_pdf_never_constructs_selected_ocr_provider(
+    database, extraction, monkeypatch
+):
+    from kanzlei_ai.documents import parse
+
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+    token = job_service.claim(database, job_id, ocr_profile="paddle")
+
+    @dataclass(frozen=True)
+    class NativePdf(parse.ParsedPdf):
+        ocr_pages: tuple[int, ...] = ()
+
+    def parse_pdf(content, *, allow_missing_text):
+        assert allow_missing_text
+        return NativePdf("native-v1", sha256(content).hexdigest(), 1, [Block(1, "text", "native")])
+
+    def reject_ocr(*_):
+        pytest.fail("Usable native text triggered OCR")
+
+    monkeypatch.setattr(parse, "parse_pdf", parse_pdf)
+    assert worker._extract_or_stage(
+        database, job_id, token, extraction.settings, ocr_provider_factory=reject_ocr
+    )
+    assert extraction.ocr_calls == []
+    assert len(extraction.uploads) == 1
+
+
+def test_embedding_policy_denial_fails_closed_before_staging(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract = _jobs(database)[0]
+    token = job_service.claim(database, extract["id"])
+    live = "mistral-embed-v1"
+    assert job_service.publish_extraction(
+        database,
+        extract["id"],
+        token,
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [],
+        },
+        enqueue_index=True,
+        index_profile=live,
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    token = job_service.claim(database, job_id, stage="index", pipeline_version=live)
+
+    def reject_stage(**_):
+        pytest.fail("Unauthorized index attempted to stage chunks")
+
+    assert not publication.process(
+        database,
+        job_id,
+        token,
+        SimpleNamespace(profile=live, stage=reject_stage),
+    )
+    assert _jobs(database, "index")[0]["error_code"] == "INDEX_PROCESSING_DENIED"
+
+
+def test_old_index_profile_cannot_activate_after_new_profile_queued(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract = _jobs(database)[0]
+    token = job_service.claim(database, extract["id"])
+    assert job_service.publish_extraction(
+        database,
+        extract["id"],
+        token,
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [],
+        },
+        enqueue_index=True,
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    token = job_service.claim(database, job_id, stage="index")
+
+    def stage(**_):
+        assert publication.reindex(database, "synthetic", profile="mistral-embed-v1").queued == 1
+
+    assert not publication.process(
+        database,
+        job_id,
+        token,
+        SimpleNamespace(profile="synthetic-v1", stage=stage),
+    )
+    assert {item["pipeline_version"]: item["status"] for item in _jobs(database, "index")} == {
+        "synthetic-v1": "superseded",
+        "mistral-embed-v1": "queued",
+    }
+
+
+def test_embedding_authorization_runs_before_each_provider_batch(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract = _jobs(database)[0]
+    token = job_service.claim(database, extract["id"])
+    live = "mistral-embed-v1"
+    assert job_service.publish_extraction(
+        database,
+        extract["id"],
+        token,
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [{"id": "chunk", "page": 1, "kind": "text", "ordinal": 0, "text": "saved"}],
+        },
+        enqueue_index=True,
+        index_profile=live,
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    token = job_service.claim(database, job_id, stage="index")
+    policy_checks, batches = [], []
+
+    def authorize(**source):
+        policy_checks.append(source)
+        return len(policy_checks) == 1
+
+    def stage(*, before_embed, **_):
+        for number in (1, 2):
+            before_embed()
+            batches.append(number)
+
+    assert not publication.process(
+        database, job_id, token, SimpleNamespace(profile=live, stage=stage), authorize=authorize
+    )
+    assert (
+        policy_checks
+        == [
+            {
+                "connector_id": "synthetic",
+                "source_id": "file:ocr",
+                "revision": "a" * 64,
+                "client_ids": ("synthetic-client",),
+            }
+        ]
+        * 2
+    )
+    assert batches == [1]
+    assert _jobs(database, "index")[0]["error_code"] == "INDEX_PROCESSING_DENIED"
+
+
+def test_mistral_ocr_denial_happens_before_external_page_call(database, extraction, monkeypatch):
+    sync.initialize(database)
+    sync.start_scan(database, "synthetic")
+    sync.cutover_ocr(database, "synthetic")
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+    authorize_calls = []
+
+    def deny(_settings, source):
+        authorize_calls.append(source.source_id)
+        return False
+
+    monkeypatch.setattr(worker, "_authorize_ocr", deny, raising=False)
+
+    for _ in range(2):  # Plan, then the first Mistral page.
+        token = job_service.claim(database, job_id, ocr_profile="mistral")
+        assert token
+        assert not worker._extract_or_stage(
+            database,
+            job_id,
+            token,
+            extraction.settings,
+            ocr_provider_factory=extraction.provider,
+        )
+    assert authorize_calls == ["file:ocr"]
+    assert extraction.ocr_calls == []
+    assert _jobs(database)[0]["error_code"] == "OCR_PROCESSING_DENIED"
+
+
+def test_recovery_exhaustion_fails_current_ocr_source(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+    assert job_service.claim(database, job_id, ocr_profile="paddle")
+    with database.begin() as conn:
+        conn.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                attempts=job_service.MAX_ATTEMPTS,
+                lease_until=text("clock_timestamp() - interval '1s'"),
+            )
+        )
+    assert outbox.recover(database) == 0
+    with database.connect() as conn:
+        assert conn.execute(select(sources.c.status, sources.c.error_code)).one() == (
+            "failed",
+            "RETRY_EXHAUSTED",
+        )
+    assert _jobs(database)[0]["status"] == "failed"
+
+
+def test_paddle_worker_consumes_only_its_queue(database, extraction, monkeypatch):
+    import time
+    from uuid import uuid4
+
+    from celery.contrib.testing.worker import start_worker
+    from redis import Redis
+
+    from kanzlei_ai.settings import Settings
+
+    sync.initialize(database)
+    _inventory(database, _manifest("file:archive"))
+    sync.cutover_ocr(database, "synthetic")
+    _inventory(database, _manifest("file:archive"), _manifest("file:new"))
+    redis_url = Settings().redis_url.get_secret_value()
+    prefix = f"ocr_test_{uuid4().hex}_"
+    redis = Redis.from_url(redis_url)
+    monkeypatch.setitem(worker.app.conf, "broker_url", redis_url)
+    monkeypatch.setitem(worker.app.conf, "broker_transport_options", {"global_keyprefix": prefix})
+    monkeypatch.setattr(worker, "Settings", lambda: extraction.settings)
+    monkeypatch.setattr(worker, "engine_from_settings", lambda _: database)
+    handled = []
+
+    def recognize_page(_content, page):
+        handled.append(page)
+        return [Block(page, "text", f"Synthetic {page}")]
+
+    def provider(_settings, profile):
+        assert profile == "paddle"
+        return SimpleNamespace(profile="paddle-test", recognize_page=recognize_page)
+
+    monkeypatch.setattr(worker, "_ocr_provider", provider)
+    try:
+        with (
+            worker.app.connection_for_write() as connection,
+            start_worker(
+                worker.app, queues=["ocr-paddle"], perform_ping_check=False, loglevel="CRITICAL"
+            ),
+        ):
+            # Other tests used the same app with a different broker key prefix.
+            # Use this connection instead of reusing the cached producer pool.
+            producer = worker.app.amqp.Producer(connection)
+            send_task = worker.app.send_task
+            monkeypatch.setattr(
+                worker.app,
+                "send_task",
+                lambda *args, **kw: send_task(*args, producer=producer, **kw),
+            )
+            archive, cloud = _jobs(database)
+            worker.app.send_task(
+                "kanzlei_ai.extract_paddle", args=[archive["id"]], queue="ocr-paddle"
+            )
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                coordinator._dispatch(database, extraction.settings)
+                archive, cloud = _jobs(database)
+                if archive["status"] == "completed":
+                    break
+                time.sleep(0.05)
+            assert archive["status"] == "completed"
+            assert cloud["status"] == "queued"
+            assert cloud["attempts"] == 0
+            assert handled == [2, 3]
+            assert len(extraction.uploads) == 1
+    finally:
+        for key in redis.scan_iter(match=prefix + "*"):
+            redis.delete(key)
+        redis.close()
+
+
+def test_native_mode_keeps_text_available_on_a_mixed_pdf(database, extraction):
+    sync.initialize(database)
+    _inventory(database, _manifest(), profile="native")
+    job_id = _jobs(database)[0]["id"]
+    token = job_service.claim(database, job_id, ocr_profile="native")
+    assert worker._extract_or_stage(
+        database, job_id, token, extraction.settings, ocr_provider_factory=extraction.provider
+    )
+    assert extraction.ocr_calls == []
+    with database.connect() as conn:
+        assert conn.execute(select(document_chunks.c.page)).scalar_one() == 1

@@ -18,6 +18,7 @@ from kanzlei_ai.models import (
 )
 
 PIPELINE_VERSION = "pdf-native-v1"
+ARCHIVE_OCR_PROFILES = ("native", "paddle")
 
 
 def initialize(engine):
@@ -49,7 +50,7 @@ def start_scan(engine, connector_id, expected_epoch=None):
         return epoch
 
 
-def _enqueue(conn, source_id, revision, generation, pipeline_version):
+def _enqueue(conn, source_id, revision, generation, pipeline_version, ocr_profile):
     job_id = str(uuid.uuid4())
     conn.execute(
         insert(jobs).values(
@@ -58,10 +59,117 @@ def _enqueue(conn, source_id, revision, generation, pipeline_version):
             revision=revision,
             pipeline_version=pipeline_version,
             generation=generation,
+            ocr_profile=ocr_profile,
             status="queued",
         )
     )
     conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
+    return job_id
+
+
+def _effective_ocr_profile(connector, ocr_profile):
+    if ocr_profile not in ARCHIVE_OCR_PROFILES:
+        raise ValueError("Initial OCR profile must be native or paddle")
+    return connector["ocr_profile_override"] or ocr_profile
+
+
+def cutover_ocr(engine, connector_id):
+    """Opt a connector into Mistral for newly discovered source revisions."""
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(connectors.c.ocr_profile_override)
+            .where(connectors.c.id == connector_id)
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            raise ValueError("Unknown connector")
+        if row.ocr_profile_override == "mistral":
+            return False
+        conn.execute(
+            update(connectors)
+            .where(connectors.c.id == connector_id)
+            .values(ocr_profile_override="mistral")
+        )
+        return True
+
+
+def _latest_extract(conn, source_id, revision):
+    return (
+        conn.execute(
+            select(jobs.c.pipeline_version, jobs.c.ocr_profile, jobs.c.generation, jobs.c.status)
+            .where(
+                jobs.c.source_id == source_id,
+                jobs.c.revision == revision,
+                jobs.c.stage == "extract",
+            )
+            .order_by(jobs.c.generation.desc())
+            .limit(1)
+        )
+        .mappings()
+        .first()
+    )
+
+
+def requeue_extract(
+    engine, connector_id, source_id, pipeline_version=PIPELINE_VERSION, *, ocr_profile="native"
+):
+    """Explicitly re-extract one active PDF under the connector's current profile."""
+    with engine.begin() as conn:
+        connector = (
+            conn.execute(
+                select(connectors).where(connectors.c.id == connector_id).with_for_update()
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if connector is None:
+            raise ValueError("Unknown connector")
+        profile = _effective_ocr_profile(connector, ocr_profile)
+        source = (
+            conn.execute(
+                select(sources)
+                .where(sources.c.connector_id == connector_id, sources.c.source_id == source_id)
+                .with_for_update()
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            source is None
+            or not source["active"]
+            or source["manifest"]["mime_type"] != "application/pdf"
+        ):
+            raise ValueError("Active PDF source required")
+        pk, revision, generation = source["id"], source["revision"], source["generation"]
+        existing = _latest_extract(conn, pk, revision)
+        if (
+            existing
+            and existing["generation"] == generation
+            and existing["status"] in ("queued", "running")
+            and existing["pipeline_version"] == pipeline_version
+            and existing["ocr_profile"] == profile
+        ):
+            return None
+        conn.execute(
+            update(jobs)
+            .where(
+                jobs.c.source_id == pk,
+                jobs.c.generation == generation,
+                jobs.c.status.in_(("queued", "running")),
+            )
+            .values(
+                status="superseded",
+                lease_token=None,
+                lease_until=None,
+                updated_at=func.clock_timestamp(),
+            )
+        )
+        conn.execute(
+            update(sources)
+            .where(sources.c.id == pk)
+            .values(generation=generation + 1, status="queued", error_code=None)
+        )
+        return _enqueue(conn, pk, revision, generation + 1, pipeline_version, profile)
 
 
 def _receipt(conn, connector_id, epoch, phase, expected_cursor, page):
@@ -82,7 +190,7 @@ def _receipt(conn, connector_id, epoch, phase, expected_cursor, page):
         )
 
 
-def _upsert(conn, connector_id, epoch, manifest, pipeline_version):
+def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
     manifest = SourceManifest.model_validate(manifest).model_dump(mode="json")
     row = (
         conn.execute(
@@ -107,25 +215,15 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version):
             ).scalars()
         )
     )
-    existing_pipeline = (
-        None
-        if row is None
-        else conn.execute(
-            select(jobs.c.pipeline_version)
-            .where(
-                jobs.c.source_id == row["id"],
-                jobs.c.generation == row["generation"],
-                jobs.c.stage == "extract",
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-    )
+    existing = None if row is None else _latest_extract(conn, row["id"], manifest["revision"])
     changed = (
         row is None
         or not row["active"]
         or row["revision"] != manifest["revision"]
         or not set(manifest["client_ids"]).issubset(current_clients)
-        or existing_pipeline != pipeline_version
+        or existing is None
+        or existing["generation"] != row["generation"]
+        or existing["pipeline_version"] != pipeline_version
     )
     incoming_clients = manifest["client_ids"]
     manifest["client_ids"] = sorted(current_clients | set(incoming_clients))
@@ -168,10 +266,13 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version):
             )
         )
     if changed:
-        _enqueue(conn, source_id, manifest["revision"], generation, pipeline_version)
+        selected_profile = existing["ocr_profile"] if existing else ocr_profile
+        _enqueue(
+            conn, source_id, manifest["revision"], generation, pipeline_version, selected_profile
+        )
 
 
-def _remove_relation(conn, source_id, client_id, pipeline_version):
+def _remove_relation(conn, source_id, client_id, pipeline_version, ocr_profile):
     result = conn.execute(
         delete(relations).where(
             and_(relations.c.source_id == source_id, relations.c.client_id == client_id)
@@ -200,11 +301,22 @@ def _remove_relation(conn, source_id, client_id, pipeline_version):
         )
     )
     if clients:
-        _enqueue(conn, source_id, source["revision"], generation, pipeline_version)
+        existing = _latest_extract(conn, source_id, source["revision"])
+        selected_profile = existing["ocr_profile"] if existing else ocr_profile
+        _enqueue(
+            conn, source_id, source["revision"], generation, pipeline_version, selected_profile
+        )
 
 
 def apply_inventory(
-    engine, connector_id, epoch, expected_cursor, page, pipeline_version=PIPELINE_VERSION
+    engine,
+    connector_id,
+    epoch,
+    expected_cursor,
+    page,
+    pipeline_version=PIPELINE_VERSION,
+    *,
+    ocr_profile="native",
 ):
     with engine.begin() as conn:
         state = (
@@ -224,8 +336,9 @@ def apply_inventory(
         watermark = page["changes_cursor"]
         if state["watermark"] is not None and state["watermark"] != watermark:
             raise ValueError("Inventory watermark changed")
+        profile = _effective_ocr_profile(state, ocr_profile)
         for manifest in page["items"]:
-            _upsert(conn, connector_id, epoch, manifest, pipeline_version)
+            _upsert(conn, connector_id, epoch, manifest, pipeline_version, profile)
         next_cursor = page["next_cursor"]
         if next_cursor is None:
             unseen = conn.execute(
@@ -240,7 +353,7 @@ def apply_inventory(
                 conn.execute(
                     select(sources.c.id).where(sources.c.id == source_id).with_for_update()
                 )
-                _remove_relation(conn, source_id, client_id, pipeline_version)
+                _remove_relation(conn, source_id, client_id, pipeline_version, profile)
         conn.execute(
             update(connectors)
             .where(connectors.c.id == connector_id)
@@ -258,7 +371,14 @@ def apply_inventory(
 
 
 def apply_changes(
-    engine, connector_id, epoch, expected_cursor, page, pipeline_version=PIPELINE_VERSION
+    engine,
+    connector_id,
+    epoch,
+    expected_cursor,
+    page,
+    pipeline_version=PIPELINE_VERSION,
+    *,
+    ocr_profile="native",
 ):
     with engine.begin() as conn:
         state = (
@@ -275,6 +395,7 @@ def apply_changes(
         ):
             return False
         _receipt(conn, connector_id, epoch, "changes", expected_cursor, page)
+        profile = _effective_ocr_profile(state, ocr_profile)
         for item in page["items"]:
             if item["operation"] == "upsert":
                 if (
@@ -282,7 +403,7 @@ def apply_changes(
                     or item["client_id"] not in item["manifest"]["client_ids"]
                 ):
                     raise ValueError("Mismatched change")
-                _upsert(conn, connector_id, epoch, item["manifest"], pipeline_version)
+                _upsert(conn, connector_id, epoch, item["manifest"], pipeline_version, profile)
             elif item["operation"] == "delete" and item["manifest"] is None:
                 source = conn.execute(
                     select(sources.c.id)
@@ -295,7 +416,7 @@ def apply_changes(
                     .with_for_update()
                 ).scalar_one_or_none()
                 if source is not None:
-                    _remove_relation(conn, source, item["client_id"], pipeline_version)
+                    _remove_relation(conn, source, item["client_id"], pipeline_version, profile)
             else:
                 raise ValueError("Invalid change")
         conn.execute(

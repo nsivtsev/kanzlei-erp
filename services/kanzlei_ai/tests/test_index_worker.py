@@ -19,7 +19,7 @@ def test_coordinator_exposes_index_route_only_when_enabled(monkeypatch):
     sent = []
     recovered = []
 
-    def dispatch(engine, publish, *, publish_index=None):
+    def dispatch(engine, publish, *, publish_index=None, publish_ocr, index_profile=None):
         publish("extract-id")
         if publish_index:
             publish_index("index-id")
@@ -41,4 +41,4 @@ def test_coordinator_exposes_index_route_only_when_enabled(monkeypatch):
         ("kanzlei_ai.stage_metadata", ["extract-id"]),
         ("kanzlei_ai.index_document", ["index-id"]),
     ]
-    assert recovered[-1] == {"include_index": True}
+    assert recovered[-1] == {"include_index": True, "index_profile": "synthetic-v1"}

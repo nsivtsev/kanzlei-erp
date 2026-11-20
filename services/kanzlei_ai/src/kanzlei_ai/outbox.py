@@ -9,10 +9,21 @@ from kanzlei_ai.jobs import MAX_ATTEMPTS, exhausted_code
 from kanzlei_ai.models import jobs, outbox, sources
 
 
-def dispatch(engine, publish, limit=50, *, publish_index=None):
-    publishers = {"extract": publish}
+def dispatch(
+    engine, publish, limit=50, *, publish_index=None, publish_ocr=None, index_profile=None
+):
+    routes = {"native": publish}
+    if publish_ocr is not None:
+        routes.update(
+            paddle=lambda job_id: publish_ocr(job_id, "paddle"),
+            mistral=lambda job_id: publish_ocr(job_id, "mistral"),
+        )
+    eligible = and_(jobs.c.stage == "extract", jobs.c.ocr_profile.in_(routes))
     if publish_index is not None:
-        publishers["index"] = publish_index
+        index_route = jobs.c.stage == "index"
+        if index_profile is not None:
+            index_route = and_(index_route, jobs.c.pipeline_version == index_profile)
+        eligible = or_(eligible, index_route)
     count = 0
     for _ in range(limit):
         token = str(uuid.uuid4())
@@ -20,12 +31,12 @@ def dispatch(engine, publish, limit=50, *, publish_index=None):
             now = func.clock_timestamp()
             row = (
                 conn.execute(
-                    select(outbox, jobs.c.stage)
+                    select(outbox, jobs.c.stage, jobs.c.ocr_profile)
                     .join(jobs, outbox.c.job_id == jobs.c.id)
                     .where(
                         and_(
                             outbox.c.published_at.is_(None),
-                            jobs.c.stage.in_(publishers),
+                            eligible,
                             or_(outbox.c.lease_until.is_(None), outbox.c.lease_until < now),
                         )
                     )
@@ -44,7 +55,8 @@ def dispatch(engine, publish, limit=50, *, publish_index=None):
                 .values(lease_token=token, lease_until=now + text("interval '30 seconds'"))
             )
         try:
-            publishers[row["stage"]](row["job_id"])
+            publisher = publish_index if row["stage"] == "index" else routes[row["ocr_profile"]]
+            publisher(row["job_id"])
         except Exception:
             delay = min(300, 2 ** min(row["attempts"] + 1, 8))
             with engine.begin() as conn:
@@ -80,13 +92,19 @@ def dispatch(engine, publish, limit=50, *, publish_index=None):
     return count
 
 
-def recover(engine, limit=100, *, include_index=False):
+def recover(engine, limit=100, *, include_index=False, index_profile=None):
     count = 0
+    eligible_stage = jobs.c.stage == "extract"
+    if include_index:
+        index_stage = jobs.c.stage == "index"
+        if index_profile is not None:
+            index_stage = and_(index_stage, jobs.c.pipeline_version == index_profile)
+        eligible_stage = or_(eligible_stage, index_stage)
     with engine.connect() as conn:
         candidates = conn.execute(
             select(jobs.c.id, jobs.c.source_id)
             .where(
-                jobs.c.stage.in_(("extract", "index") if include_index else ("extract",)),
+                eligible_stage,
                 or_(
                     and_(
                         jobs.c.status == "queued",
@@ -139,9 +157,7 @@ def recover(engine, limit=100, *, include_index=False):
                 )
                 continue
             if job["attempts"] >= MAX_ATTEMPTS:
-                error_code = (
-                    exhausted_code(job["stage"]) if job["stage"] == "index" else job["error_code"]
-                )
+                error_code = exhausted_code(job["stage"])
                 conn.execute(
                     update(jobs)
                     .where(jobs.c.id == job_id)
@@ -153,6 +169,12 @@ def recover(engine, limit=100, *, include_index=False):
                         updated_at=now,
                     )
                 )
+                if job["stage"] == "extract":
+                    conn.execute(
+                        update(sources)
+                        .where(sources.c.id == source_id)
+                        .values(status="failed", error_code=error_code)
+                    )
                 continue
             conn.execute(
                 update(jobs)
