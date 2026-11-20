@@ -1,5 +1,7 @@
 """Transactional, serialized invalidations; no content or network access here."""
 
+from contextvars import ContextVar
+
 import frappe
 
 # Internal ledger marker so a Drive-only cursor cannot observe mail attachment
@@ -22,6 +24,7 @@ MAIL_CONTENT_FIELDS = frozenset(
 	}
 )
 MAIL_CHANGE_FIELDS = MAIL_CONTENT_FIELDS | {"reference_doctype", "reference_name"}
+_undo_send = ContextVar("ai_feed_undo_send", default=None)
 
 
 def _mail_enabled():
@@ -201,7 +204,36 @@ def communication_deleting(doc, method=None):
 	if _mail_enabled():
 		# Use locking reads before Frappe removes links and attachments. Its
 		# deletion document may have been loaded from an older RR snapshot.
-		_record_communication(doc.name, _parent_clients(doc.name))
+		clients = _parent_clients(doc.name)
+		undo = _undo_send.get()
+		if undo is not None and undo[0] == doc.name:
+			undo[1].update(clients)
+		_record_communication(doc.name, clients)
+
+
+@frappe.whitelist()
+def undo_email_send(communication_name: str):
+	from frappe.core.doctype.communication.email import undo_email_send as upstream_undo
+
+	if not _mail_enabled():
+		return upstream_undo(communication_name)
+
+	# Undo Send clears File bindings with raw SQL before deleting the message.
+	# The deletion hook still sees its Customer links, and the upstream result
+	# lists exactly the Files it detached.
+	clients = set()
+	token = _undo_send.set((communication_name, clients))
+	try:
+		result = upstream_undo(communication_name)
+	finally:
+		_undo_send.reset(token)
+
+	if clients and result["attachments"] and _capture_ready():
+		files = frappe.get_all(
+			"File", filters={"name": ["in", result["attachments"]], "is_folder": 0}, pluck="name"
+		)
+		_record_many({(ATTACHMENT_EVENT_PREFIX + file, client) for file in files for client in clients})
+	return result
 
 
 def communication_linked(doc):

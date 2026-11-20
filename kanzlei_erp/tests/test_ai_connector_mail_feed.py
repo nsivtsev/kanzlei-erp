@@ -201,6 +201,90 @@ class TestAIConnectorMailFeed(FrappeTestCase):
 		frappe.delete_doc("File", file.name, force=True)
 		self.assertEqual(self.changes(cursor), {("file:" + file.name, self.other, "delete")})
 
+	def undo_send(self, mail):
+		from frappe.handler import execute_cmd
+		from frappe.utils import get_datetime
+		from werkzeug.test import EnvironBuilder
+		from werkzeug.wrappers import Request
+
+		route = "frappe.core.doctype.communication.email.undo_email_send"
+		request = Request(EnvironBuilder(method="POST").get_environ())
+		with (
+			patch.object(frappe.local, "request", request, create=True),
+			patch.object(frappe.local, "form_dict", frappe._dict(cmd=route, communication_name=mail.name)),
+			patch(
+				"frappe.core.doctype.communication.email.now_datetime",
+				return_value=get_datetime(mail.creation),
+			),
+		):
+			return execute_cmd(route)
+
+	def test_undo_send_route_invalidates_detached_pdf_for_all_former_customers(self):
+		mail = self.message(self.client, sent_or_received="Sent")
+		mail.add_link("Customer", self.other, autosave=True)
+		file = self.attachment(mail)
+		queue = frappe.get_doc(
+			{
+				"doctype": "Email Queue",
+				"sender": "feed@example.invalid",
+				"message": "Fixture only",
+				"status": "Not Sent",
+				"priority": 1,
+				"communication": mail.name,
+				"recipients": [{"recipient": "office@example.invalid", "status": "Not Sent"}],
+			}
+		).insert()
+		cursor = inventory.inventory()["changes_cursor"]
+		frappe.db.savepoint("undo_fixture")
+
+		result = self.undo_send(mail)
+
+		self.assertEqual(result["attachments"], [file.name])
+		self.assertEqual(result["subject"], mail.subject)
+		self.assertFalse(frappe.db.exists("Communication", mail.name))
+		self.assertFalse(frappe.db.exists("Email Queue", queue.name))
+		file.reload()
+		self.assertFalse(file.attached_to_name)
+		self.assertFalse(file.attached_to_doctype)
+		self.assertEqual(
+			self.changes(cursor),
+			{
+				(source_id, customer, "delete")
+				for source_id in ("email:" + mail.name, "file:" + file.name)
+				for customer in (self.client, self.other)
+			},
+		)
+
+		frappe.db.rollback(save_point="undo_fixture")
+		self.assertTrue(frappe.db.exists("Communication", mail.name))
+		self.assertTrue(frappe.db.exists("Email Queue", queue.name))
+		self.assertEqual(frappe.db.get_value("File", file.name, "attached_to_name"), mail.name)
+		self.assertEqual(self.changes(cursor), set())
+
+	def test_undo_send_route_preserves_owner_check(self):
+		mail = self.message(self.client, sent_or_received="Sent")
+		file = self.attachment(mail)
+		frappe.db.set_value("Communication", mail.name, "owner", "Guest")
+		cursor = inventory.inventory()["changes_cursor"]
+
+		with self.assertRaises(frappe.ValidationError):
+			self.undo_send(mail)
+
+		self.assertTrue(frappe.db.exists("Communication", mail.name))
+		self.assertEqual(frappe.db.get_value("File", file.name, "attached_to_name"), mail.name)
+		self.assertEqual(self.changes(cursor), set())
+
+	def test_undo_send_route_still_detaches_when_mail_feed_is_disabled(self):
+		mail = self.message(self.client, sent_or_received="Sent")
+		file = self.attachment(mail)
+		self.active = False
+		cursor = inventory.inventory()["changes_cursor"]
+
+		self.assertEqual(self.undo_send(mail)["attachments"], [file.name])
+		self.assertFalse(frappe.db.exists("Communication", mail.name))
+		self.assertFalse(frappe.db.get_value("File", file.name, "attached_to_name"))
+		self.assertEqual(self.changes(cursor), set())
+
 	def test_attachment_save_invalidates_the_previous_customer(self):
 		from io import BytesIO
 		from pathlib import Path

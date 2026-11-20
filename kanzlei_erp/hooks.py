@@ -10,6 +10,7 @@ app_license = "mit"
 
 required_apps = ["erpnext"]
 override_whitelisted_methods = {
+	"frappe.core.doctype.communication.email.undo_email_send": "kanzlei_erp.ai_connector.events.undo_email_send",
 	"erpnext.projects.doctype.project.project.set_project_status": "kanzlei_erp.fibu_questions.set_project_status",
 	"suite.drive.api.files.remove_or_restore": "kanzlei_erp.suite_setup.trash_or_restore",
 	"suite.writer.api.docs.create_document": "kanzlei_erp.mandant_drive.create_document",
