@@ -1,0 +1,26 @@
+[
+  {
+    "source_id": "email:de-1",
+    "direction": "incoming",
+    "format": "html",
+    "active": "Die Freigabe für Müller & Söhne lautet DE-2026-0714.",
+    "body": "<div>Die Freigabe für Müller &amp; Söhne lautet DE-2026-0714.</div><div class='gmail_quote'><div>Fremdmandant: DE-SECRET</div></div><span style='DISPLAY: none !important'>HIDDEN-CUSTOMER</span><img src='https://example.invalid/pixel' alt='REMOTE-ALT'>",
+    "question": "Wie lautet die Freigabe für Müller & Söhne?"
+  },
+  {
+    "source_id": "email:ru-2",
+    "direction": "outgoing",
+    "format": "text",
+    "active": "Для Ирины Ковалёвой подтверждён номер RU-00917.",
+    "body": "> чужой идентификатор RU-SECRET\nДля Ирины Ковалёвой подтверждён номер RU-00917.\n\nВт, 10 ноября Нина\nнаписала:\nДоговор другого клиента: RU-TAIL",
+    "question": "Какой номер подтверждён для Ирины Ковалёвой?"
+  },
+  {
+    "source_id": "email:en-3",
+    "direction": "incoming",
+    "format": "html",
+    "active": "The case reference for Anaïs is EN-425B.",
+    "body": "<p>The case reference for Anaïs is EN-425B.</p><div>From: Other Client<br>Sent: Friday<br>To: Other Recipient<br>Subject: Unrelated<br>EN-SECRET</div>",
+    "question": "What is the case reference for Anaïs?"
+  }
+]

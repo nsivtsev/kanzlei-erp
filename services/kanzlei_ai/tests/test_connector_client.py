@@ -230,3 +230,64 @@ def test_binary_response_size_is_bounded_even_with_a_valid_checksum():
         )
     assert type(result.value).__name__ == "ConnectorError"
     assert result.value.status == 413
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        "/desk/communication/mail-%D0%90",
+        "/desk/communication/different-mail",
+        "/api/method/frappe.auth.get_logged_user",
+        "//outside.invalid",
+        "/%2foutside.invalid",
+        "/app/%2e%2e/login",
+        "/app/%0alogin",
+        "/app/communication/mail?access_token=private",
+        "https://outside.invalid",
+    ],
+)
+def test_locator_resolver_uses_fixed_rpc_and_bounds_relative_navigation(locator):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    source = SourceRef(source_id="email:mail-А", revision="a" * 64, client_id="A")
+    scope = Scope(kind="client", client_id="A")
+
+    def handler(request):
+        assert request.url.path.endswith(".resolve_source_locator")
+        assert request.url.host == "erp.example.invalid"
+        assert not request.url.query
+        assert json.loads(request.content) == {
+            "version": 1,
+            "access_token": "g" * 43,
+            "scope": scope.model_dump(exclude_none=True),
+            "source": source.model_dump(),
+        }
+        return httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+
+    adapter = client(handler)
+    if locator == "/desk/communication/mail-%D0%90":
+        assert asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source)) == locator
+    else:
+        with pytest.raises(ConnectorError):
+            asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source))
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        "/api/method/kanzlei_erp.mandant_documents.download_document"
+        "?customer=A&file_id=attachment&disposition=inline",
+        "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
+        "?customer=A&file_id=attachment&revision=" + "a" * 64,
+    ],
+)
+def test_file_locator_resolver_preserves_fixed_erp_download_paths(locator):
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    scope = Scope(kind="client", client_id="A")
+    source = SourceRef(source_id="file:attachment", revision="a" * 64, client_id="A")
+    adapter = client(
+        lambda _: httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+    )
+    assert asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source)) == locator

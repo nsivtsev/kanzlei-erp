@@ -1,12 +1,21 @@
 """Strict, versioned wire contracts with no Frappe runtime dependency."""
 
 from typing import Annotated, Literal, Self
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Identifier = Annotated[str, Field(min_length=1, max_length=200)]
 Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Token = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{43}$")]
+SourceId = Annotated[
+    str, Field(pattern=r"^(file:.{1,195}|email:[^\x00-\x1f\x7f]+)$", max_length=200)
+]
+EmailId = Annotated[str, Field(pattern=r"^email:[^\x00-\x1f\x7f]+$", max_length=200)]
+Locator = Annotated[str, Field(min_length=1, max_length=2048)]
+
+EMAIL_MIME_TYPE = "application/vnd.kanzlei.email+json"
+MAX_SOURCE_BYTES = 20 * 1024 * 1024
 
 
 class Contract(BaseModel):
@@ -34,7 +43,7 @@ class Scope(Contract):
 
 class SourceRef(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-    source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
+    source_id: SourceId
     revision: Revision
     client_id: Identifier
 
@@ -51,16 +60,26 @@ class ProcessingPolicyCheck(ScopeCheck):
 
 
 class SourceManifest(Contract):
-    source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
-    source_type: Literal["file"]
+    source_id: SourceId
+    source_type: Literal["file", "email"]
     revision: Revision
     client_ids: Annotated[list[Identifier], Field(min_length=1, max_length=100)]
     title: Annotated[str, Field(min_length=1, max_length=500)]
     mime_type: Annotated[str, Field(min_length=1, max_length=200)]
     source_modified_at: Annotated[str, Field(min_length=1, max_length=50)]
-    locator: Annotated[str, Field(min_length=1, max_length=2048)]
-    byte_size: Annotated[int, Field(ge=0, le=20 * 1024 * 1024)]
+    locator: Locator
+    byte_size: Annotated[int, Field(ge=0, le=MAX_SOURCE_BYTES)]
     active: Literal[True] = True
+    parent_message_id: EmailId | None = None
+
+    @model_validator(mode="after")
+    def validate_source_type(self) -> Self:
+        if not self.source_id.startswith(self.source_type + ":"):
+            raise ValueError("Source ID must match the source type")
+        is_email = self.source_type == "email"
+        if is_email != (self.mime_type == EMAIL_MIME_TYPE) or (is_email and self.parent_message_id):
+            raise ValueError("Invalid email media type or attachment parent")
+        return self
 
     @field_validator("locator")
     @classmethod
@@ -72,6 +91,30 @@ class SourceManifest(Contract):
             or any(ord(c) < 32 for c in value)
         ):
             raise ValueError("Expected an ERP-relative locator")
+        return value
+
+
+class SourceLocator(Contract):
+    version: Literal[1]
+    locator: Locator
+
+    @field_validator("locator")
+    @classmethod
+    def safe_erp_path(cls, value: str) -> str:
+        if not value.startswith("/") or value.startswith("//") or value != value.strip():
+            raise ValueError("Expected an ERP-relative locator")
+        decoded = unquote(value, errors="strict")
+        if "\\" in decoded or any(ord(char) < 32 or ord(char) == 127 for char in decoded):
+            raise ValueError("Invalid ERP locator characters")
+        parsed = urlsplit(value)
+        path = unquote(parsed.path, errors="strict")
+        if (
+            parsed.netloc
+            or "#" in value
+            or path.startswith("//")
+            or any(part in {".", ".."} for part in path.split("/"))
+        ):
+            raise ValueError("Unsafe ERP locator")
         return value
 
 
@@ -153,7 +196,7 @@ class InventoryPage(Contract):
 
 class ChangeItem(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-    source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
+    source_id: SourceId
     client_id: Identifier
     operation: Literal["upsert", "delete"]
     manifest: SourceManifest | None

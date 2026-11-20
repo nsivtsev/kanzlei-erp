@@ -196,7 +196,8 @@ def _receipt(conn, connector_id, epoch, phase, expected_cursor, page):
 
 
 def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
-    manifest = SourceManifest.model_validate(manifest).model_dump(mode="json")
+    manifest = SourceManifest.model_validate(manifest).model_dump(mode="json", exclude_none=True)
+    is_email = manifest["source_type"] == "email"
     row = (
         conn.execute(
             select(sources)
@@ -235,6 +236,7 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
         or existing is None
         or existing["generation"] != row["generation"]
         or existing["pipeline_version"] != pipeline_version
+        or (is_email and existing["ocr_profile"] != "native")
         or needs_local_ocr
     )
     incoming_clients = manifest["client_ids"]
@@ -283,6 +285,8 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
             if same_revision and existing and not needs_local_ocr
             else ocr_profile
         )
+        if is_email:
+            selected_profile = "native"
         _enqueue(
             conn, source_id, manifest["revision"], generation, pipeline_version, selected_profile
         )
@@ -319,6 +323,8 @@ def _remove_relation(conn, source_id, client_id, pipeline_version, ocr_profile):
     if clients:
         existing = _latest_extract(conn, source_id, source["revision"])
         selected_profile = existing["ocr_profile"] if existing else ocr_profile
+        if manifest["source_type"] == "email":
+            selected_profile = "native"
         _enqueue(
             conn, source_id, source["revision"], generation, pipeline_version, selected_profile
         )

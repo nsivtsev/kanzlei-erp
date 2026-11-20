@@ -1,4 +1,4 @@
-"""Celery tasks for fenced PDF extraction and indexing."""
+"""Celery tasks for fenced source extraction and indexing."""
 
 import asyncio
 import logging
@@ -10,6 +10,7 @@ from celery import Celery
 
 from kanzlei_ai.db import engine_from_settings
 from kanzlei_ai.jobs import (
+    MAX_CHUNKS,
     claim,
     complete,
     extraction_claim_is_live,
@@ -340,7 +341,7 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
     if not settings.ingestion_enabled:
         return complete(engine, job_id, token)
     from kanzlei_ai.connectors.base import ConnectorError
-    from kanzlei_ai.connectors.contracts import SourceRef
+    from kanzlei_ai.connectors.contracts import EMAIL_MIME_TYPE, SourceRef
     from kanzlei_ai.documents.artifacts import LimitExceeded
     from kanzlei_ai.documents.chunk import ChunkInput, OversizedTable, deterministic_chunks
     from kanzlei_ai.documents.parse import ExtractionError, TerminalExtractionError
@@ -350,7 +351,9 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
     if context is None:
         return False
     manifest = context["manifest"]
-    if manifest["mime_type"] != "application/pdf":
+    mime_type = manifest["mime_type"]
+    is_email = manifest.get("source_type") == "email" and mime_type == EMAIL_MIME_TYPE
+    if not is_email and mime_type != "application/pdf":
         fail_terminal(engine, job_id, token, "UNSUPPORTED_MEDIA")
         return False
     source = SourceRef(
@@ -359,15 +362,23 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
         client_id=sorted(manifest["client_ids"])[0],
     )
     try:
-        parsed = _process_extraction_portion(
-            engine,
-            job_id,
-            token,
-            settings,
-            source,
-            context,
-            ocr_provider_factory or _ocr_provider,
-        )
+        if is_email:
+            from kanzlei_ai.documents.email import parse_email
+
+            if context["ocr_profile"] != "native":
+                raise TerminalExtractionError("INVALID_EXTRACTION_PROFILE")
+            content = asyncio.run(_background_connector(settings).read_background_source(source))
+            parsed = parse_email(content)
+        else:
+            parsed = _process_extraction_portion(
+                engine,
+                job_id,
+                token,
+                settings,
+                source,
+                context,
+                ocr_provider_factory or _ocr_provider,
+            )
         if parsed is None:
             return False
         if not parsed.blocks:
@@ -386,6 +397,8 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
                 ],
             )
         )
+        if is_email and len(chunks) > MAX_CHUNKS:
+            raise TerminalExtractionError("CHUNK_LIMIT_EXCEEDED")
         if not extraction_claim_is_live(engine, job_id, token):
             return False
         store = _artifact_store(settings)

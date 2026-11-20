@@ -3,13 +3,14 @@
 import asyncio
 import hashlib
 import json
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import httpx
 from pydantic import SecretStr, ValidationError
 
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import (
+    MAX_SOURCE_BYTES,
     AuthorizationResult,
     ChangePage,
     ClientPage,
@@ -22,11 +23,14 @@ from kanzlei_ai.connectors.contracts import (
     Revoked,
     Scope,
     ScopeCheck,
+    SourceLocator,
     SourceRef,
 )
 
 _AUTHORIZATION_BATCH_SIZE = 4
 _MAX_AUTHORIZATION_REFERENCES = 50
+_DOCUMENT_DOWNLOAD = "/api/method/kanzlei_erp.mandant_documents.download_document"
+_ATTACHMENT_DOWNLOAD = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
 
 
 class FrappeConnector:
@@ -39,7 +43,7 @@ class FrappeConnector:
         site_name: str | None = None,
         timeout_seconds: float = 5,
         max_json_bytes: int = 2 * 1024 * 1024,
-        max_source_bytes: int = 20 * 1024 * 1024,
+        max_source_bytes: int = MAX_SOURCE_BYTES,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         parsed = urlsplit(base_url)
@@ -245,6 +249,34 @@ class FrappeConnector:
         ):
             raise ConnectorError()
         return content
+
+    async def resolve_source_locator(
+        self, access_token: str, scope: Scope, source: SourceRef
+    ) -> str:
+        result = await self._typed(
+            SourceLocator,
+            "resolve_source_locator",
+            access_token=access_token,
+            scope=scope.model_dump(exclude_none=True),
+            source=source.model_dump(),
+        )
+        locator = result.locator
+        source_type, _, name = source.source_id.partition(":")
+        if source_type == "email":
+            allowed = locator == "/desk/communication/" + quote(name, safe="")
+        else:
+            parts = urlsplit(locator)
+            expected = {"customer": [source.client_id], "file_id": [name]}
+            if parts.path == _DOCUMENT_DOWNLOAD:
+                expected["disposition"] = ["inline"]
+            elif parts.path == _ATTACHMENT_DOWNLOAD:
+                expected["revision"] = [source.revision]
+            allowed = parts.path in {_DOCUMENT_DOWNLOAD, _ATTACHMENT_DOWNLOAD} and (
+                parse_qs(parts.query, keep_blank_values=True) == expected
+            )
+        if not allowed or access_token in unquote(locator):
+            raise ConnectorError()
+        return locator
 
     async def inventory(self, cursor: str | None = None, limit: int = 50) -> InventoryPage:
         return await self._typed(InventoryPage, "inventory", cursor=cursor, limit=limit)
