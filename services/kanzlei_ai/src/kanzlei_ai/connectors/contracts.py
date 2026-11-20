@@ -43,6 +43,13 @@ class ScopeCheck(Contract):
     allowed: bool
 
 
+ProcessingOperation = Literal["ocr", "embed", "generate"]
+
+
+class ProcessingPolicyCheck(ScopeCheck):
+    version: Literal[1]
+
+
 class SourceManifest(Contract):
     source_id: Annotated[str, Field(pattern=r"^file:.{1,195}$", max_length=200)]
     source_type: Literal["file"]

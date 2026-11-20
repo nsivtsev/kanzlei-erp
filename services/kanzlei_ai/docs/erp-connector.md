@@ -258,3 +258,38 @@ transaction. Binding replacement scans and locks managed File IDs and URLs to
 match every canonical alias; its cost grows with the number of managed Files,
 but capture does not read file content or call object storage. The AI service uses
 a durable consumer, separate extraction and indexing jobs, and periodic reconciliation.
+
+## External processing policy
+
+Set `kanzlei_ai_connector.external_processing` in the ERP site configuration
+to grant individual operations to explicit Customer IDs. A missing Customer or
+operation, a false value, and a value of any other type all deny processing.
+
+```json
+{
+  "external_processing": {
+    "FIXTURE-MANDANT": {
+      "ocr": false,
+      "embed": true,
+      "generate": true
+    }
+  }
+}
+```
+
+POST `/api/method/kanzlei_erp.ai_connector.api.check_processing_policy` with
+`version: 1`, `operation: "ocr" | "embed" | "generate"`, `scope`, and `sources`.
+Use the same scope and exact source references as `authorize_sources`. Supply
+`access_token` with the delegated service credential for interactive processing.
+Omit it and use the ingestion credential for work under the fixed ingestion
+identity. The ERP checks that identity's current Mandant and managed Drive
+projection. The reply grants the entire batch only when the ERP returns
+`{"version": 1, "allowed": true}` in its normal `message` envelope.
+
+Clients call `FrappeConnector.check_processing_policy(operation, scope, sources,
+access_token=...)` immediately before sending data to an external provider.
+For a question-only embedding use the current authorized client scope and an
+empty source list. A question in general scope has no explicit Mandant grant.
+For sourced generation include every excerpt's source reference, including all
+referenced Mandanten in general scope. For background OCR or document embeddings
+send the current source references. Each retry rechecks permission online.

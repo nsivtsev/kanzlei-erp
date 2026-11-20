@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -318,6 +319,69 @@ class TestAIConnector(FrappeTestCase):
 		frappe.db.set_value("File", self.root.name, "status", "Trashed")
 		result = self.call("authorize_sources", access_token=token, scope=self.scope(), sources=[ref])
 		self.assertFalse(result["decisions"][0]["allowed"])
+
+	def test_processing_policy_rechecks_the_current_delegation_and_source_revision(self):
+		self.committed = True
+		frappe.db.commit()
+		token = self.grant()
+		manifest = self.documents(token)["items"][0]
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
+		payload = {"operation": "embed", "access_token": token, "scope": self.scope(), "sources": [ref]}
+		self.assertEqual(self.call("check_processing_policy", **payload).status_code, 403)
+		self.config["external_processing"] = {self.customer.name: {"embed": True}}
+		self.assertEqual(
+			self.call("check_processing_policy", **payload), {"version": 1, "allowed": True}
+		)
+		frappe.db.set_value("File", self.file.name, "file_name", "replacement.pdf")
+		frappe.db.commit()
+		self.assertEqual(self.call("check_processing_policy", **payload).status_code, 403)
+		self.assertEqual(
+			self.call("check_processing_policy", **(payload | {"sources": []})),
+			{"version": 1, "allowed": True},
+		)
+		frappe.db.delete("Sessions", {"sid": self.sid})
+		frappe.db.commit()
+		self.assertEqual(
+			self.call("check_processing_policy", **(payload | {"sources": []})).status_code, 401
+		)
+
+	def test_processing_policy_checks_the_fixed_ingestion_drive_projection(self):
+		ingestion_key = "synthetic-ingestion-key-" + frappe.generate_hash(length=32)
+		self.config["ingestion"] = {
+			"enabled": True,
+			"user": self.reader.name,
+			"client_ids": [self.customer.name],
+			"generation": "fixture-v1",
+			"key_sha256": hashlib.sha256(ingestion_key.encode()).hexdigest(),
+		}
+		binding = SimpleNamespace(
+			object_key="fixture/document", sha256=hashlib.sha256(self.original).hexdigest(),
+			file_size=len(self.original),
+		)
+		self.committed = True
+		frappe.db.commit()
+		with patch("kanzlei_erp.object_storage.get_binding", return_value=binding):
+			manifest = self.documents(self.grant())["items"][0]
+			ref = {
+				"source_id": manifest["source_id"],
+				"revision": manifest["revision"],
+				"client_id": self.customer.name,
+			}
+			payload = {"operation": "ocr", "scope": self.scope(), "sources": [ref]}
+			self.assertEqual(self.call("check_processing_policy", **payload).status_code, 401)
+			with patch.object(self, "key", ingestion_key):
+				self.assertEqual(self.call("check_processing_policy", **payload).status_code, 403)
+				self.config["external_processing"] = {self.customer.name: {"ocr": True}}
+				self.assertEqual(
+					self.call("check_processing_policy", **payload), {"version": 1, "allowed": True}
+				)
+				frappe.db.set_value("File", self.root.name, "status", "Trashed")
+				frappe.db.commit()
+				self.assertEqual(self.call("check_processing_policy", **payload).status_code, 403)
 
 	def test_unknown_fields_versions_and_oversized_batches_fail_closed(self):
 		token = self.grant()

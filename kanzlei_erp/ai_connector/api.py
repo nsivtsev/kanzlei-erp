@@ -121,6 +121,14 @@ def authorize_sources(access_token=None, scope=None, sources=None, version=1, **
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
+def check_processing_policy(operation=None, scope=None, sources=None, access_token=None, version=1, **extra):
+	from kanzlei_erp.ai_connector import external_processing
+
+	return external_processing.check(operation, scope, sources, access_token)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
 def read_source(access_token=None, scope=None, source=None, version=1, **extra):
 	with auth.principal(access_token):
 		content = policy.read_source(scope, source, authenticate_current=lambda: auth.resolve(access_token))

@@ -17,6 +17,8 @@ from kanzlei_ai.connectors.contracts import (
     Grant,
     Identity,
     InventoryPage,
+    ProcessingOperation,
+    ProcessingPolicyCheck,
     Revoked,
     Scope,
     ScopeCheck,
@@ -193,6 +195,27 @@ class FrappeConnector:
                 raise ConnectorError()
             decisions.extend(result.decisions)
         return AuthorizationResult(version=1, decisions=decisions)
+
+    async def check_processing_policy(
+        self,
+        operation: ProcessingOperation,
+        scope: Scope,
+        sources: list[SourceRef],
+        *,
+        access_token: str | None = None,
+    ) -> None:
+        if len(sources) > _MAX_AUTHORIZATION_REFERENCES:
+            raise ConnectorError("INVALID_REQUEST", 400)
+        result = await self._typed(
+            ProcessingPolicyCheck,
+            "check_processing_policy",
+            operation=operation,
+            scope=scope.model_dump(exclude_none=True),
+            sources=[source.model_dump() for source in sources],
+            **({"access_token": access_token} if access_token is not None else {}),
+        )
+        if result.allowed is not True:
+            raise ConnectorError("FORBIDDEN", 403)
 
     async def read_source(self, access_token: str, scope: Scope, source: SourceRef) -> bytes:
         content, headers = await self._rpc(

@@ -8,6 +8,7 @@ from kanzlei_ai.connectors.contracts import (
     DocumentPage,
     Grant,
     Identity,
+    ProcessingOperation,
     Scope,
     SourceRef,
 )
@@ -43,5 +44,13 @@ class ERPConnector(Protocol):
     async def authorize_sources(
         self, access_token: str, scope: Scope, sources: list[SourceRef]
     ) -> AuthorizationResult: ...
+    async def check_processing_policy(
+        self,
+        operation: ProcessingOperation,
+        scope: Scope,
+        sources: list[SourceRef],
+        *,
+        access_token: str | None = None,
+    ) -> None: ...
     async def read_source(self, access_token: str, scope: Scope, source: SourceRef) -> bytes: ...
     async def read_background_source(self, source: SourceRef) -> bytes: ...
