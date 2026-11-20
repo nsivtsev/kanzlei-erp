@@ -160,11 +160,16 @@ def download_mail_attachment(customer=None, file_id=None, revision=None, **extra
 
 	with inventory.current_permission_context():
 		refresh()
-		content = mail.read_current(source, before_final_projection=refresh)
+		content, mime_type = mail.read_current_with_mime(source, before_final_projection=refresh)
+	disposition = (
+		'attachment; filename="attachment.docx"'
+		if mime_type == mail.DOCX_MIME_TYPE
+		else 'inline; filename="attachment.pdf"'
+	)
 	return Response(
 		content,
-		mimetype="application/pdf",
-		headers={**HEADERS, "Content-Disposition": 'inline; filename="attachment.pdf"'},
+		mimetype=mime_type,
+		headers={**HEADERS, "Content-Disposition": disposition},
 	)
 
 

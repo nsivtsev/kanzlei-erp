@@ -5,6 +5,7 @@ from contextlib import contextmanager, nullcontext
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import frappe
 from botocore.exceptions import ClientError
@@ -15,6 +16,7 @@ from werkzeug.wrappers import Request
 from kanzlei_erp.ai_connector import inventory, policy
 from kanzlei_erp.ai_connector.errors import ConnectorError
 from kanzlei_erp.tests import test_ai_connector as connector_fixtures
+from kanzlei_erp.tests import test_ai_connector_email as mail_fixtures
 
 
 class SyntheticS3:
@@ -117,7 +119,7 @@ class TestAIConnectorNative(FrappeTestCase):
 		drive_storage.invalidate()
 		super().tearDown()
 
-	def upload_native(self):
+	def upload_native(self, filename="native.pdf"):
 		from suite.drive.api.files import upload_file
 
 		from kanzlei_erp.object_storage import get_binding, settings
@@ -126,7 +128,7 @@ class TestAIConnectorNative(FrappeTestCase):
 			EnvironBuilder(
 				method="POST",
 				data={
-					"file": (BytesIO(self.original), "native.pdf"),
+					"file": (BytesIO(self.original), filename),
 				},
 			).get_environ()
 		)
@@ -175,11 +177,39 @@ class TestAIConnectorNative(FrappeTestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertTrue(response.get_data() == self.original, "Delegated bytes differ")
 
+	def test_native_drive_docx_keeps_file_identity_and_attachment_locator(self):
+		self.original = mail_fixtures.synthetic_docx()
+		file = self.upload_native("native.DOCX")
+		frappe.db.set_value("File", file.name, "mime_type", "application/octet-stream")
+		self.as_reader()
+		manifest = inventory.project(file.name, self.customer.name, {self.customer.name})
+		self.assertEqual(manifest["source_id"], "file:" + file.name)
+		self.assertEqual(manifest["mime_type"], mail_fixtures.DOCX_MIME)
+		self.assertNotIn("parent_message_id", manifest)
+		locator = urlsplit(manifest["locator"])
+		self.assertEqual(locator.path, "/api/method/kanzlei_erp.mandant_documents.download_document")
+		self.assertEqual(
+			parse_qs(locator.query),
+			{"customer": [self.customer.name], "file_id": [file.name], "disposition": ["attachment"]},
+		)
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
+		self.assertEqual(policy.resolve_source_locator(self.scope(), ref)["locator"], manifest["locator"])
+		self.assertTrue(policy.authorize_sources(self.scope(), [ref])["decisions"][0]["allowed"])
+		self.assertEqual(inventory.read_current(ref, {self.customer.name}), self.original)
+
 	def test_delegated_native_read_denies_if_final_permission_check_denies(self):
 		file = self.upload_native()
 		self.as_reader()
 		manifest = inventory.project(file.name, self.customer.name, {self.customer.name})
-		ref = {"source_id": manifest["source_id"], "revision": manifest["revision"], "client_id": self.customer.name}
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
 		token = self.grant()
 
 		@contextmanager

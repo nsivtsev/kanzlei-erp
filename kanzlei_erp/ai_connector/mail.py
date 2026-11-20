@@ -1,11 +1,13 @@
-"""Current Customer-scoped projections of ERP email and its PDF attachments."""
+"""Current Customer-scoped projections of ERP email and its attachments."""
 
 import hashlib
 import json
 from dataclasses import dataclass
 from email.utils import getaddresses
+from io import BytesIO
 from pathlib import PurePosixPath
 from urllib.parse import quote, urlencode
+from zipfile import is_zipfile
 
 import frappe
 
@@ -16,13 +18,18 @@ from kanzlei_erp.ai_connector.native_drive import MAX_BYTES
 from kanzlei_erp.mandant_documents import _safe_local_path
 
 MIME_TYPE = "application/vnd.kanzlei.email+json"
+PDF_MIME_TYPE = "application/pdf"
+DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DIRECTIONS = {"Received": "incoming", "Sent": "outgoing"}
-ATTACHMENT_MIME_TYPES = {".pdf": "application/pdf"}
+
+
+def _flag(key):
+	settings = auth.get_site_config(cached=False).get("kanzlei_ai_connector")
+	return isinstance(settings, dict) and settings.get(key) is True
 
 
 def enabled():
-	settings = auth.get_site_config(cached=False).get("kanzlei_ai_connector")
-	return isinstance(settings, dict) and settings.get("email_enabled") is True
+	return _flag("email_enabled")
 
 
 def is_attachment(file):
@@ -119,15 +126,35 @@ def _message_bytes(message):
 	return content
 
 
-def _attachment_mime(file):
-	return ATTACHMENT_MIME_TYPES.get(PurePosixPath(file.file_name or "").suffix.casefold())
+def is_docx(filename):
+	return PurePosixPath(filename or "").suffix.casefold() == ".docx"
+
+
+def require_docx(content):
+	# Inspect the local-file signature and ZIP end record without reading or
+	# expanding package entries. The AI parser validates the OOXML package.
+	if content.startswith(b"PK\x03\x04"):
+		try:
+			if is_zipfile(BytesIO(content)):
+				return
+		except (ValueError, OverflowError):
+			# Malformed directory offsets can fail while seeking.
+			pass
+	fail("FORBIDDEN", 403)
 
 
 def _check_file(file):
 	from kanzlei_erp.ai_connector import policy
 
 	policy._eligible(file)
-	if file.is_folder or not _attachment_mime(file) or not frappe.has_permission("File", "read", doc=file):
+	if file.is_folder or not frappe.has_permission("File", "read", doc=file):
+		fail("FORBIDDEN", 403)
+	suffix = PurePosixPath(file.file_name or "").suffix.casefold()
+	if suffix == ".pdf":
+		mime_type = PDF_MIME_TYPE
+	elif suffix == ".docx" and _flag("docx_enabled"):
+		mime_type = DOCX_MIME_TYPE
+	else:
 		fail("FORBIDDEN", 403)
 	if not native_drive.is_native(file):
 		url = file.file_url or ""
@@ -139,6 +166,7 @@ def _check_file(file):
 		if not object_storage.get_binding(url):
 			_safe_local_path(file)
 	drive_storage.require_storage_access(file)
+	return mime_type
 
 
 @dataclass(frozen=True)
@@ -217,7 +245,7 @@ def _source(source_id, client_id=None):
 		}
 		return _Source(manifest, clients, content=content)
 
-	_check_file(file)
+	mime_type = _check_file(file)
 	# A native object must also belong to the selected Customer's active Drive.
 	# For local and classic S3 attachments, the actual parent binding is enough.
 	state = policy._source_state(file, client_id)
@@ -231,7 +259,7 @@ def _source(source_id, client_id=None):
 		"revision": revision,
 		"client_ids": [client_id],
 		"title": file.file_name,
-		"mime_type": _attachment_mime(file),
+		"mime_type": mime_type,
 		"source_modified_at": str(file.modified),
 		"locator": "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment?"
 		+ urlencode({"customer": client_id, "file_id": name, "revision": revision}),
@@ -263,8 +291,12 @@ def external_clients(source_id, *, client_id=None, revision=None):
 	return current.clients
 
 
-@native_drive.bounded
 def read_current(ref, *, before_final_projection=None):
+	return read_current_with_mime(ref, before_final_projection=before_final_projection)[0]
+
+
+@native_drive.bounded
+def read_current_with_mime(ref, *, before_final_projection=None):
 	"""Check the expected revision both before reading and before releasing bytes.
 
 	The caller supplies the permission refresh for its current transaction.
@@ -285,7 +317,10 @@ def read_current(ref, *, before_final_projection=None):
 			content = stream.read(MAX_BYTES + 1)
 	if len(content) > MAX_BYTES:
 		fail("LIMIT_EXCEEDED", 413)
-	if initial.file is not None and not content.startswith(b"%PDF-"):
+	mime_type = initial.manifest["mime_type"]
+	if mime_type == DOCX_MIME_TYPE:
+		require_docx(content)
+	elif mime_type == PDF_MIME_TYPE and not content.startswith(b"%PDF-"):
 		fail("FORBIDDEN", 403)
 	if before_final_projection is not None:
 		before_final_projection()
@@ -294,4 +329,4 @@ def read_current(ref, *, before_final_projection=None):
 	final = _source(source_id, client_id)
 	if final.manifest["revision"] != revision or final.manifest["byte_size"] != len(content):
 		fail("STALE_SOURCE", 409)
-	return content
+	return content, mime_type

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
+from zipfile import ZipFile
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -19,6 +20,31 @@ from kanzlei_erp.ai_connector import api, external_processing, policy
 from kanzlei_erp.ai_connector.errors import ConnectorError
 from kanzlei_erp.tests import test_email_history as fixtures
 from kanzlei_erp.tests import test_mandant_documents as drive_fixtures
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def synthetic_docx():
+	stream = BytesIO()
+	with ZipFile(stream, "w") as package:
+		package.writestr(
+			"[Content_Types].xml",
+			'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+			'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.'
+			'wordprocessingml.document.main+xml"/></Types>',
+		)
+		package.writestr(
+			"_rels/.rels",
+			'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+			'<Relationship Id="synthetic" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+			'relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+		)
+		package.writestr(
+			"word/document.xml",
+			'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			"<w:body><w:p><w:r><w:t>Beleg März</w:t></w:r></w:p></w:body></w:document>",
+		)
+	return stream.getvalue()
 
 
 class TestAIConnectorEmail(FrappeTestCase):
@@ -92,6 +118,73 @@ class TestAIConnectorEmail(FrappeTestCase):
 		)
 		self.files.append(file.name)
 		return file
+
+	def docx_attachment(self, message, content):
+		filename = "synthetic-" + frappe.generate_hash(length=10) + ".DOCX"
+		# Match Frappe's incoming mail hook, which inserts the raw payload.
+		file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": filename,
+				"attached_to_doctype": "Communication",
+				"attached_to_name": message.name,
+				"is_private": 1,
+				"content": content,
+			}
+		).insert()
+		self.files.append(file.name)
+		return file
+
+	def test_docx_attachment_flag_parent_permissions_and_all_direct_grants(self):
+		from kanzlei_erp.ai_connector import mail
+
+		message = self.linked()
+		self.add_link(message, self.other)
+		content = synthetic_docx()
+		file = self.docx_attachment(message, content)
+		source_id = "file:" + file.name
+		self.assertIsNone(mail.project(source_id, self.customer.name))
+		for value in (False, "true", 1):
+			self.config["docx_enabled"] = value
+			self.assertIsNone(mail.project(source_id, self.customer.name))
+		self.config["docx_enabled"] = True
+		manifest = mail.project(source_id, self.customer.name)
+		self.assertIsNotNone(manifest)
+		self.assertEqual(manifest["mime_type"], DOCX_MIME)
+		self.assertEqual(manifest["parent_message_id"], "email:" + message.name)
+		value = self.reference(manifest)
+		scope = {"kind": "client", "client_id": self.customer.name}
+		self.assertEqual(policy.read_source(scope, value), content)
+		self.assertEqual(policy.resolve_source_locator(scope, value)["locator"], manifest["locator"])
+		self.config["external_processing"] = {
+			self.customer.name: {"embed": True},
+			self.other.name: {"embed": 1},
+		}
+		with self.assertRaises(ConnectorError) as denied:
+			external_processing._check_current(
+				"embed", scope, [value], background_clients={self.customer.name}
+			)
+		self.assertEqual(denied.exception.status, 403)
+		self.config["external_processing"][self.other.name]["embed"] = True
+		external_processing._check_current("embed", scope, [value], background_clients={self.customer.name})
+		frappe.db.set_value("File", file.name, "attached_to_name", self.make_mail().name)
+		self.assertFalse(policy.authorize_sources(scope, [value])["decisions"][0]["allowed"])
+
+	def test_docx_attachment_with_an_invalid_zip_envelope_is_denied(self):
+		from kanzlei_erp.ai_connector import mail
+
+		self.config["docx_enabled"] = True
+		valid = synthetic_docx()
+		invalid_directory = bytearray(valid)
+		invalid_directory[-10:-6] = (len(valid) * 2).to_bytes(4, "little")
+		message = self.linked()
+		for content in (valid[:-22], bytes(invalid_directory)):
+			file = self.docx_attachment(message, content)
+			manifest = mail.project("file:" + file.name, self.customer.name)
+			self.assertIsNotNone(manifest)
+			with self.assertRaises(ConnectorError) as denied:
+				mail.read_current(self.reference(manifest))
+			self.assertEqual(denied.exception.status, 403)
 
 	def test_flag_is_literal_and_opt_in(self):
 		from kanzlei_erp.ai_connector import mail
@@ -356,6 +449,10 @@ class TestAIConnectorEmail(FrappeTestCase):
 
 		message = self.linked()
 		file = self.attachment(message)
+		self.config["docx_enabled"] = True
+		docx = synthetic_docx()
+		docx_file = self.docx_attachment(message, docx)
+		docx_item = mail.project("file:" + docx_file.name, self.customer.name)
 		item = mail.project("file:" + file.name, self.customer.name)
 		message_item = mail.project("email:" + message.name, self.customer.name)
 		locator = urlsplit(item["locator"])
@@ -418,6 +515,14 @@ class TestAIConnectorEmail(FrappeTestCase):
 				response = api.download_mail_attachment(**arguments)
 				self.assertEqual(response.mimetype, "application/pdf")
 				self.assertEqual(response.get_data(), self.pdf_content)
+				docx_response = api.download_mail_attachment(
+					customer=self.customer.name, file_id=docx_file.name, revision=docx_item["revision"]
+				)
+				self.assertEqual(docx_response.mimetype, DOCX_MIME)
+				self.assertEqual(
+					docx_response.headers["Content-Disposition"], 'attachment; filename="attachment.docx"'
+				)
+				self.assertEqual(docx_response.get_data(), docx)
 				with patch("kanzlei_erp.object_storage.open_file", stream_with_revocation):
 					self.assertEqual(api.download_mail_attachment(**arguments).status_code, 403)
 				self.assertIs(frappe.local.db, original_db)

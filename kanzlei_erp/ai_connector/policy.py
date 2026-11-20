@@ -224,23 +224,25 @@ def manifest(file, client_id, *, managed_only=False, locked=False):
 		"revision": state.revision,
 		"client_ids": [client_id],
 		"title": file.file_name,
-		"mime_type": file.get("mime_type")
-		or mimetypes.guess_type(file.file_name)[0]
-		or "application/octet-stream",
+		"mime_type": mail.DOCX_MIME_TYPE
+		if mail.is_docx(file.file_name)
+		else (file.get("mime_type") or mimetypes.guess_type(file.file_name)[0] or "application/octet-stream"),
 		"source_modified_at": str(file.modified),
-		"locator": _file_locator(client_id, file.name),
+		"locator": _file_locator(client_id, file),
 		"byte_size": state.byte_size,
 		"active": True,
 	}
 
 
-def _file_locator(client_id, file_id):
+def _file_locator(client_id, file):
+	disposition = "attachment" if mail.is_docx(file.file_name) else "inline"
 	return (
 		"/api/method/kanzlei_erp.mandant_documents.download_document?customer="
 		+ quote(client_id, safe="")
 		+ "&file_id="
-		+ quote(file_id, safe="")
-		+ "&disposition=inline"
+		+ quote(file.name, safe="")
+		+ "&disposition="
+		+ disposition
 	)
 
 
@@ -344,7 +346,7 @@ def resolve_source_locator(requested_scope, source):
 		locator = item["locator"]
 	else:
 		file, _ = _authorized(value, requested_scope)
-		locator = _file_locator(client_id, file.name)
+		locator = _file_locator(client_id, file)
 	return {"version": 1, "locator": locator}
 
 
@@ -431,6 +433,14 @@ def read_source(requested_scope, source, *, lock_current=True, managed_only=Fals
 	file, state = _authorized(value, requested_scope, managed_only=managed_only)
 	if state.native:
 		content = state.native.read()
+	else:
+		with open_file(file) as stream:
+			content = stream.read(MAX_BYTES + 1)
+		if len(content) > MAX_BYTES:
+			fail("LIMIT_EXCEEDED", 413)
+	if mail.is_docx(file.file_name):
+		mail.require_docx(content)
+	if state.native:
 		invalidate()
 		if authenticate_current is not None:
 			from kanzlei_erp.ai_connector.inventory import (
@@ -448,10 +458,6 @@ def read_source(requested_scope, source, *, lock_current=True, managed_only=Fals
 			return content
 		_file(value["client_id"], file.name)
 	else:
-		with open_file(file) as stream:
-			content = stream.read(MAX_BYTES + 1)
-		if len(content) > MAX_BYTES:
-			fail("LIMIT_EXCEEDED", 413)
 		_authorized(value, requested_scope, managed_only=managed_only)
 	# The ordinary delegated path takes a current lock. The fixed-ingestion path
 	# runs inside inventory.current_permission_context instead: it is read-only
