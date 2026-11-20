@@ -201,9 +201,7 @@ def _source(source_id, client_id=None):
 	parent_id = "email:" + message.name
 	if file is None:
 		content = _message_bytes(message)
-		revision = hashlib.sha256(
-			_json([source_id, sorted(clients), str(message.modified)]) + content
-		).hexdigest()
+		revision = hashlib.sha256(_json([source_id, sorted(clients)]) + content).hexdigest()
 		manifest = {
 			"version": 1,
 			"source_id": source_id,

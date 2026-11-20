@@ -233,6 +233,22 @@ class TestAIConnectorEmail(FrappeTestCase):
 			mail.read_current(value, before_final_projection=revoke)
 		self.assertEqual(denied.exception.status, 403)
 
+	def test_contact_only_edits_preserve_mail_and_attachment_revisions(self):
+		from kanzlei_erp.ai_connector import mail
+
+		message = self.linked()
+		file = self.attachment(message)
+		source_ids = ("email:" + message.name, "file:" + file.name)
+		before = [mail.project(source_id, self.customer.name) for source_id in source_ids]
+		previous_modified = message.modified
+		contact = self.make_contact(address="no-match@example.invalid", customers=[])
+		message.add_link("Contact", contact.name)
+		message.save(ignore_permissions=True)
+		self.assertNotEqual(previous_modified, message.modified)
+		for source_id, manifest in zip(source_ids, before, strict=True):
+			self.assertEqual(mail.project(source_id, self.customer.name)["revision"], manifest["revision"])
+			self.assertEqual(len(mail.read_current(self.reference(manifest))), manifest["byte_size"])
+
 	def test_delegated_catalogue_authorize_read_and_resolve_agree(self):
 		message = self.linked()
 		file = self.attachment(message)
