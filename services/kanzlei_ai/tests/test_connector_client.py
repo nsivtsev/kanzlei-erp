@@ -71,6 +71,37 @@ def test_incompatible_identity_response_is_rejected():
     assert type(result.value).__name__ == "ConnectorError"
 
 
+@pytest.mark.parametrize("fail_last", [False, True])
+def test_source_authorization_checks_complete_result_in_small_ordered_batches(fail_last):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    refs = [
+        SourceRef(source_id=f"file:{index}", revision="a" * 64, client_id="A")
+        for index in range(25)
+    ]
+    scope = Scope(kind="client", client_id="A")
+    seen = []
+
+    def handler(request):
+        batch = json.loads(request.content)["sources"]
+        if len(batch) > 4 or (fail_last and len(seen) + len(batch) == len(refs)):
+            return httpx.Response(503)
+        seen.extend(entry["source_id"] for entry in batch)
+        result = {"version": 1, "decisions": [{**ref, "allowed": True} for ref in batch]}
+        return httpx.Response(200, json={"message": result})
+
+    if fail_last:
+        with pytest.raises(ConnectorError):
+            asyncio.run(client(handler).authorize_sources("g" * 43, scope, refs))
+        assert seen == [ref.source_id for ref in refs[:-1]]
+    else:
+        result = asyncio.run(client(handler).authorize_sources("g" * 43, scope, refs))
+        actual_ids = [decision.source_id for decision in result.decisions]
+        assert actual_ids == [ref.source_id for ref in refs]
+        assert all(decision.allowed for decision in result.decisions)
+
+
 def test_binary_read_checks_revision_and_checksum():
     from kanzlei_ai.connectors import contracts
 

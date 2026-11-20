@@ -6,16 +6,18 @@ import hmac
 import json
 import mimetypes
 import time
+from dataclasses import dataclass
 from urllib.parse import quote
 
 import frappe
 
-from kanzlei_erp.ai_connector import auth
+from kanzlei_erp.ai_connector import auth, native_drive
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail, text
+from kanzlei_erp.ai_connector.native_drive import MAX_BYTES
 from kanzlei_erp.mandant_documents import get_authorized_document_files, get_documents
 
-MAX_BYTES = 20 * 1024 * 1024
 MAX_BATCH = 50
+DELEGATED_DOCUMENT_PAGE_SIZE = 4
 
 
 def limit(value):
@@ -146,8 +148,15 @@ def _eligible(file):
 	return file
 
 
-def _revision(file):
-	from kanzlei_erp.object_storage import S3_URL_PREFIX, get_binding
+@dataclass(frozen=True)
+class SourceState:
+	revision: str
+	byte_size: int
+	native: native_drive.NativeObject | None
+
+
+def _source_state(file, client_id, *, managed_only=False, locked=False):
+	from kanzlei_erp.object_storage import get_binding
 
 	fields = (
 		"name",
@@ -171,23 +180,34 @@ def _revision(file):
 		"is_private",
 	)
 	state = {key: str(file.get(key) or "") for key in fields}
+	size = int(file.file_size or 0)
+	native = None
 	binding = get_binding(file.file_url)
 	if binding:
 		state["storage"] = [binding.object_key, binding.sha256, binding.file_size]
-	elif not file.file_url.startswith(S3_URL_PREFIX):
+	elif native_drive.is_native(file):
+		native = native_drive.inspect(file, client_id, locked=locked)
+		state["storage"] = ["native", native.bucket, native.key, *native.fingerprint]
+		size = native.fingerprint[1]
+	elif managed_only:
+		fail("UNSUPPORTED_STORAGE", 409)
+	else:
 		from pathlib import Path
 
 		stat = Path(file.get_full_path()).stat()
 		state["storage"] = [stat.st_size, stat.st_mtime_ns]
-	return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+	revision = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+	return SourceState(revision, size, native)
 
 
-def manifest(file, client_id):
+@native_drive.bounded
+def manifest(file, client_id, *, managed_only=False, locked=False):
+	state = _source_state(file, client_id, managed_only=managed_only, locked=locked)
 	return {
 		"version": 1,
 		"source_id": "file:" + file.name,
 		"source_type": "file",
-		"revision": _revision(file),
+		"revision": state.revision,
 		"client_ids": [client_id],
 		"title": file.file_name,
 		"mime_type": file.get("mime_type")
@@ -199,17 +219,18 @@ def manifest(file, client_id):
 		+ "&file_id="
 		+ quote(file.name, safe="")
 		+ "&disposition=inline",
-		"byte_size": int(file.file_size or 0),
+		"byte_size": state.byte_size,
 		"active": True,
 	}
 
 
+@native_drive.bounded
 def documents(client_id, page_limit=50, cursor=None):
 	text(client_id)
 	limit(page_limit)
 	scope({"kind": "client", "client_id": client_id})
 	underlying = _cursor(cursor, "documents:" + client_id)
-	page = get_documents(client_id, cursor=underlying, page_length=page_limit)
+	page = get_documents(client_id, cursor=underlying, page_length=min(page_limit, DELEGATED_DOCUMENT_PAGE_SIZE))
 	items = []
 	ids = [row["file_id"] for row in page["items"] if row["can_download"]]
 	files = get_authorized_document_files(client_id, ids, allow_partial=True)[1] if ids else {}
@@ -218,7 +239,10 @@ def documents(client_id, page_limit=50, cursor=None):
 			continue
 		try:
 			items.append(manifest(_eligible(files[row["file_id"]]), client_id))
-		except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError, ConnectorError:
+		except ConnectorError as error:
+			if error.status == 503:
+				raise
+		except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError:
 			continue
 	return {
 		"version": 1,
@@ -227,15 +251,17 @@ def documents(client_id, page_limit=50, cursor=None):
 	}
 
 
-def authorized(value, requested_scope):
+def _authorized(value, requested_scope, *, managed_only=False):
 	if requested_scope["kind"] == "client" and value["client_id"] != requested_scope["client_id"]:
 		fail("FORBIDDEN", 403)
 	file = _file(value["client_id"], value["source_id"][5:])
-	if _revision(file) != value["revision"]:
+	state = _source_state(file, value["client_id"], managed_only=managed_only)
+	if state.revision != value["revision"]:
 		fail("STALE_SOURCE", 409)
-	return file
+	return file, state
 
 
+@native_drive.bounded
 def authorize_sources(requested_scope, sources):
 	requested_scope = scope(requested_scope)
 	if not isinstance(sources, list) or not 1 <= len(sources) <= MAX_BATCH:
@@ -253,27 +279,55 @@ def authorize_sources(requested_scope, sources):
 		except frappe.PermissionError, frappe.DoesNotExistError:
 			continue
 	decisions = []
+	revisions = {}
 	for value in values:
+		key = value["client_id"], value["source_id"][5:]
 		try:
-			file = files.get((value["client_id"], value["source_id"][5:]))
-			allowed = bool(file and _revision(_eligible(file)) == value["revision"])
-		except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError, ConnectorError:
+			if key not in revisions:
+				file = files.get(key)
+				revisions[key] = _source_state(_eligible(file), key[0]).revision if file else None
+			allowed = revisions[key] == value["revision"]
+		except ConnectorError as error:
+			if error.status == 503:
+				raise
+			revisions[key] = None
+			allowed = False
+		except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError:
+			revisions[key] = None
 			allowed = False
 		decisions.append({**value, "allowed": allowed})
 	return {"version": 1, "decisions": decisions}
 
 
-def read_source(requested_scope, source, *, lock_current=True):
+@native_drive.bounded
+def read_source(requested_scope, source, *, lock_current=True, managed_only=False, authenticate_current=None):
+	from kanzlei_erp.drive_storage import invalidate
 	from kanzlei_erp.object_storage import open_file
 
 	requested_scope = scope(requested_scope)
 	value = reference(source)
-	file = authorized(value, requested_scope)
-	with open_file(file) as stream:
-		content = stream.read(MAX_BYTES + 1)
-	if len(content) > MAX_BYTES:
-		fail("LIMIT_EXCEEDED", 413)
-	authorized(value, requested_scope)
+	file, state = _authorized(value, requested_scope, managed_only=managed_only)
+	if state.native:
+		content = state.native.read()
+		invalidate()
+		if authenticate_current is not None:
+			from kanzlei_erp.ai_connector.inventory import current_permission_context, refresh_principal_permissions
+
+			user = frappe.session.user
+			with current_permission_context():
+				if authenticate_current()["subject"] != user:
+					fail("UNAUTHENTICATED", 401)
+				refresh_principal_permissions(user)
+				scope(requested_scope)
+				_authorized(value, requested_scope, managed_only=managed_only)
+			return content
+		_file(value["client_id"], file.name)
+	else:
+		with open_file(file) as stream:
+			content = stream.read(MAX_BYTES + 1)
+		if len(content) > MAX_BYTES:
+			fail("LIMIT_EXCEEDED", 413)
+		_authorized(value, requested_scope, managed_only=managed_only)
 	# The ordinary delegated path takes a current lock. The fixed-ingestion path
 	# runs inside inventory.current_permission_context instead: it is read-only
 	# and makes its post-read authorization projection at READ COMMITTED.
@@ -281,13 +335,24 @@ def read_source(requested_scope, source, *, lock_current=True):
 
 	try:
 		current = frappe.get_doc("File", file.name, for_update=lock_current)
+		if native_drive.is_native(current) != bool(state.native):
+			fail("STALE_SOURCE", 409)
 		if lock_current:
 			lock_binding(current.file_url)
-		current_revision = _revision(current)
+		current_revision = _source_state(
+			current,
+			value["client_id"],
+			managed_only=managed_only,
+			locked=lock_current,
+		).revision
 	except frappe.QueryDeadlockError:
 		# innodb_snapshot_isolation rejects a current read of a row changed
 		# since this request's snapshot. Never return the already-read bytes.
 		fail("STALE_SOURCE", 409)
+	except frappe.QueryTimeoutError:
+		if state.native:
+			fail("STALE_SOURCE", 409)
+		raise
 	if current_revision != value["revision"]:
 		fail("STALE_SOURCE", 409)
 	return content

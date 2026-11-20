@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({testDir:'./tests',testMatch:'*.browser.spec.ts',reporter:'dot',use:{baseURL:'http://127.0.0.1:19992',headless:true,channel:'chrome'},webServer:[{command:'node tests/stub.mjs',port:19991,reuseExistingServer:false},{command:'KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:19991 npm run dev -- --port 19992 --strictPort',port:19992,reuseExistingServer:false}]});

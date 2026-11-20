@@ -11,7 +11,7 @@ from copy import deepcopy
 
 import frappe
 
-from kanzlei_erp.ai_connector import auth, policy
+from kanzlei_erp.ai_connector import auth, native_drive, policy
 from kanzlei_erp.ai_connector.errors import ConnectorError, fail, text
 from kanzlei_erp.posteingang_permissions import staff
 
@@ -67,14 +67,13 @@ def principal(user):
 
 @contextmanager
 def current_permission_context():
-	"""Use a private READ COMMITTED connection for a background byte read.
+	"""Use a private READ COMMITTED connection for a current permission check.
 
 	It never commits or rolls back the RPC request's database connection. The
 	post-stream projection is the consistency point for fresh SQL-backed
 	DocShare, Customer-root, File and Drive-ancestry reads at READ COMMITTED.
-	Frappe role and User Permission freshness remains cache-dependent; this
-	background ingestion boundary is not a user-facing retrieval authorization
-	contract and must be tightened before the pilot.
+	Frappe role and User Permission freshness remains cache-dependent and
+	must be tightened before the pilot.
 	"""
 	from frappe.database import get_db
 
@@ -160,7 +159,7 @@ def require_clients(clients):
 			fail("FORBIDDEN", 403)
 
 
-def project(name, client, clients, locked=False):
+def _drive_file(name, client, clients, *, locked=False):
 	if client not in clients or not frappe.has_permission("Customer", "read", doc=client):
 		return None
 	try:
@@ -178,36 +177,22 @@ def project(name, client, clients, locked=False):
 			and not frappe.has_permission(file.attached_to_doctype, "read", doc=file.attached_to_name)
 		):
 			return None
-		root = frappe.db.get_value("Customer", client, "kanzlei_drive_folder")
-		parent = file.folder
-		seen = set()
-		while parent and parent not in seen and len(seen) < 256:
-			seen.add(parent)
-			if locked:
-				rows = frappe.db.sql(
-					"SELECT name,folder,is_folder,status,kanzlei_drive_customer FROM `tabFile` WHERE name=%s FOR UPDATE",
-					(parent,),
-					as_dict=True,
-				)
-				row = rows[0] if rows else None
-			else:
-				row = frappe.db.get_value(
-					"File",
-					parent,
-					["name", "folder", "is_folder", "status", "kanzlei_drive_customer"],
-					as_dict=True,
-				)
-			if not row or not row.is_folder or row.status != "Active" or row.kanzlei_drive_customer != client:
-				return None
-			if parent == root:
-				from kanzlei_erp.object_storage import get_binding
+		if native_drive.in_drive(file, client, locked=locked):
+			return file
+	except ConnectorError, frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError:
+		return None
+	return None
 
-				if not get_binding(file.file_url):
-					fail("UNSUPPORTED_STORAGE", 409)
-				return policy.manifest(file, client)
-			parent = row.folder
+
+@native_drive.bounded
+def project(name, client, clients, locked=False):
+	file = _drive_file(name, client, clients, locked=locked)
+	if not file:
+		return None
+	try:
+		return policy.manifest(file, client, managed_only=True, locked=locked)
 	except ConnectorError as error:
-		if error.code == "UNSUPPORTED_STORAGE":
+		if error.code == "UNSUPPORTED_STORAGE" or error.status == 503:
 			raise
 		return None
 	except frappe.PermissionError, frappe.DoesNotExistError, FileNotFoundError:
@@ -215,17 +200,18 @@ def project(name, client, clients, locked=False):
 	return None
 
 
+@native_drive.bounded
 def read_current(source, clients, *, before_final_projection=None):
 	"""Current background projection; never infer access from S3 alone."""
 	value = policy.reference(source)
 	if value["client_id"] not in clients:
 		fail("FORBIDDEN", 403)
 	require_clients(clients)
-	manifest = project(value["source_id"][5:], value["client_id"], clients)
-	if not manifest or manifest["revision"] != value["revision"]:
+	file = _drive_file(value["source_id"][5:], value["client_id"], clients)
+	if not file:
 		fail("STALE_SOURCE", 409)
 	content = policy.read_source(
-		{"kind": "client", "client_id": value["client_id"]}, value, lock_current=False
+		{"kind": "client", "client_id": value["client_id"]}, value, lock_current=False, managed_only=True
 	)
 	# This is the SQL-backed authorization consistency point. Refresh cache state
 	# immediately before it so current DocShare/root/Drive reads use the isolated
@@ -233,12 +219,17 @@ def read_current(source, clients, *, before_final_projection=None):
 	# cache-dependent and is deliberately not promised by this stage.
 	if before_final_projection:
 		before_final_projection()
+	if native_drive.is_native(file):
+		from kanzlei_erp.drive_storage import invalidate
+
+		invalidate()
 	manifest = project(value["source_id"][5:], value["client_id"], clients)
 	if not manifest or manifest["revision"] != value["revision"]:
 		fail("STALE_SOURCE", 409)
 	return content
 
 
+@native_drive.bounded
 def inventory(cursor=None, limit=50):
 	limit = policy.limit(limit)
 	user, clients, binding = settings()
@@ -259,13 +250,17 @@ def inventory(cursor=None, limit=50):
 			order_by="name asc",
 			limit=limit,
 		)
+		scanned = 0
 		for row in rows:
+			if scanned and native_drive.page_should_yield():
+				break
 			item = project(row.name, row.kanzlei_drive_customer, clients)
 			if item:
 				items.append(item)
+			scanned += 1
 		next_cursor = (
-			encode({"kind": "inventory", "watermark": watermark, "after": rows[-1].name}, binding)
-			if len(rows) == limit
+			encode({"kind": "inventory", "watermark": watermark, "after": rows[scanned - 1].name}, binding)
+			if scanned and (len(rows) == limit or scanned < len(rows))
 			else None
 		)
 		return {
@@ -276,6 +271,7 @@ def inventory(cursor=None, limit=50):
 		}
 
 
+@native_drive.bounded
 def changes(cursor, limit=50):
 	limit = policy.limit(limit)
 	user, clients, binding = settings()
@@ -292,7 +288,10 @@ def changes(cursor, limit=50):
 			limit=limit,
 		)
 		items = []
+		after = data["after"]
 		for row in rows:
+			if items and native_drive.page_should_yield():
+				break
 			manifest = project(row.source_id[5:], row.client_id, clients)
 			items.append(
 				{
@@ -302,7 +301,7 @@ def changes(cursor, limit=50):
 					"manifest": manifest,
 				}
 			)
-		after = rows[-1].sequence if rows else data["after"]
+			after = row.sequence
 		return {
 			"version": 1,
 			"items": items,

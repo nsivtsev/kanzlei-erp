@@ -79,13 +79,14 @@ class SearchIndex:
         self.embedding = embedding or SyntheticEmbedding()
 
     @classmethod
-    def from_settings(cls, settings):
+    def from_settings(cls, settings, *, check_compatibility: bool = True):
         key = settings.qdrant_api_key
         return cls(
             client=QdrantClient(
                 url=str(settings.qdrant_url),
                 api_key=key.get_secret_value() if key else None,
                 timeout=2,
+                check_compatibility=check_compatibility,
             ),
             collection=settings.search_collection,
         )

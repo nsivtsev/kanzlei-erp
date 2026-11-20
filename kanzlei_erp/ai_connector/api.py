@@ -69,6 +69,18 @@ def exchange_ticket(ticket=None, version=1, **extra):
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
+def issue_browser_ticket(state=None, challenge=None, version=1, **extra):
+	return auth.issue_browser_ticket(state, challenge)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
+def exchange_browser_ticket(ticket=None, state=None, verifier=None, chat_origin=None, version=1, **extra):
+	return auth.exchange_browser_ticket(ticket, state, verifier, chat_origin)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
 def identity(access_token=None, version=1, **extra):
 	return auth.identity_record(auth.resolve(access_token))
 
@@ -104,7 +116,7 @@ def authorize_sources(access_token=None, scope=None, sources=None, version=1, **
 @endpoint
 def read_source(access_token=None, scope=None, source=None, version=1, **extra):
 	with auth.principal(access_token):
-		content = policy.read_source(scope, source)
+		content = policy.read_source(scope, source, authenticate_current=lambda: auth.resolve(access_token))
 	return Response(
 		content,
 		mimetype="application/octet-stream",

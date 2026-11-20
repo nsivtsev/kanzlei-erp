@@ -22,6 +22,9 @@ from kanzlei_ai.connectors.contracts import (
     SourceRef,
 )
 
+_AUTHORIZATION_BATCH_SIZE = 4
+_MAX_AUTHORIZATION_REFERENCES = 50
+
 
 class FrappeConnector:
     def __init__(
@@ -114,6 +117,18 @@ class FrappeConnector:
     async def exchange_ticket(self, ticket: str) -> Grant:
         return await self._typed(Grant, "exchange_ticket", ticket=ticket)
 
+    async def exchange_browser_ticket(
+        self, ticket: str, state: str, verifier: str, chat_origin: str
+    ) -> Grant:
+        return await self._typed(
+            Grant,
+            "exchange_browser_ticket",
+            ticket=ticket,
+            state=state,
+            verifier=verifier,
+            chat_origin=chat_origin,
+        )
+
     async def identity(self, access_token: str) -> Identity:
         return await self._typed(Identity, "identity", access_token=access_token)
 
@@ -142,18 +157,24 @@ class FrappeConnector:
     async def authorize_sources(
         self, access_token: str, scope: Scope, sources: list[SourceRef]
     ) -> AuthorizationResult:
-        result = await self._typed(
-            AuthorizationResult,
-            "authorize_sources",
-            access_token=access_token,
-            scope=scope.model_dump(exclude_none=True),
-            sources=[s.model_dump() for s in sources],
-        )
-        if [d.model_dump(exclude={"allowed"}) for d in result.decisions] != [
-            s.model_dump() for s in sources
-        ]:
-            raise ConnectorError()
-        return result
+        if not 1 <= len(sources) <= _MAX_AUTHORIZATION_REFERENCES:
+            raise ConnectorError("INVALID_REQUEST", 400)
+        requested_scope = scope.model_dump(exclude_none=True)
+        decisions = []
+        for offset in range(0, len(sources), _AUTHORIZATION_BATCH_SIZE):
+            references = sources[offset : offset + _AUTHORIZATION_BATCH_SIZE]
+            batch = [ref.model_dump() for ref in references]
+            result = await self._typed(
+                AuthorizationResult,
+                "authorize_sources",
+                access_token=access_token,
+                scope=requested_scope,
+                sources=batch,
+            )
+            if [decision.model_dump(exclude={"allowed"}) for decision in result.decisions] != batch:
+                raise ConnectorError()
+            decisions.extend(result.decisions)
+        return AuthorizationResult(version=1, decisions=decisions)
 
     async def read_source(self, access_token: str, scope: Scope, source: SourceRef) -> bytes:
         content, headers = await self._rpc(

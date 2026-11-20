@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -26,7 +27,6 @@ def create_app(
     settings = settings or Settings()
     checks = dependency_probes(settings) if probes is None else probes
     timeout = settings.health_timeout_seconds if timeout_seconds is None else timeout_seconds
-    app = FastAPI(title="Kanzlei AI", version="0.1.0")
     if connector is None and settings.erp_base_url and settings.erp_service_key:
         connector = FrappeConnector(
             str(settings.erp_base_url),
@@ -35,8 +35,44 @@ def create_app(
             site_name=settings.erp_site_name,
             timeout_seconds=settings.erp_timeout_seconds,
         )
+    if settings.chat_enabled and (
+        not settings.search_index_enabled
+        or settings.chat_browser_erp_origin is None
+        or connector is None
+    ):
+        raise ValueError("Chat requires the search index, ERP connector and browser ERP origin")
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        if not settings.chat_enabled:
+            yield
+            return
+
+        from kanzlei_ai.chat.api import ChatRuntime
+        from kanzlei_ai.db import engine_from_settings
+        from kanzlei_ai.search.index import SearchIndex
+
+        engine = engine_from_settings(settings)
+        try:
+            index = SearchIndex.from_settings(settings, check_compatibility=False)
+            try:
+                application.state.chat_runtime = ChatRuntime(engine, index)
+                yield
+            finally:
+                index.client.close()
+        finally:
+            engine.dispose()
+
+    app = FastAPI(title="Kanzlei AI", version="0.1.0", lifespan=lifespan)
     app.state.erp_connector = connector
     app.include_router(router)
+    if settings.chat_enabled:
+        from kanzlei_ai.browser_auth import router as browser_router
+        from kanzlei_ai.chat.api import router as chat_router
+
+        app.state.chat_browser_erp_origin = str(settings.chat_browser_erp_origin).rstrip("/")
+        app.include_router(browser_router)
+        app.include_router(chat_router)
 
     @app.exception_handler(ConnectorError)
     async def connector_error(request: Request, error: ConnectorError) -> JSONResponse:

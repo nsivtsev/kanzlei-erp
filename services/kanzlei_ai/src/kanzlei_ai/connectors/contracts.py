@@ -81,6 +81,12 @@ class ExchangeRequest(Contract):
     ticket: Token = Field(repr=False)
 
 
+class BrowserExchangeRequest(ExchangeRequest):
+    version: Literal[1]
+    state: Token = Field(repr=False)
+    verifier: Token = Field(repr=False)
+
+
 class ClientRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     id: Identifier

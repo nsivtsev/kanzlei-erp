@@ -7,8 +7,8 @@ It does not import Frappe or read ERP database tables.
 
 The service provides health endpoints, durable PDF extraction and indexing jobs,
 and an optional ERP connector with delegated identity and online permissions.
-Hybrid search is internal; the chat API and UI are later stages. No model API
-keys or real documents are needed for local tests.
+The optional local chat uses internal hybrid search with source citations. No
+model API keys or real documents are needed for the synthetic fixture.
 
 ## Start locally
 
@@ -234,3 +234,20 @@ Internal retrieval filters every query by connector and allowed client IDs. It
 checks the current PostgreSQL publication and delegates authorization to the ERP
 under the caller's grant before returning text. A failed ERP check cannot produce
 partial output. There is no public search endpoint in this stage.
+
+### Chat on an isolated synthetic stand
+
+Keep `AI_CHAT_ENABLED=false` on the regular stand. On the isolated stand, migrate
+the AI database to `0005`, enable the index and chat, and set
+`AI_CHAT_BROWSER_ERP_ORIGIN` to the exact ERP origin visible to the browser.
+Continue to configure the API-to-ERP origin and service key separately. The
+isolated ERP site's `kanzlei_ai_connector.browser_chat_origin` must match the
+exact web origin (scheme, host and port). See the [ERP connector contract](docs/erp-connector.md)
+and [web startup instructions](web/README.md).
+
+The UI uses the ERP browser session to sign in and keeps the short-lived grant
+in memory. A conversation stays in its selected Mandant. History and original
+PDF bytes are reauthorized on access; a revoked or replaced source is not
+shown from stored history. A new question searches current sources rather than
+reusing prior answers. The bundled synthetic answer provider exercises this
+flow without an external model and does not measure answer quality.

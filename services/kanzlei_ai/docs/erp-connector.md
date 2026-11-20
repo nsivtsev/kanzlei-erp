@@ -1,11 +1,9 @@
 # ERP connector contract v1
 
 This stage implements delegated user identity, permitted clients and documents,
-batch authorization and bounded retrieval of original stored files. Email bodies
-and the chat UI are later stages. Background ingestion uses the separate
-credential described below. The independent frontend will use Vite and TypeScript;
-this stage adds no
-browser login shortcut or automatic redirect.
+batch authorization and bounded retrieval of original stored files. The optional
+local chat uses the ERP session handoff described below. Background ingestion
+uses a separate credential. Email bodies are outside this contract.
 
 ## Identity and trust boundary
 
@@ -31,11 +29,18 @@ integration key invalidates access. Connector security settings are read without
 Frappe's ordinary request configuration cache. Grants do not extend ERP session
 lifetime. Redis failure closes access; there is no offline authorization fallback.
 
-Keep tickets/grants out of URLs, logs and persisted browser storage. Before adding
-an automatic browser redirect/handoff, implement state and verifier binding (for
-example PKCE) and review the exact-origin/callback policy. The current explicit
-API exchange is not a complete redirect login flow. No fake identity bypass is
-enabled in production code.
+Keep tickets and grants out of URLs, logs and persisted browser storage. The
+explicit exchange remains available; it does not redeem browser-bound tickets.
+
+For the local chat, set `browser_chat_origin` on the isolated ERP connector to
+the exact chat origin. The chat starts the ERP popup with only a random state and
+the SHA-256 challenge of a random verifier. The popup issues a distinct 60-second
+ticket via the ERP session and CSRF-checked POST. The ticket is sent via
+`postMessage` to the configured chat origin. The client verifies origin, window
+and state before sending ticket, state and verifier in the body of
+`POST /v1/auth/browser/exchange`. ERP checks the configured origin, binding and
+live session and consumes the ticket once. The grant keeps the existing
+300-second lifetime and is held only in memory. No fake identity is accepted.
 
 ## Configuration
 
@@ -134,6 +139,13 @@ revision returns `STALE_SOURCE` without bytes. Authorization is checked for each
 request; already delivered bytes cannot be recalled on later access revocation.
 ERP returns a SHA256 and revision header, which the AI client verifies.
 
+Delegated document pages use a short batch and can return fewer items than
+requested with a continuation. The AI adapter splits authorization into short
+ERP requests and validates every decision in order before returning the complete
+result. A failed subrequest does not return partial decisions. After reading a
+native Drive original, the ERP checks the session, source revision and permission
+again on an isolated READ COMMITTED connection before returning bytes.
+
 Public failures are content-free codes: `UNAUTHENTICATED`, `FORBIDDEN`,
 `STALE_SOURCE`, `INVALID_REQUEST`, `LIMIT_EXCEEDED`, `METHOD_NOT_ALLOWED` and
 `CONNECTOR_UNAVAILABLE`. Browser validation errors omit rejected input. Responses
@@ -217,13 +229,16 @@ removes previously indexed sources absent from the completed scan. No event
 retention or pruning is implemented. Operators recover sources that exhausted
 transient attempts by changing the AI pipeline version and initiating a full
 scan/reconciliation; this deliberately creates a fenced new generation rather
-than bypassing the durable retry policy. The feed currently supports managed S3
-Drive files only: a readable active local Drive source reachable during a scan
-or change projection causes `UNSUPPORTED_STORAGE` (409). Migrate local files
-before enabling ingestion; the existing delegated document API still supports
-local files. This restriction is necessary because Suite's failed local WebDAV
-promotion repair can commit raw metadata updates without File hooks. Future
-legacy support needs reliable capture or reconciliation for that path.
+than bypassing the durable retry policy. The feed supports managed S3 Drive
+files with framework storage bindings and native Suite uploads in the flat,
+site-scoped Drive namespace. For a native upload, ERP checks the persisted File,
+Mandant ancestry and exact managed object key before reading S3 metadata. The
+current object fingerprint contributes to its revision. The original read is
+conditional on that fingerprint and rechecks the current source before exposing
+bytes. An inventory or change page can return early with a continuation to
+bound storage requests. A readable, active local Drive source causes
+`UNSUPPORTED_STORAGE` (409) in the feed; delegated reads still support local files.
+Local WebDAV promotion repair can commit raw metadata updates without File hooks.
 
 File writes append private invalidations in the same transaction, without
 network calls or content processing. A locked sequence row serializes event
@@ -234,6 +249,5 @@ activation and rollback explicitly invalidate affected File IDs. Locking reads
 can conflict with concurrent writers; retry a deadlocked operation as a whole
 transaction. Binding replacement scans and locks managed File IDs and URLs to
 match every canonical alias; its cost grows with the number of managed Files,
-but capture does not read file content or call object storage. The AI service now
-provides a durable consumer, metadata-staging worker and periodic reconciliation;
-extraction and indexing remain later stages.
+but capture does not read file content or call object storage. The AI service uses
+a durable consumer, separate extraction and indexing jobs, and periodic reconciliation.

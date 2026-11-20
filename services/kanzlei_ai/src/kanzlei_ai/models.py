@@ -3,9 +3,11 @@
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -142,4 +144,43 @@ index_publications = Table(
     Column("revision", String(64), nullable=False),
     Column("generation", Integer, nullable=False),
     Column("profile", String(100), nullable=False),
+)
+
+chat_conversations = Table(
+    "chat_conversations",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("connector_id", String(200), nullable=False),
+    Column("subject", String(200), nullable=False),
+    Column("client_id", String(200), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Index(
+        "ix_chat_conversations_owner_client",
+        "connector_id",
+        "subject",
+        "client_id",
+        "created_at",
+        "id",
+    ),
+)
+chat_turns = Table(
+    "chat_turns",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column(
+        "conversation_id", ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False
+    ),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("status", String(16), nullable=False),
+    Column("question", Text, nullable=False),
+    Column("answer", Text),
+    # These immutable snapshots carry exact source versions without pinning old index rows.
+    Column("dependencies", JSON, nullable=False),
+    Column("citations", JSON, nullable=False),
+    CheckConstraint(
+        "(status = 'answered' AND answer IS NOT NULL) OR "
+        "(status = 'no_evidence' AND answer IS NULL)",
+        name="ck_chat_turns_completed",
+    ),
+    Index("ix_chat_turns_conversation_page", "conversation_id", "created_at", "id"),
 )

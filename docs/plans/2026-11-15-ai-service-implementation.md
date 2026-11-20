@@ -151,13 +151,29 @@ An initial driver traceback exposed the local AI database password. It was rotat
 
 ## Task 7: Scoped chat API and first browser scenario
 
-**Create:** `services/kanzlei_ai/src/kanzlei_ai/chat/{__init__.py,api.py,context.py,citations.py,history.py}`, `migrations/versions/0002_conversations.py`, `tests/test_chat.py`, `tests/integration/test_history_permissions.py`, `web/` containing the independent client and its browser tests.
+**Create:** `services/kanzlei_ai/src/kanzlei_ai/chat/{__init__.py,api.py,context.py,citations.py,history.py}`, `migrations/versions/0005_chat_conversations.py`, `tests/test_chat.py`, `tests/integration/test_history_permissions.py`, `web/` containing the independent client and its browser tests.
 
 1. Add tests for immutable scope, source-grounded citations, unanswerable questions, model injection in a PDF, denied source expansion, unavailable ERP authorization and revoked access to old answers/summaries.
 2. Run `uv run pytest tests/test_chat.py tests/integration/test_history_permissions.py -q`; verify failures for the intended missing behavior.
 3. Implement context assembly, model adapter calls, SSE, citation validation and dependency-aware history. A fake provider enables deterministic integration work; live providers remain separately configured. Check authorization before generation starts and fail closed if ERP cannot authorize. Stop known-invalidated work; do not claim already-streamed content can be recalled.
 4. Add the small independent chat UI with login, selected client, source processing state and clickable citations. Exercise one browser scenario: upload a synthetic PDF to client A in Drive, wait for readiness, ask a gold question in A's chat, open the cited original, then verify client B and an unauthorized user cannot obtain the content. If the UI supports DE/RU or responsive layouts, exercise both languages and one narrow viewport.
 5. Rerun affected checks after fixes, record concise results and commit. The first milestone is complete only after this scenario passes with real isolated storage/search/queue components.
+
+**Result on 2026-11-20:** The independent German chat uses ERP browser sign-in,
+an immutable Mandant scope, a deterministic extractive provider, and live ERP
+authorization for cited originals and history. Native Suite uploads in managed
+flat S3 storage flow through inventory without a separate attachment binding.
+
+The isolated acceptance uploaded a synthetic PDF through Suite Drive, then
+processed and indexed it through Celery, MinIO, PostgreSQL and Qdrant. Chromium
+showed the expected amount and rendered page 2 of the original at desktop and
+mobile widths. Mandant B and a separate B-only user could not access A's
+content. A committed DocShare revocation during the S3 read withheld the
+original, and the browser cleared the old answer and viewer after denial.
+Focused checks passed: 44 service unit tests, 36 PostgreSQL integration tests,
+8 native ERP connector tests and 3 Chromium source-refresh regressions.
+Production, external model providers and real documents were outside this run.
+Role and User Permission cache freshness remains a pre-pilot boundary.
 
 ## Task 8: OCR quality and model integration
 
