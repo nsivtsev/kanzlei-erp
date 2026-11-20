@@ -1,7 +1,7 @@
 """Fixed-width Mistral text embeddings in caller input order."""
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 import httpx
 
@@ -12,8 +12,28 @@ EMBEDDING_DIMENSIONS = 1024
 # A conservative UTF-8 byte budget for the embedding model's batch token limit.
 _BATCH_BUDGET = 15000
 _INPUT_OVERHEAD = 16
-_MAX_BATCH_ITEMS = 32
+MAX_BATCH_ITEMS = 32
 _MAX_EMBEDDING_RESPONSE_BYTES = 1024 * 1024
+
+
+def embedding_batches(texts: Sequence[str]) -> Iterator[list[str]]:
+    batch: list[str] = []
+    size = 0
+    for text in texts:
+        try:
+            cost = len(text.encode("utf-8")) + _INPUT_OVERHEAD
+        except UnicodeError:
+            raise MistralError("MISTRAL_INVALID_INPUT", retryable=False) from None
+        if cost > _BATCH_BUDGET:
+            raise MistralError("MISTRAL_INPUT_LIMIT_EXCEEDED", retryable=False)
+        if size + cost > _BATCH_BUDGET or len(batch) == MAX_BATCH_ITEMS:
+            yield batch
+            batch = []
+            size = 0
+        batch.append(text)
+        size += cost
+    if batch:
+        yield batch
 
 
 class MistralEmbeddingProvider:
@@ -32,25 +52,9 @@ class MistralEmbeddingProvider:
     def embed(
         self, texts: Sequence[str], *, before_batch: Callable[[], None] | None = None
     ) -> list[list[float]]:
-        batches: list[list[str]] = []
-        batch: list[str] = []
-        size = 0
-        for text in texts:
-            try:
-                cost = len(text.encode("utf-8")) + _INPUT_OVERHEAD
-            except UnicodeError:
-                raise MistralError("MISTRAL_INVALID_INPUT", retryable=False) from None
-            if cost > _BATCH_BUDGET:
-                raise MistralError("MISTRAL_INPUT_LIMIT_EXCEEDED", retryable=False)
-            if size + cost > _BATCH_BUDGET or len(batch) == _MAX_BATCH_ITEMS:
-                batches.append(batch)
-                batch = []
-                size = 0
-            batch.append(text)
-            size += cost
-        if not batch:
+        batches = list(embedding_batches(texts))
+        if not batches:
             return []
-        batches.append(batch)
 
         vectors: list[list[float]] = []
         with self._http.client(self._transport) as client:

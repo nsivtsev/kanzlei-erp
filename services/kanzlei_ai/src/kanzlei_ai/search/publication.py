@@ -2,6 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
+from struct import Struct
 
 from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -10,6 +11,7 @@ from kanzlei_ai import jobs as job_service
 from kanzlei_ai.models import (
     document_artifacts,
     document_chunks,
+    index_embedding_batches,
     index_publications,
     jobs,
     outbox,
@@ -17,12 +19,18 @@ from kanzlei_ai.models import (
     sources,
 )
 from kanzlei_ai.providers.mistral import MistralError
+from kanzlei_ai.providers.mistral_embeddings import (
+    EMBEDDING_DIMENSIONS,
+    MAX_BATCH_ITEMS,
+    embedding_batches,
+)
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
 
 INDEX_STAGE = "index"
 INDEX_UNAVAILABLE = "INDEX_UNAVAILABLE"
 INDEX_PROCESSING_DENIED = "INDEX_PROCESSING_DENIED"
 MAX_REINDEX_LIMIT = 500
+_EMBEDDING_ROW = Struct(f"!{EMBEDDING_DIMENSIONS}f")
 
 
 class _ProcessingDenied(Exception):
@@ -77,6 +85,9 @@ def queue_index(conn, source, artifact_id, *, profile=INDEX_PROFILE):
         "lease_token": None,
         "lease_until": None,
         "retry_not_before": None,
+        "index_build_id": None,
+        "index_offset": 0,
+        "index_repair_started": False,
         "error_code": None,
         "updated_at": func.clock_timestamp(),
     }
@@ -90,7 +101,8 @@ def queue_index(conn, source, artifact_id, *, profile=INDEX_PROFILE):
     ).scalar_one_or_none()
     if job_id is None:
         return False
-    conn.execute(
+    job_service.clear_index_batches(conn, job_id)
+    superseded = conn.execute(
         update(jobs)
         .where(
             jobs.c.source_id == source["id"],
@@ -105,7 +117,10 @@ def queue_index(conn, source, artifact_id, *, profile=INDEX_PROFILE):
             lease_until=None,
             updated_at=func.clock_timestamp(),
         )
-    )
+        .returning(jobs.c.id)
+    ).scalars()
+    for other_job_id in superseded:
+        job_service.clear_index_batches(conn, other_job_id)
     pending = select(outbox.c.id).where(outbox.c.job_id == job_id, outbox.c.published_at.is_(None))
     if not conn.execute(select(pending.exists())).scalar_one():
         conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
@@ -202,6 +217,13 @@ def _read_projection(engine, job_id, token, profile):
         )
         if not client_ids:
             return None
+        live = profile == MISTRAL_INDEX_PROFILE
+        offset = job["index_offset"] if live else 0
+        limit = (
+            min(MAX_BATCH_ITEMS, job_service.MAX_CHUNKS - offset + 1)
+            if live
+            else (job_service.MAX_CHUNKS + 1)
+        )
         chunks = (
             conn.execute(
                 select(document_chunks.c.id, document_chunks.c.text)
@@ -212,31 +234,49 @@ def _read_projection(engine, job_id, token, profile):
                     document_chunks.c.generation == job["generation"],
                 )
                 .order_by(document_chunks.c.ordinal)
-                .limit(job_service.MAX_CHUNKS + 1)
+                .offset(offset)
+                .limit(limit)
             )
             .mappings()
             .all()
         )
-        if len(chunks) > job_service.MAX_CHUNKS:
+        if offset + len(chunks) > job_service.MAX_CHUNKS:
             raise ValueError("Invalid index projection")
-        return source["source_id"], {
-            "publication_id": token,
-            "connector_id": source["connector_id"],
-            "source_pk": source["id"],
-            "revision": job["revision"],
-            "generation": job["generation"],
-            "client_ids": client_ids,
-            "chunks": chunks,
-        }
+        cached_batch = None
+        if live and chunks and job["index_build_id"]:
+            cached_batch = conn.execute(
+                select(index_embedding_batches.c.vectors).where(
+                    index_embedding_batches.c.job_id == job_id,
+                    index_embedding_batches.c.offset == offset,
+                )
+            ).scalar_one_or_none()
+        return (
+            source["source_id"],
+            job,
+            cached_batch,
+            {
+                "publication_id": (job["index_build_id"] or token) if live else token,
+                "connector_id": source["connector_id"],
+                "source_pk": source["id"],
+                "revision": job["revision"],
+                "generation": job["generation"],
+                "client_ids": client_ids,
+                "chunks": chunks,
+            },
+        )
 
 
-def _activate_once(engine, job_id, token, profile):
+def _activate_once(engine, job_id, token, profile, publication_id=None):
     with engine.begin() as conn:
         source, job = _publication_claim(conn, job_id, token, profile)
         if job is None:
             return False
+        if publication_id is not None:
+            if publication_id != (job["index_build_id"] or token):
+                return False
+            job_service.clear_index_batches(conn, job_id)
         values = {
-            "publication_id": token,
+            "publication_id": publication_id or token,
             "artifact_id": job["artifact_id"],
             "revision": job["revision"],
             "generation": job["generation"],
@@ -272,6 +312,67 @@ def _index_claim_is_live(engine, job_id, token, profile):
         return job is not None
 
 
+def _save_batch_once(engine, job_id, token, offset, encoded):
+    with engine.begin() as conn:
+        _, job = _publication_claim(conn, job_id, token, MISTRAL_INDEX_PROFILE)
+        if job is None or job["index_offset"] != offset:
+            return False
+        conn.execute(
+            insert(index_embedding_batches).values(job_id=job_id, offset=offset, vectors=encoded)
+        )
+        if job["index_build_id"] is None:
+            conn.execute(update(jobs).where(jobs.c.id == job_id).values(index_build_id=token))
+        return True
+
+
+def _advance_build_once(engine, job_id, token, offset, next_offset, repair):
+    with engine.begin() as conn:
+        _, job = _publication_claim(conn, job_id, token, MISTRAL_INDEX_PROFILE)
+        if job is None or job["index_offset"] != offset:
+            return False
+        job_service.requeue_progress(
+            conn,
+            job_id,
+            index_offset=next_offset,
+            index_repair_started=repair or job["index_repair_started"],
+        )
+        return True
+
+
+def _stage_live(engine, job_id, token, index, job, encoded, projection, before_embed, check_claim):
+    locked = job_service._publish_with_lock_retry
+    offset = job["index_offset"]
+    chunks = projection["chunks"]
+    if not chunks:
+        check_claim()
+        build_id = projection["publication_id"]
+        if index.verify_staged(build_id, offset):
+            return locked(_activate_once, engine, job_id, token, MISTRAL_INDEX_PROFILE, build_id)
+        if job["index_repair_started"]:
+            job_service.fail_terminal(
+                engine, job_id, token, "INDEX_STORAGE_INCOMPLETE", stage=INDEX_STAGE
+            )
+        else:
+            locked(_advance_build_once, engine, job_id, token, offset, 0, True)
+        return False
+
+    if encoded is None:
+        batch = next(embedding_batches([chunk["text"] for chunk in chunks]))
+        vectors = index.embedding.embed(batch, before_batch=before_embed)
+        if len(vectors) != len(batch):
+            raise ValueError("Invalid embedding count")
+        encoded = b"".join(_EMBEDDING_ROW.pack(*vector) for vector in vectors)
+        if not locked(_save_batch_once, engine, job_id, token, offset, encoded):
+            return False
+    vectors = [list(vector) for vector in _EMBEDDING_ROW.iter_unpack(encoded)]
+    if not 1 <= len(vectors) <= len(chunks):
+        raise ValueError("Invalid saved embedding batch")
+    check_claim()
+    index.stage_vectors(**{**projection, "chunks": chunks[: len(vectors)]}, vectors=vectors)
+    locked(_advance_build_once, engine, job_id, token, offset, offset + len(vectors), False)
+    return False
+
+
 def process(engine, job_id, token, index: SearchIndex, *, authorize=None) -> bool:
     profile = getattr(index, "profile", INDEX_PROFILE)
     selection = job_service._publish_with_lock_retry(
@@ -279,7 +380,7 @@ def process(engine, job_id, token, index: SearchIndex, *, authorize=None) -> boo
     )
     if selection is None:
         return False
-    source_id, projection = selection
+    source_id, job, cached_batch, projection = selection
 
     def check_claim():
         if not job_service._publish_with_lock_retry(
@@ -304,6 +405,18 @@ def process(engine, job_id, token, index: SearchIndex, *, authorize=None) -> boo
     try:
         if profile != INDEX_PROFILE and authorize is None:
             raise _ProcessingDenied
+        if profile == MISTRAL_INDEX_PROFILE:
+            return _stage_live(
+                engine,
+                job_id,
+                token,
+                index,
+                job,
+                cached_batch,
+                projection,
+                before_embed,
+                check_claim,
+            )
         # The adapter confirms all bounded batches under one immutable publication ID.
         if authorize is not None:
             index.stage(**projection, before_embed=before_embed)

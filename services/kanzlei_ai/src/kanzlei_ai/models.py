@@ -9,11 +9,13 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Table,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 
@@ -62,6 +64,9 @@ jobs = Table(
     Column("stage", String(16), nullable=False, server_default="extract"),
     Column("ocr_profile", String(16), nullable=False, server_default="native"),
     Column("artifact_id", ForeignKey("document_artifacts.id")),
+    Column("index_build_id", String(36)),
+    Column("index_offset", Integer, nullable=False, server_default="0"),
+    Column("index_repair_started", Boolean, nullable=False, server_default=false()),
     Column("status", String(32), nullable=False),
     Column("error_code", String(64)),
     Column("lease_token", String(36)),
@@ -87,6 +92,13 @@ extraction_plans = Table(
     Column("page_count", Integer, nullable=False),
     Column("native_blocks", JSON, nullable=False),
     Column("ocr_pages", JSON, nullable=False),
+)
+index_embedding_batches = Table(
+    "index_embedding_batches",
+    metadata,
+    Column("job_id", ForeignKey("jobs.id"), primary_key=True),
+    Column("offset", Integer, primary_key=True),
+    Column("vectors", LargeBinary, nullable=False),
 )
 ocr_page_checkpoints = Table(
     "ocr_page_checkpoints",

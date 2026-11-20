@@ -5,7 +5,7 @@ import time
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import func, insert, select, text, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.exc import OperationalError
 
 from kanzlei_ai.connectors.contracts import SourceManifest
@@ -13,6 +13,7 @@ from kanzlei_ai.models import (
     document_artifacts,
     document_chunks,
     extraction_plans,
+    index_embedding_batches,
     jobs,
     ocr_page_checkpoints,
     outbox,
@@ -80,6 +81,10 @@ def exhausted_code(stage):
     return "INDEX_RETRY_EXHAUSTED" if stage == "index" else RETRY_EXHAUSTED
 
 
+def clear_index_batches(conn, job_id):
+    conn.execute(delete(index_embedding_batches).where(index_embedding_batches.c.job_id == job_id))
+
+
 def claim(engine, job_id, *, stage="extract", ocr_profile=None, pipeline_version=None):
     with engine.begin() as conn:
         source, job = _locked(conn, job_id, stage=stage)
@@ -115,6 +120,8 @@ def claim(engine, job_id, *, stage="extract", ocr_profile=None, pipeline_version
                     .where(sources.c.id == source["id"])
                     .values(status="failed", error_code=code)
                 )
+            elif stage == "index":
+                clear_index_batches(conn, job_id)
             return None
         token = str(uuid.uuid4())
         conn.execute(
@@ -187,6 +194,8 @@ def _fail_once(engine, job_id, token, error_code, terminal, stage, retry_after=N
                     .where(sources.c.id == source["id"])
                     .values(status="failed", error_code=final_code)
                 )
+            elif stage == "index":
+                clear_index_batches(conn, job_id)
         else:
             delay = min(300, 2 ** job["attempts"])
             if retry_after is not None:
@@ -323,22 +332,27 @@ def _checkpoint_once(engine, job_id, token, table, values):
         if job is None:
             return False
         conn.execute(insert(table).values(job_id=job_id, **values))
-        conn.execute(
-            update(jobs)
-            .where(jobs.c.id == job_id)
-            .values(
-                status="queued",
-                attempts=0,
-                lease_token=None,
-                lease_until=None,
-                error_code=None,
-                updated_at=func.clock_timestamp(),
-            )
-        )
-        # The preceding delivery may still be marking its outbox row sent.
-        # Always give the newly committed portion its own durable message.
-        conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
+        requeue_progress(conn, job_id)
         return True
+
+
+def requeue_progress(conn, job_id, **progress):
+    """Release a fenced claim and publish the next durable portion."""
+    conn.execute(
+        update(jobs)
+        .where(jobs.c.id == job_id)
+        .values(
+            status="queued",
+            attempts=0,
+            lease_token=None,
+            lease_until=None,
+            error_code=None,
+            updated_at=func.clock_timestamp(),
+            **progress,
+        )
+    )
+    # The preceding delivery may still be marking its outbox row sent.
+    conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
 
 
 def save_extraction_plan(engine, job_id, token, plan):

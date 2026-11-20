@@ -331,13 +331,9 @@ def test_profile_reindex_uses_saved_chunks_and_can_skip_current_publications(dat
         ),
     )
 
-    assert publication.process(
-        database,
-        index_job["id"],
-        token,
-        index,
-        authorize=authorize,
-    )
+    assert not publication.process(database, index_job["id"], token, index, authorize=authorize)
+    token = job_service.claim(database, index_job["id"], stage="index")
+    assert publication.process(database, index_job["id"], token, index, authorize=authorize)
     assert len(staged) == 1
     assert authorized[0]["source_id"] == "file:ocr"
     assert publication.reindex(database, "synthetic", profile=live, missing_only=True).queued == 0
@@ -479,6 +475,8 @@ def test_old_index_profile_cannot_activate_after_new_profile_queued(database):
 
 
 def test_embedding_authorization_runs_before_each_provider_batch(database):
+    from kanzlei_ai.models import index_embedding_batches
+
     sync.initialize(database)
     _inventory(database, _manifest())
     extract = _jobs(database)[0]
@@ -493,27 +491,33 @@ def test_embedding_authorization_runs_before_each_provider_batch(database):
             "content_sha256": "c" * 64,
             "artifact_key": "synthetic/artifact",
             "page_count": 1,
-            "chunks": [{"id": "chunk", "page": 1, "kind": "text", "ordinal": 0, "text": "saved"}],
+            "chunks": [
+                {"id": f"chunk-{n}", "page": 1, "kind": "text", "ordinal": n, "text": "saved"}
+                for n in range(33)
+            ],
         },
         enqueue_index=True,
         index_profile=live,
     )
     job_id = _jobs(database, "index")[0]["id"]
-    token = job_service.claim(database, job_id, stage="index")
     policy_checks, batches = [], []
 
     def authorize(**source):
         policy_checks.append(source)
         return len(policy_checks) == 1
 
-    def stage(*, before_embed, **_):
-        for number in (1, 2):
-            before_embed()
-            batches.append(number)
+    def embed(inputs, *, before_batch):
+        before_batch()
+        batches.append(len(inputs))
+        return [[1] * 1024 for _ in inputs]
 
-    assert not publication.process(
-        database, job_id, token, SimpleNamespace(profile=live, stage=stage), authorize=authorize
+    index = SimpleNamespace(
+        profile=live, embedding=SimpleNamespace(embed=embed), stage_vectors=lambda **_: None
     )
+    for _ in range(2):
+        token = job_service.claim(database, job_id, stage="index")
+        assert token
+        assert not publication.process(database, job_id, token, index, authorize=authorize)
     assert (
         policy_checks
         == [
@@ -526,8 +530,10 @@ def test_embedding_authorization_runs_before_each_provider_batch(database):
         ]
         * 2
     )
-    assert batches == [1]
+    assert batches == [32]
     assert _jobs(database, "index")[0]["error_code"] == "INDEX_PROCESSING_DENIED"
+    with database.connect() as conn:
+        assert conn.execute(select(index_embedding_batches)).all() == []
 
 
 def test_mistral_ocr_denial_happens_before_external_page_call(database, extraction, monkeypatch):
@@ -677,3 +683,147 @@ def test_native_mode_keeps_text_available_on_a_mixed_pdf(database, extraction):
     assert extraction.ocr_calls == []
     with database.connect() as conn:
         assert conn.execute(select(document_chunks.c.page)).scalar_one() == 1
+
+
+def test_long_embedding_resumes_paid_batches_and_activates_only_complete_projection(
+    database, monkeypatch
+):
+    import json
+
+    import httpx
+    from qdrant_client import QdrantClient
+
+    from kanzlei_ai.models import index_embedding_batches, index_publications
+    from kanzlei_ai.providers.mistral_embeddings import MistralEmbeddingProvider
+    from kanzlei_ai.search.index import SearchIndex
+
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    source_job = _jobs(database)[0]["id"]
+    profile = "mistral-embed-v1"
+    texts = [f"Synthetic chunk {n}" for n in range(225)]
+    assert job_service.publish_extraction(
+        database,
+        source_job,
+        job_service.claim(database, source_job),
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [
+                {"id": f"chunk-{n}", "page": 1, "kind": "text", "ordinal": n, "text": value}
+                for n, value in enumerate(texts)
+            ],
+        },
+        enqueue_index=True,
+        index_profile=profile,
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    elapsed = 0
+    requests = []
+    policy = []
+
+    def authorize(**ref):
+        policy.append(ref)
+        return True
+
+    def request_embedding(request):
+        nonlocal elapsed
+        elapsed += 9
+        assert elapsed < 60
+        items = json.loads(request.content)["input"]
+        requests.append(items)
+        return httpx.Response(
+            200, json={"data": [{"index": i, "embedding": [1] * 1024} for i in range(len(items))]}
+        )
+
+    client = QdrantClient(":memory:")
+    index = SearchIndex(
+        client=client,
+        collection="long_fixture",
+        profile=profile,
+        dimensions=1024,
+        embedding=MistralEmbeddingProvider(
+            endpoint="https://mistral.invalid",
+            api_key="fixture-key",
+            transport=httpx.MockTransport(request_embedding),
+        ),
+    )
+    upsert = client.upsert
+    failures = [True]
+    collection_lost = False
+
+    def write(*args, **kwargs):
+        result = upsert(*args, **kwargs)
+        if failures:
+            failures.pop()
+            raise OSError("synthetic lost acknowledgement after Qdrant write")
+        return result
+
+    monkeypatch.setattr(client, "upsert", write)
+    for _ in range(30):
+        elapsed = 0
+        with database.begin() as conn:
+            conn.execute(update(jobs).values(retry_not_before=None))
+        lease = job_service.claim(database, job_id, stage="index", pipeline_version=profile)
+        assert lease
+        completed = publication.process(database, job_id, lease, index, authorize=authorize)
+        assert elapsed <= 9
+        if completed:
+            break
+        with database.connect() as conn:
+            assert conn.execute(select(index_publications)).all() == []
+        if _jobs(database, "index")[0]["index_offset"] == len(texts) and not collection_lost:
+            assert client.delete_collection("long_fixture")
+            collection_lost = True
+    else:
+        pytest.fail("Long artifact never activated")
+
+    assert [item for batch in requests for item in batch] == texts
+    assert len(requests) == len(policy) == 8
+    assert collection_lost
+    assert client.count("long_fixture", exact=True).count == len(texts)
+    with database.connect() as conn:
+        assert conn.execute(select(index_embedding_batches)).all() == []
+
+
+def test_embedding_response_cannot_checkpoint_a_replaced_source(database):
+    from kanzlei_ai.models import index_embedding_batches, index_publications
+
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    extract_id = _jobs(database)[0]["id"]
+    profile = "mistral-embed-v1"
+    assert job_service.publish_extraction(
+        database,
+        extract_id,
+        job_service.claim(database, extract_id),
+        {
+            "parser_version": "synthetic",
+            "content_sha256": "c" * 64,
+            "artifact_key": "synthetic/artifact",
+            "page_count": 1,
+            "chunks": [{"id": "chunk", "page": 1, "kind": "text", "ordinal": 0, "text": "saved"}],
+        },
+        enqueue_index=True,
+        index_profile=profile,
+    )
+
+    def embed(texts, *, before_batch):
+        before_batch()
+        _inventory(database, _manifest(revision="b"))
+        return [[1] * 1024 for _ in texts]
+
+    def reject_stage(**_):
+        pytest.fail("A stale embedding claimant wrote to the projection")
+
+    index = SimpleNamespace(
+        profile=profile, embedding=SimpleNamespace(embed=embed), stage_vectors=reject_stage
+    )
+    job_id = _jobs(database, "index")[0]["id"]
+    token = job_service.claim(database, job_id, stage="index")
+    assert not publication.process(database, job_id, token, index, authorize=lambda **_: True)
+    with database.connect() as conn:
+        assert conn.execute(select(index_embedding_batches)).all() == []
+        assert conn.execute(select(index_publications)).all() == []

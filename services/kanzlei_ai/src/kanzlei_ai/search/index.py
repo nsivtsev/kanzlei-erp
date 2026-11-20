@@ -188,12 +188,7 @@ class SearchIndex:
         if any(not isinstance(t, str) for t in texts):
             raise ValueError("chunk text must be a string")
         self._ensure_schema()
-        existing = self.client.count(
-            self.collection,
-            count_filter=models.Filter(must=[_match("publication_id", publication_id)]),
-            exact=True,
-        ).count
-        if existing:
+        if self._point_count(publication_id):
             raise ValueError("publication already staged")
         if self.profile == MISTRAL_INDEX_PROFILE:
             if before_embed is None:
@@ -201,12 +196,73 @@ class SearchIndex:
             vectors = self.embedding.embed(texts, before_batch=before_embed)
         else:
             vectors = self.embedding.embed(texts)
-        if len(vectors) != len(texts) or any(len(v) != self.dimensions for v in vectors):
+        self._write_vectors(
+            publication_id,
+            connector_id,
+            source_pk,
+            revision,
+            generation,
+            client_ids,
+            chunks,
+            vectors,
+        )
+        if self._point_count(publication_id) != len(chunks):
+            raise RuntimeError("search index publication incomplete")
+
+    def stage_vectors(
+        self,
+        *,
+        publication_id,
+        connector_id,
+        source_pk,
+        revision,
+        generation,
+        client_ids,
+        chunks,
+        vectors,
+    ):
+        """Stage a confirmed batch under the durable build ID."""
+        UUID(publication_id)
+        self._ensure_schema()
+        self._write_vectors(
+            publication_id,
+            connector_id,
+            source_pk,
+            revision,
+            generation,
+            client_ids,
+            chunks,
+            vectors,
+        )
+
+    def verify_staged(self, publication_id, expected_count):
+        self._ensure_schema()
+        return self._point_count(publication_id) == expected_count
+
+    def _point_count(self, publication_id):
+        return self.client.count(
+            self.collection,
+            count_filter=models.Filter(must=[_match("publication_id", publication_id)]),
+            exact=True,
+        ).count
+
+    def _write_vectors(
+        self,
+        publication_id,
+        connector_id,
+        source_pk,
+        revision,
+        generation,
+        client_ids,
+        chunks,
+        vectors,
+    ):
+        if len(vectors) != len(chunks) or any(len(v) != self.dimensions for v in vectors):
             raise ValueError("invalid embedding dimensions")
         points = [
             models.PointStruct(
-                id=point_id(publication_id, chunk_id),
-                vector={"dense": vector, "sparse": _sparse(text)},
+                id=point_id(publication_id, chunk["id"]),
+                vector={"dense": vector, "sparse": _sparse(chunk["text"])},
                 payload={
                     "publication_id": publication_id,
                     "connector_id": connector_id,
@@ -215,11 +271,11 @@ class SearchIndex:
                     "generation": generation,
                     "client_ids": list(client_ids),
                     "profile": self.profile,
-                    "chunk_id": chunk_id,
-                    "identifiers": sorted(_hash(i) for i in exact_identifiers(text)),
+                    "chunk_id": chunk["id"],
+                    "identifiers": sorted(_hash(i) for i in exact_identifiers(chunk["text"])),
                 },
             )
-            for chunk_id, text, vector in zip(ids, texts, vectors, strict=True)
+            for chunk, vector in zip(chunks, vectors, strict=True)
         ]
         for start in range(0, len(points), 100):
             result = self.client.upsert(
@@ -230,12 +286,6 @@ class SearchIndex:
             )
             if result.status != models.UpdateStatus.COMPLETED:
                 raise RuntimeError("search index write not confirmed")
-        if self.client.count(
-            self.collection,
-            count_filter=models.Filter(must=[_match("publication_id", publication_id)]),
-            exact=True,
-        ).count != len(points):
-            raise RuntimeError("search index publication incomplete")
 
     def candidates(
         self,
