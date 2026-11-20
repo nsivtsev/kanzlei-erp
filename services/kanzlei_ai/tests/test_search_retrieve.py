@@ -79,11 +79,48 @@ def test_external_question_embedding_checks_policy_before_search():
             )
             raise ConnectorError("FORBIDDEN", 403)
 
-    index = EmptyIndex()
-    index.profile = MISTRAL_INDEX_PROFILE
+    class ExternalIndex(EmptyIndex):
+        profile = MISTRAL_INDEX_PROFILE
+
+        def candidates(self, *, before_query_embed, **kwargs):
+            before_query_embed()
+            return super().candidates(**kwargs)
+
+    index = ExternalIndex()
     with pytest.raises(ConnectorError, match="FORBIDDEN"):
         search("synthetic", Scope(kind="client", client_id="A"), DeniedConnector(), index)
     assert index.calls == []
+
+
+def test_query_policy_is_refreshed_after_identifier_lookup(monkeypatch):
+    from qdrant_client import QdrantClient
+
+    from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE, SearchIndex
+
+    revoked = False
+
+    def revoke_during_scroll(*args, **kwargs):
+        nonlocal revoked
+        revoked = True
+        return [], None
+
+    class Connector(ScopeConnector):
+        async def check_processing_policy(self, operation, scope, sources, *, access_token):
+            if revoked:
+                raise ConnectorError("FORBIDDEN", 403)
+
+    class Embedding:
+        def embed(self, texts):
+            pytest.fail("Revoked question reached the external model")
+
+    client = QdrantClient(":memory:")
+    index = SearchIndex(
+        client=client, collection="external", embedding=Embedding(), profile=MISTRAL_INDEX_PROFILE
+    )
+    index._ensure_schema()
+    monkeypatch.setattr(client, "scroll", revoke_during_scroll)
+    with pytest.raises(ConnectorError, match="FORBIDDEN"):
+        search("RE-2026-0042", Scope(kind="client", client_id="A"), Connector(), index)
 
 
 @pytest.mark.parametrize("kind", ["general", "client"])

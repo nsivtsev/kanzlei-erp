@@ -242,6 +242,7 @@ def _artifact_store(settings):
 
 
 def _process_extraction_portion(engine, job_id, token, settings, source, context, factory):
+    from kanzlei_ai.connectors.base import ConnectorError
     from kanzlei_ai.documents.artifacts import LimitExceeded
     from kanzlei_ai.documents.parse import Block, ParsedPdf, TerminalExtractionError, parse_pdf
 
@@ -293,13 +294,19 @@ def _process_extraction_portion(engine, job_id, token, settings, source, context
             raise TerminalExtractionError("OCR_PROFILE_CHANGED")
         page = pending[0]
         if profile == "mistral":
-            for client_id in context["manifest"]["client_ids"]:
-                ref = source.model_copy(update={"client_id": client_id})
-                if _authorize_ocr(settings, ref) is not True:
-                    raise TerminalExtractionError("OCR_PROCESSING_DENIED")
-            if not extraction_claim_is_live(engine, job_id, token):
-                return None
-        recognized = provider.recognize_page(content, page)
+
+            def authorize_page():
+                for client_id in context["manifest"]["client_ids"]:
+                    ref = source.model_copy(update={"client_id": client_id})
+                    if _authorize_ocr(settings, ref) is not True:
+                        raise TerminalExtractionError("OCR_PROCESSING_DENIED")
+                if not extraction_claim_is_live(engine, job_id, token):
+                    raise ConnectorError("STALE_SOURCE", 409)
+
+            authorize_page()
+            recognized = provider.recognize_page(content, page, before_request=authorize_page)
+        else:
+            recognized = provider.recognize_page(content, page)
         if not isinstance(recognized, list) or any(
             not isinstance(block, Block)
             or block.page != page

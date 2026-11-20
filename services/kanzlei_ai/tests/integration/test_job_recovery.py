@@ -1,12 +1,66 @@
 """Lease and generation fencing against PostgreSQL, without eager workers."""
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import case, select, text, update
 
 from kanzlei_ai import sync
 from kanzlei_ai.models import jobs, sources
 
 pytestmark = pytest.mark.integration
+
+
+def test_retry_cooldown_does_not_crowd_out_due_jobs(database):
+    from kanzlei_ai import outbox
+    from kanzlei_ai.models import outbox as messages
+
+    sync.initialize(database)
+    epoch = sync.start_scan(database, "erp")
+    manifests = [
+        {
+            "version": 1,
+            "source_id": f"file:{name}",
+            "source_type": "file",
+            "revision": "a" * 64,
+            "client_ids": ["client"],
+            "title": name,
+            "mime_type": "application/pdf",
+            "source_modified_at": "2026-01-01",
+            "locator": "/file",
+            "byte_size": 1,
+            "active": True,
+        }
+        for name in ("cooldown", "due")
+    ]
+    sync.apply_inventory(
+        database,
+        "erp",
+        epoch,
+        None,
+        {"items": manifests, "next_cursor": None, "changes_cursor": "w"},
+    )
+    with database.begin() as conn:
+        ids = dict(conn.execute(select(sources.c.source_id, jobs.c.id).join(jobs)).all())
+        conn.execute(update(messages).values(published_at=text("clock_timestamp()")))
+        conn.execute(
+            update(jobs).values(
+                updated_at=text("clock_timestamp() - interval '2 mins'"),
+                retry_not_before=case(
+                    (
+                        jobs.c.id == ids["file:cooldown"],
+                        text("clock_timestamp() + interval '1 day'"),
+                    ),
+                ),
+            )
+        )
+
+    assert outbox.recover(database, limit=1) == 1
+    with database.connect() as conn:
+        assert (
+            conn.execute(
+                select(messages.c.job_id).where(messages.c.published_at.is_(None))
+            ).scalar_one()
+            == ids["file:due"]
+        )
 
 
 def test_expired_worker_cannot_publish_over_new_generation(database):

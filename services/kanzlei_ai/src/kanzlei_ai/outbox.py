@@ -106,12 +106,20 @@ def recover(engine, limit=100, *, include_index=False, index_profile=None):
             .where(
                 eligible_stage,
                 or_(
+                    jobs.c.retry_not_before.is_(None),
+                    jobs.c.retry_not_before <= func.clock_timestamp(),
+                ),
+                or_(
                     and_(
                         jobs.c.status == "queued",
                         jobs.c.updated_at < func.clock_timestamp() - text("interval '60 seconds'"),
                     ),
                     and_(jobs.c.status == "running", jobs.c.lease_until < func.clock_timestamp()),
                 ),
+            )
+            .order_by(
+                func.coalesce(jobs.c.lease_until, jobs.c.retry_not_before, jobs.c.updated_at),
+                jobs.c.id,
             )
             .limit(limit)
         ).all()

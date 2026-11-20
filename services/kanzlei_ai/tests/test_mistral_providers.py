@@ -53,6 +53,25 @@ def provider(provider_type, handler, **kwargs):
     )
 
 
+def test_ocr_policy_is_rechecked_after_rendering_before_network(monkeypatch):
+    from kanzlei_ai.connectors.base import ConnectorError
+
+    rendered = []
+
+    def render(content, page):
+        rendered.append((content, page))
+        return b"fixture-image"
+
+    def deny():
+        assert rendered == [(PDF, 1)]
+        raise ConnectorError("FORBIDDEN", 403)
+
+    monkeypatch.setattr(mistral_ocr, "_render_page", render)
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("Denied raster reached Mistral"))
+    with pytest.raises(ConnectorError, match="FORBIDDEN"):
+        ocr.recognize_page(PDF, 1, before_request=deny)
+
+
 def _pdf_bytes(writer):
     with BytesIO() as original:
         writer.write(original)
@@ -141,7 +160,7 @@ def test_ocr_posts_only_rendered_page_and_keeps_original_provenance(monkeypatch)
         )
 
     ocr = provider(MistralOcrProvider, handler)
-    assert ocr.profile == "mistral-ocr-4-1"
+    assert ocr.profile == "mistral-ocr-4-1-png200-v1"
     assert ocr.recognize_page(content, 2) == [
         Block(2, "text", "Rechnung"),
         Block(2, "table", TABLE),

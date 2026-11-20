@@ -238,7 +238,13 @@ class SearchIndex:
             raise RuntimeError("search index publication incomplete")
 
     def candidates(
-        self, *, query: str, connector_id: str, client_ids: Sequence[str], limit: int
+        self,
+        *,
+        query: str,
+        connector_id: str,
+        client_ids: Sequence[str],
+        limit: int,
+        before_query_embed: Callable[[], None] | None = None,
     ) -> dict[str, list[Candidate]]:
         result: dict[str, list[Candidate]] = {"exact": [], "dense": [], "sparse": []}
         if limit <= 0 or not client_ids:
@@ -311,6 +317,10 @@ class SearchIndex:
                 with_payload=True,
             )
             result["exact"] = convert(points)
+        if self.profile == MISTRAL_INDEX_PROFILE:
+            if before_query_embed is None:
+                raise ValueError("External query embedding requires a processing policy check")
+            before_query_embed()
         dense = self.embedding.embed([query])
         if len(dense) != 1 or len(dense[0]) != self.dimensions:
             raise ValueError("invalid embedding dimensions")

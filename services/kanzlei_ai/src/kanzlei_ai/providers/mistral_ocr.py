@@ -3,6 +3,7 @@
 import math
 import re
 from base64 import b64encode
+from collections.abc import Callable
 from contextlib import closing
 from io import BytesIO
 
@@ -35,7 +36,7 @@ class MistralOcrError(ExtractionError):
 
 
 class MistralOcrProvider:
-    profile = OCR_MODEL
+    profile = f"{OCR_MODEL}-png200-v1"
 
     def __init__(
         self,
@@ -49,7 +50,9 @@ class MistralOcrProvider:
         self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds, gate)
         self._transport = transport
 
-    def recognize_page(self, content: bytes, page: int) -> list[Block]:
+    def recognize_page(
+        self, content: bytes, page: int, *, before_request: Callable[[], None] | None = None
+    ) -> list[Block]:
         if type(page) is not int or not 1 <= page <= MAX_PAGES:
             raise TerminalExtractionError("OCR_INVALID_PAGE")
         if len(content) > MAX_SOURCE_BYTES:
@@ -69,6 +72,8 @@ class MistralOcrProvider:
         }
         try:
             with self._http.client(self._transport) as client:
+                if before_request is not None:
+                    before_request()
                 result = self._http.post(client, "ocr", payload, limit=_MAX_OCR_RESPONSE_BYTES)
         except MistralError as error:
             if error.status == 429:

@@ -44,7 +44,14 @@ def test_search_index_uses_configured_embedding_profile_and_dimensions():
     assert client.get_collection(index.collection).config.params.vectors["dense"].size == 1024
     points, _ = client.scroll(index.collection, with_payload=True)
     assert points[0].payload["profile"] == "mistral-embed-v1"
-    result = index.candidates(query="Rechnung", connector_id="erp", client_ids=["a"], limit=1)
+    result = index.candidates(
+        query="Rechnung",
+        connector_id="erp",
+        client_ids=["a"],
+        limit=1,
+        before_query_embed=lambda: checked.append(True),
+    )
+    assert checked == [True, True]
     assert result["dense"][0].publication_id == publication
 
 

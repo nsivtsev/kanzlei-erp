@@ -272,11 +272,17 @@ def _rank(
 
 
 def _index_candidates(
-    index: SearchIndex, query: str, connector_id: str, client_ids: Sequence[str], limit: int
+    index: SearchIndex,
+    query: str,
+    connector_id: str,
+    client_ids: Sequence[str],
+    limit: int,
+    before_query_embed=None,
 ) -> dict[str, list[Candidate]]:
     try:
+        kwargs = {"before_query_embed": before_query_embed} if before_query_embed else {}
         candidates = index.candidates(
-            query=query, connector_id=connector_id, client_ids=client_ids, limit=limit
+            query=query, connector_id=connector_id, client_ids=client_ids, limit=limit, **kwargs
         )
         return {
             branch: [
@@ -286,6 +292,8 @@ def _index_candidates(
             ]
             for branch in _BRANCHES
         }
+    except ConnectorError:
+        raise
     except Exception:
         # Provider/transport exceptions can contain query or transport details.
         raise RuntimeError("SEARCH_INDEX_UNAVAILABLE") from None
@@ -315,13 +323,22 @@ async def retrieve(
             if not client_ids:
                 return []
             profile = getattr(index, "profile", INDEX_PROFILE)
+
+            def authorize_query():
+                asyncio.run(
+                    connector.check_processing_policy("embed", scope, [], access_token=access_token)
+                )
+
+            before_query_embed = authorize_query if profile == MISTRAL_INDEX_PROFILE else None
             for pool_size in (max(50, limit * 4), 200):
-                if profile == MISTRAL_INDEX_PROFILE:
-                    await connector.check_processing_policy(
-                        "embed", scope, [], access_token=access_token
-                    )
                 branches = await asyncio.to_thread(
-                    _index_candidates, index, query, identity.connector_id, client_ids, pool_size
+                    _index_candidates,
+                    index,
+                    query,
+                    identity.connector_id,
+                    client_ids,
+                    pool_size,
+                    before_query_embed,
                 )
                 candidates = tuple(dict.fromkeys(c for branch in branches.values() for c in branch))
                 if not candidates:

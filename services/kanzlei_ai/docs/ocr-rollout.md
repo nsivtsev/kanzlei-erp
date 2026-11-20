@@ -44,6 +44,11 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
    worker. Review completed and failed jobs in PostgreSQL and verify that
    current successfully extracted sources have committed artifacts. Resolve or
    explicitly accept failed documents before cutover.
+   A fresh corpus includes all initial PDFs. An upgraded corpus retries legacy
+   `OCR_REQUIRED` failures automatically in the Paddle profile and preserves
+   other completed revisions. If a previously completed PDF has scanned pages
+   missing from its old artifact, run `requeue-extract SOURCE_ID` while Paddle
+   is still the effective profile and let that job finish before cutover.
 
 ## Mistral cutover
 
@@ -57,8 +62,9 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
    server worker consuming `celery,ocr-mistral`.
 2. Run `python -m kanzlei_ai.coordinator cutover-ocr` for the configured
    connector. Resume polling from the saved feed cursor. New and changed
-   documents select Mistral OCR for pages that need it. Current Paddle artifacts
-   keep their provenance.
+   documents select Mistral OCR for pages that need it. The worker renders each
+   selected page to a fresh PNG and rechecks the Mandant policy before sending
+   it. Current Paddle artifacts keep their provenance.
 3. Run `python -m kanzlei_ai.coordinator reindex --missing-only` and repeat
    with `--cursor <next_cursor>` until there is no continuation. The index
    worker builds the separate 1024-dimensional Mistral collection directly from
@@ -66,9 +72,10 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
    `AI_CHAT_ENABLED=true`.
 4. To stop external processing, revoke the affected Mandant policy immediately
    and stop the Mistral consumers and API before changing their model profile.
-   Keep artifacts, leases, and cursors for recovery. Use `requeue-extract
-   SOURCE_ID` to retry OCR for a specific current document. Run reindex again
-   for artifacts whose embedding work needs to be retried.
+   Keep artifacts, leases, and cursors so interrupted jobs can resume when
+   processing is restored. `requeue-extract SOURCE_ID` starts a fresh OCR
+   generation under the current profile, which is Mistral after cutover. Use
+   `reindex --missing-only` to retry embeddings from existing artifacts.
 
 ## Synthetic results on the M1 Max
 
