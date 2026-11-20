@@ -50,8 +50,9 @@ class MistralRequestGate:
                 ) as broker,
                 broker.lock(self._LOCK, timeout=120, blocking=False),
             ):
-                if broker.exists(self._COOLDOWN):
-                    raise MistralError("MISTRAL_RATE_LIMITED", status=429)
+                remaining = broker.ttl(self._COOLDOWN)
+                if remaining >= 0:
+                    raise MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=remaining)
                 try:
                     yield
                 except MistralError as error:
@@ -70,8 +71,9 @@ class MistralRequestGate:
                 ) as broker,
                 broker.lock(self._LOCK, timeout=120, blocking=False),
             ):
-                if await broker.exists(self._COOLDOWN):
-                    raise MistralError("MISTRAL_RATE_LIMITED", status=429)
+                remaining = await broker.ttl(self._COOLDOWN)
+                if remaining >= 0:
+                    raise MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=remaining)
                 try:
                     yield
                 except MistralError as error:

@@ -108,6 +108,25 @@ def test_explicit_pipeline_version_change_still_creates_new_generation(database)
     ]
 
 
+def test_bootstrap_picks_up_previous_ocr_required_and_cutover_handles_reverted_revision(database):
+    sync.initialize(database)
+    original = _manifest()
+    _inventory(database, original, profile="native")
+    native = _jobs(database)[0]
+    token = job_service.claim(database, native["id"], ocr_profile="native")
+    assert job_service.fail_terminal(database, native["id"], token, "OCR_REQUIRED")
+    _inventory(database, original, profile="paddle")
+    assert sync.cutover_ocr(database, "synthetic")
+    _inventory(database, _manifest(revision="b"))
+    _inventory(database, original)
+    assert [(row["generation"], row["ocr_profile"]) for row in _jobs(database)] == [
+        (1, "native"),
+        (2, "paddle"),
+        (3, "mistral"),
+        (4, "mistral"),
+    ]
+
+
 @pytest.fixture
 def extraction(monkeypatch):
     from kanzlei_ai.documents import parse
@@ -249,6 +268,14 @@ def test_ocr_during_stale_claim_cannot_checkpoint_or_publish(database, extractio
 
 
 def test_profile_reindex_uses_saved_chunks_and_can_skip_current_publications(database):
+    import json
+
+    import httpx
+    from qdrant_client import QdrantClient
+
+    from kanzlei_ai.providers.mistral_embeddings import MistralEmbeddingProvider
+    from kanzlei_ai.search.index import SearchIndex
+
     sync.initialize(database)
     _inventory(database, _manifest())
     extract = _jobs(database)[0]
@@ -279,18 +306,40 @@ def test_profile_reindex_uses_saved_chunks_and_can_skip_current_publications(dat
     )
     assert staged == []
 
-    def stage(*, before_embed, **data):
-        before_embed()
-        staged.append(data)
+    authorized = []
+
+    def request_embedding(request):
+        assert authorized
+        payload = json.loads(request.content)
+        assert payload["input"] == ["saved"]
+        staged.append(payload)
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1] * 1024}]})
+
+    def authorize(**source):
+        authorized.append(source)
+        return True
+
+    index = SearchIndex(
+        client=QdrantClient(":memory:"),
+        collection="mistral_fixture",
+        profile=live,
+        dimensions=1024,
+        embedding=MistralEmbeddingProvider(
+            endpoint="https://mistral.invalid",
+            api_key="fixture-key",
+            transport=httpx.MockTransport(request_embedding),
+        ),
+    )
 
     assert publication.process(
         database,
         index_job["id"],
         token,
-        SimpleNamespace(profile=live, stage=stage),
-        authorize=lambda **_: True,
+        index,
+        authorize=authorize,
     )
-    assert staged[0]["chunks"][0]["text"] == "saved"
+    assert len(staged) == 1
+    assert authorized[0]["source_id"] == "file:ocr"
     assert publication.reindex(database, "synthetic", profile=live, missing_only=True).queued == 0
     assert len(_jobs(database)) == 1
 
@@ -485,13 +534,15 @@ def test_mistral_ocr_denial_happens_before_external_page_call(database, extracti
     sync.initialize(database)
     sync.start_scan(database, "synthetic")
     sync.cutover_ocr(database, "synthetic")
-    _inventory(database, _manifest())
+    manifest = _manifest()
+    manifest["client_ids"] = ["a-allowed", "b-denied"]
+    _inventory(database, manifest)
     job_id = _jobs(database)[0]["id"]
     authorize_calls = []
 
     def deny(_settings, source):
-        authorize_calls.append(source.source_id)
-        return False
+        authorize_calls.append((source.source_id, source.client_id))
+        return source.client_id == "a-allowed"
 
     monkeypatch.setattr(worker, "_authorize_ocr", deny, raising=False)
 
@@ -505,9 +556,22 @@ def test_mistral_ocr_denial_happens_before_external_page_call(database, extracti
             extraction.settings,
             ocr_provider_factory=extraction.provider,
         )
-    assert authorize_calls == ["file:ocr"]
+    assert authorize_calls == [("file:ocr", "a-allowed"), ("file:ocr", "b-denied")]
     assert extraction.ocr_calls == []
     assert _jobs(database)[0]["error_code"] == "OCR_PROCESSING_DENIED"
+
+
+def test_provider_retry_after_is_retained_in_the_durable_job(database):
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+    token = job_service.claim(database, job_id, ocr_profile="paddle")
+    assert job_service.fail(database, job_id, token, "OCR_RATE_LIMITED", retry_after=75)
+
+    job = _jobs(database)[0]
+    assert job["status"] == "queued"
+    assert (job["retry_not_before"] - job["updated_at"]).total_seconds() == 75
+    assert job_service.claim(database, job_id, ocr_profile="paddle") is None
 
 
 def test_recovery_exhaustion_fails_current_ocr_source(database):

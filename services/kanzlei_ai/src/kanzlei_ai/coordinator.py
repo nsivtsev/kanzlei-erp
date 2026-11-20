@@ -150,6 +150,8 @@ def main():
             reindex_parser.error(
                 f"Cursor must be nonnegative and limit must be 1–{MAX_REINDEX_LIMIT}"
             )
+    if args.command == "cutover-ocr" and not settings.mistral_enabled:
+        parser.error("OCR cutover requires AI_MISTRAL_ENABLED")
     engine = engine_from_settings(settings)
     try:
         if args.command == "migrate":

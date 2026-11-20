@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from dataclasses import asdict, replace
+from functools import lru_cache
 from hashlib import sha256
 
 from celery import Celery
@@ -65,6 +66,8 @@ def _run_extraction(job_id, profile):
     try:
         settings = Settings()
         if profile != "native" and not settings.ingestion_enabled:
+            return
+        if profile == "mistral" and not settings.mistral_enabled:
             return
         engine = engine_from_settings(settings)
         token = claim(engine, job_id, ocr_profile=profile)
@@ -137,20 +140,69 @@ def _background_connector(settings):
 
 
 def _ocr_provider(settings, profile):
-    """Integration hook for the explicitly selected worker's OCR adapter."""
     from kanzlei_ai.documents.parse import TerminalExtractionError
 
+    if profile == "paddle" and settings.paddle_model_dir and settings.paddle_docling_artifacts_dir:
+        return _paddle_provider(settings.paddle_model_dir, settings.paddle_docling_artifacts_dir)
+    if profile == "mistral" and settings.mistral_enabled:
+        from kanzlei_ai.providers.mistral import MistralRequestGate
+        from kanzlei_ai.providers.mistral_ocr import MistralOcrProvider
+
+        return MistralOcrProvider(
+            endpoint=settings.mistral_endpoint,
+            api_key=settings.mistral_api_key.get_secret_value(),
+            gate=MistralRequestGate(settings.redis_url.get_secret_value()),
+        )
     raise TerminalExtractionError("OCR_PROVIDER_UNCONFIGURED")
 
 
+@lru_cache(maxsize=1)
+def _paddle_provider(model_dir, artifacts_dir):
+    from kanzlei_ai.providers.paddle_ocr import PaddleOcrProvider
+
+    return PaddleOcrProvider(model_dir, artifacts_path=artifacts_dir)
+
+
+async def _allow_processing(connector, operation, refs):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope
+
+    if not refs:
+        return False
+    try:
+        for ref in refs:
+            await connector.check_processing_policy(
+                operation, Scope(kind="client", client_id=ref.client_id), [ref]
+            )
+    except ConnectorError as error:
+        if error.status in {401, 403, 404, 409}:
+            return False
+        raise
+    return True
+
+
 def _authorize_ocr(settings, source):
-    """Integration hook for authorization immediately before external OCR."""
-    return False
+    return settings.mistral_enabled and asyncio.run(
+        _allow_processing(_background_connector(settings), "ocr", [source])
+    )
 
 
 def _index_authorizer(settings):
-    """Integration hook for the external embedding processing policy."""
-    return None
+    if settings.model_profile != "mistral":
+        return None
+
+    from kanzlei_ai.connectors.contracts import SourceRef
+
+    def authorize(*, connector_id, source_id, revision, client_ids):
+        if connector_id != settings.ingestion_connector_id:
+            return False
+        refs = [
+            SourceRef(client_id=client_id, source_id=source_id, revision=revision)
+            for client_id in client_ids
+        ]
+        return asyncio.run(_allow_processing(_background_connector(settings), "embed", refs))
+
+    return authorize
 
 
 def _artifact_store(settings):
@@ -241,8 +293,10 @@ def _process_extraction_portion(engine, job_id, token, settings, source, context
             raise TerminalExtractionError("OCR_PROFILE_CHANGED")
         page = pending[0]
         if profile == "mistral":
-            if _authorize_ocr(settings, source) is not True:
-                raise TerminalExtractionError("OCR_PROCESSING_DENIED")
+            for client_id in context["manifest"]["client_ids"]:
+                ref = source.model_copy(update={"client_id": client_id})
+                if _authorize_ocr(settings, ref) is not True:
+                    raise TerminalExtractionError("OCR_PROCESSING_DENIED")
             if not extraction_claim_is_live(engine, job_id, token):
                 return None
         recognized = provider.recognize_page(content, page)
@@ -376,7 +430,11 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
         return False
     except ExtractionError as error:
         if error.retryable:
-            fail(engine, job_id, token, error.code)
+            retry_after = getattr(error, "retry_after", None)
+            if retry_after is None:
+                fail(engine, job_id, token, error.code)
+            else:
+                fail(engine, job_id, token, error.code, retry_after=retry_after)
         else:
             fail_terminal(engine, job_id, token, error.code)
         return False

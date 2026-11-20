@@ -39,7 +39,9 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
 
 3. Once inventory finishes, consume the change feed to its current end and
    pause ingestion polling. Leave dispatch and recovery running while the OCR
-   queue drains. Review completed and failed jobs in PostgreSQL and verify that
+   queue drains. Stop the coordinator's `run` process and use its `recover` and
+   `dispatch` commands until the queue settles. Keep ingestion enabled on the Mac
+   worker. Review completed and failed jobs in PostgreSQL and verify that
    current successfully extracted sources have committed artifacts. Resolve or
    explicitly accept failed documents before cutover.
 
@@ -67,3 +69,12 @@ Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
    Keep artifacts, leases, and cursors for recovery. Use `requeue-extract
    SOURCE_ID` to retry OCR for a specific current document. Run reindex again
    for artifacts whose embedding work needs to be retried.
+
+## Synthetic results on the M1 Max
+
+PaddleOCR passed all seven OCR checks on the German evaluation fixtures, including
+amounts, the invoice identifier, the date, and the two exact table rows. In a
+separate single-process benchmark on repeated synthetic scan pages, native PDF
+parsing plus OCR took 16.6, 22.2 and 65.3 seconds for 1, 10 and 30 pages. The
+one-page run included cold model loading. Peak resident memory was 2.5 GiB. This
+benchmark excludes ERP, network and durable queue work.

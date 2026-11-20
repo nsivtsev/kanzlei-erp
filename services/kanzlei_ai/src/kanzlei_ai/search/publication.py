@@ -16,12 +16,12 @@ from kanzlei_ai.models import (
     relations,
     sources,
 )
-from kanzlei_ai.search.index import INDEX_PROFILE, SearchIndex
+from kanzlei_ai.providers.mistral import MistralError
+from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
 
 INDEX_STAGE = "index"
 INDEX_UNAVAILABLE = "INDEX_UNAVAILABLE"
 INDEX_PROCESSING_DENIED = "INDEX_PROCESSING_DENIED"
-MISTRAL_INDEX_PROFILE = "mistral-embed-v1"
 MAX_REINDEX_LIMIT = 500
 
 
@@ -313,6 +313,14 @@ def process(engine, job_id, token, index: SearchIndex, *, authorize=None) -> boo
         job_service.fail_terminal(engine, job_id, token, INDEX_PROCESSING_DENIED, stage=INDEX_STAGE)
         return False
     except _ClaimLost:
+        return False
+    except MistralError as error:
+        if error.retryable:
+            job_service.fail(
+                engine, job_id, token, error.code, stage=INDEX_STAGE, retry_after=error.retry_after
+            )
+        else:
+            job_service.fail_terminal(engine, job_id, token, error.code, stage=INDEX_STAGE)
         return False
     except Exception:
         job_service.fail(engine, job_id, token, INDEX_UNAVAILABLE, stage=INDEX_STAGE)

@@ -159,7 +159,7 @@ def _complete_once(engine, job_id, token):
         return True
 
 
-def _fail_once(engine, job_id, token, error_code, terminal, stage):
+def _fail_once(engine, job_id, token, error_code, terminal, stage, retry_after=None):
     error_code = _error_code(error_code)
 
     with engine.begin() as conn:
@@ -189,6 +189,8 @@ def _fail_once(engine, job_id, token, error_code, terminal, stage):
                 )
         else:
             delay = min(300, 2 ** job["attempts"])
+            if retry_after is not None:
+                delay = max(delay, min(retry_after, 86400))
             conn.execute(
                 update(jobs)
                 .where(jobs.c.id == job_id)
@@ -294,8 +296,12 @@ def publish_extraction(
     )
 
 
-def fail(engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE", *, stage="extract"):
-    return _publish_with_lock_retry(_fail_once, engine, job_id, token, error_code, False, stage)
+def fail(
+    engine, job_id, token, error_code="EXTRACTION_UNAVAILABLE", *, stage="extract", retry_after=None
+):
+    return _publish_with_lock_retry(
+        _fail_once, engine, job_id, token, error_code, False, stage, retry_after
+    )
 
 
 def fail_terminal(engine, job_id, token, error_code, *, stage="extract"):

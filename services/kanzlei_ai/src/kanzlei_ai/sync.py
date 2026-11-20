@@ -216,14 +216,21 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
         )
     )
     existing = None if row is None else _latest_extract(conn, row["id"], manifest["revision"])
+    same_revision = row is not None and row["active"] and row["revision"] == manifest["revision"]
+    needs_local_ocr = (
+        same_revision
+        and ocr_profile == "paddle"
+        and existing is not None
+        and existing["ocr_profile"] == "native"
+        and row["error_code"] == "OCR_REQUIRED"
+    )
     changed = (
-        row is None
-        or not row["active"]
-        or row["revision"] != manifest["revision"]
+        not same_revision
         or not set(manifest["client_ids"]).issubset(current_clients)
         or existing is None
         or existing["generation"] != row["generation"]
         or existing["pipeline_version"] != pipeline_version
+        or needs_local_ocr
     )
     incoming_clients = manifest["client_ids"]
     manifest["client_ids"] = sorted(current_clients | set(incoming_clients))
@@ -266,7 +273,11 @@ def _upsert(conn, connector_id, epoch, manifest, pipeline_version, ocr_profile):
             )
         )
     if changed:
-        selected_profile = existing["ocr_profile"] if existing else ocr_profile
+        selected_profile = (
+            existing["ocr_profile"]
+            if same_revision and existing and not needs_local_ocr
+            else ocr_profile
+        )
         _enqueue(
             conn, source_id, manifest["revision"], generation, pipeline_version, selected_profile
         )

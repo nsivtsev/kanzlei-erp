@@ -184,6 +184,18 @@ Role and User Permission cache freshness remains a pre-pilot boundary.
 3. Evaluate actual selected models on synthetic scans, tables, exact identifiers, semantic questions, contradictions and unanswerable questions. Measure retrieval separately from answer quality and citation correctness.
 4. Document observed quality, latency, resource use and provider cost; do not infer quality from fake-provider checks. Commit independently.
 
+**Implementation on 2026-11-20:** The initial archive profile runs PaddleOCR locally.
+PostgreSQL records the OCR route and page checkpoints for each extraction job. An operator
+switches a connector to Mistral for subsequent revisions and builds the separate embedding
+index from saved chunks. ERP authorizes each external processing operation for the current
+Mandant and source revision. See the [rollout instructions](../../services/kanzlei_ai/docs/ocr-rollout.md).
+
+PaddleOCR passed seven German fixture checks on Apple Silicon. The isolated service checks
+exercised durable recovery and reindexing through the Mistral adapter with synthetic HTTP
+responses. Live Mistral quality, latency and billing remain unmeasured. The current chat
+verifier still limits answers to supported invoice amounts with exact evidence. The production
+VPN and client archive belong to the pilot.
+
 ## Task 9: Email and broader source coverage
 
 **Modify:** `kanzlei_erp/ai_connector/{api.py,policy.py,events.py,inventory.py}`, `kanzlei_erp/email_history.py` only where explicit direct timeline-link changes require event coverage.
