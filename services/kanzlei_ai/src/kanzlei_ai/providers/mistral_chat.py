@@ -6,7 +6,12 @@ import httpx
 
 from kanzlei_ai.chat.citations import AnswerPacket
 from kanzlei_ai.chat.context import CHUNK_LIMIT, CONTEXT_LIMIT, Evidence
-from kanzlei_ai.providers.mistral import MistralError, _json_object, _MistralEndpoint
+from kanzlei_ai.providers.mistral import (
+    MistralError,
+    MistralRequestGate,
+    _json_object,
+    _MistralEndpoint,
+)
 
 CHAT_MODEL = "mistral-small-2603"
 _MAX_QUESTION_CHARACTERS = 8192
@@ -30,8 +35,9 @@ class MistralChatProvider:
         api_key: str,
         timeout_seconds: float = 12,
         transport: httpx.AsyncBaseTransport | None = None,
+        gate: MistralRequestGate | None = None,
     ):
-        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds)
+        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds, gate)
         self._transport = transport
 
     async def generate(self, question: str, context: tuple[Evidence, ...]) -> AnswerPacket | None:

@@ -30,7 +30,7 @@ from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Identity, Scope
 from kanzlei_ai.models import document_artifacts, index_publications, jobs, relations, sources
 from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
-from kanzlei_ai.search.index import INDEX_PROFILE, SearchIndex
+from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
 from kanzlei_ai.search.publication import INDEX_STAGE
 
 _POLL_SECONDS = 2.0
@@ -150,6 +150,7 @@ async def _session(adapter, access_token, service, *, client_id=None, conversati
         identity.connector_id,
         identity.subject,
         Scope(kind="client", client_id=client_id),
+        index_profile=getattr(service.index, "profile", INDEX_PROFILE),
     )
     await adapter.check_scope(access_token, session.scope)
     return session
@@ -205,7 +206,7 @@ def _source_status(engine, session, entries):
                 pub.source_id == src.id,
                 pub.revision == src.revision,
                 pub.generation == src.generation,
-                pub.profile == INDEX_PROFILE,
+                pub.profile == session.index_profile,
             ),
         )
         .outerjoin(
@@ -224,7 +225,7 @@ def _source_status(engine, session, entries):
                 job.revision == src.revision,
                 job.generation == src.generation,
                 job.stage == INDEX_STAGE,
-                job.pipeline_version == INDEX_PROFILE,
+                job.pipeline_version == session.index_profile,
             ),
         )
     )
@@ -326,6 +327,11 @@ async def _refresh_context(service, session, context):
 
 
 async def _generate(service, session, question, context):
+    if session.index_profile == MISTRAL_INDEX_PROFILE:
+        refs = list(dict.fromkeys(item.dependency.source for item in context))
+        await session.connector.check_processing_policy(
+            "generate", session.scope, refs, access_token=session.token
+        )
     task = asyncio.create_task(service.provider.generate(question, context))
     try:
         while True:

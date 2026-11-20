@@ -37,6 +37,34 @@ def test_chat_rejects_incomplete_opt_in_configuration():
         create_app(settings=Settings(_env_file=None, chat_enabled=True))
 
 
+def test_mistral_requires_explicit_opt_in_credentials_and_approved_origin():
+    from kanzlei_ai.search.index import SearchIndex
+
+    args = {"_env_file": None, "model_profile": "mistral"}
+    with pytest.raises(ValidationError):
+        Settings(**args)
+    with pytest.raises(ValidationError):
+        Settings(
+            **args,
+            mistral_enabled=True,
+            mistral_api_key="fixture",
+            mistral_endpoint="https://proxy.invalid",
+        )
+    settings = Settings(
+        **args,
+        mistral_enabled=True,
+        mistral_api_key="fixture",
+        mistral_endpoint="https://api.eu.mistral.ai",
+    )
+    index = SearchIndex.from_settings(settings, check_compatibility=False)
+    try:
+        assert index.profile == "mistral-embed-v1"
+        assert index.collection == "kanzlei_pdf_mistral_embed_v1"
+        assert index.dimensions == 1024
+    finally:
+        index.client.close()
+
+
 def test_configured_chat_mounts_routes_without_contacting_dependencies():
     settings = Settings(
         _env_file=None,

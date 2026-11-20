@@ -1,8 +1,10 @@
 """Service-local configuration; secrets are excluded from object representations."""
 
+from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, HttpUrl, SecretStr, field_validator
+from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +23,13 @@ class Settings(BaseSettings):
     qdrant_api_key: SecretStr | None = None
     search_index_enabled: bool = False
     search_collection: str = Field(default="kanzlei_pdf_synthetic_v1", min_length=1, max_length=255)
+    mistral_search_collection: str = Field(
+        default="kanzlei_pdf_mistral_embed_v1", min_length=1, max_length=255
+    )
+    model_profile: Literal["synthetic", "mistral"] = "synthetic"
+    mistral_enabled: bool = False
+    mistral_endpoint: Literal["https://api.eu.mistral.ai", "https://api.mistral.ai"] | None = None
+    mistral_api_key: SecretStr | None = None
     chat_enabled: bool = False
     chat_browser_erp_origin: HttpUrl | None = None
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:56379/0")
@@ -36,6 +45,9 @@ class Settings(BaseSettings):
     ingestion_poll_seconds: int = Field(default=30, ge=5, le=3600)
     ingestion_reconcile_seconds: int = Field(default=86400, ge=60, le=2592000)
     ingestion_pipeline_version: str = Field(default="pdf-native-v1", min_length=1, max_length=100)
+    ingestion_ocr_profile: Literal["native", "paddle"] = "native"
+    paddle_model_dir: Path | None = None
+    paddle_docling_artifacts_dir: Path | None = None
     artifact_s3_endpoint: HttpUrl | None = None
     artifact_s3_bucket: str | None = None
     artifact_s3_access_key: SecretStr | None = None
@@ -43,6 +55,16 @@ class Settings(BaseSettings):
     artifact_s3_region: str = Field(default="us-east-1", min_length=1, max_length=100)
     artifact_s3_prefix: str = Field(default="kanzlei-ai", min_length=1, max_length=60)
     artifact_max_bytes: int = Field(default=4 * 1024 * 1024, ge=1024, le=20 * 1024 * 1024)
+
+    @model_validator(mode="after")
+    def require_mistral_configuration(self):
+        if self.model_profile == "mistral" and not self.mistral_enabled:
+            raise ValueError("Mistral model profile requires explicit external processing opt-in")
+        if self.mistral_enabled and (not self.mistral_endpoint or not self.mistral_api_key):
+            raise ValueError("Mistral requires an approved endpoint and API key")
+        if self.mistral_search_collection == self.search_collection:
+            raise ValueError("Mistral and synthetic indexes require separate collections")
+        return self
 
     @field_validator("chat_browser_erp_origin", mode="before")
     @classmethod

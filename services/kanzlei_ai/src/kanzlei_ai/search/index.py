@@ -9,7 +9,7 @@ import hashlib
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -19,6 +19,7 @@ from kanzlei_ai.providers.base import EmbeddingProvider
 from kanzlei_ai.providers.fake import SyntheticEmbedding
 
 INDEX_PROFILE = "synthetic-v1"
+MISTRAL_INDEX_PROFILE = "mistral-embed-v1"
 _DIMENSIONS = 64
 _PAYLOAD_INDEXES = (
     ("connector_id", models.PayloadSchemaType.KEYWORD),
@@ -72,15 +73,41 @@ class Candidate:
 
 class SearchIndex:
     def __init__(
-        self, *, client: QdrantClient, collection: str, embedding: EmbeddingProvider | None = None
+        self,
+        *,
+        client: QdrantClient,
+        collection: str,
+        embedding: EmbeddingProvider | None = None,
+        profile: str = INDEX_PROFILE,
+        dimensions: int = _DIMENSIONS,
     ):
         self.client = client
         self.collection = collection
         self.embedding = embedding or SyntheticEmbedding()
+        self.profile = profile
+        self.dimensions = dimensions
 
     @classmethod
     def from_settings(cls, settings, *, check_compatibility: bool = True):
         key = settings.qdrant_api_key
+        kwargs = {"collection": settings.search_collection}
+        if settings.model_profile == "mistral":
+            from kanzlei_ai.providers.mistral import MistralRequestGate
+            from kanzlei_ai.providers.mistral_embeddings import (
+                EMBEDDING_DIMENSIONS,
+                MistralEmbeddingProvider,
+            )
+
+            kwargs = {
+                "collection": settings.mistral_search_collection,
+                "embedding": MistralEmbeddingProvider(
+                    endpoint=settings.mistral_endpoint,
+                    api_key=settings.mistral_api_key.get_secret_value(),
+                    gate=MistralRequestGate(settings.redis_url.get_secret_value()),
+                ),
+                "profile": MISTRAL_INDEX_PROFILE,
+                "dimensions": EMBEDDING_DIMENSIONS,
+            }
         return cls(
             client=QdrantClient(
                 url=str(settings.qdrant_url),
@@ -88,7 +115,7 @@ class SearchIndex:
                 timeout=2,
                 check_compatibility=check_compatibility,
             ),
-            collection=settings.search_collection,
+            **kwargs,
         )
 
     def _ensure_schema(self) -> None:
@@ -98,7 +125,7 @@ class SearchIndex:
                     self.collection,
                     vectors_config={
                         "dense": models.VectorParams(
-                            size=_DIMENSIONS, distance=models.Distance.COSINE
+                            size=self.dimensions, distance=models.Distance.COSINE
                         )
                     },
                     sparse_vectors_config={
@@ -123,15 +150,14 @@ class SearchIndex:
                 if refreshed is None or refreshed.data_type != kind:
                     raise
 
-    @staticmethod
-    def _validate_schema(info) -> None:
+    def _validate_schema(self, info) -> None:
         params = info.config.params
         vectors = params.vectors
         sparse = params.sparse_vectors or {}
         if (
             not isinstance(vectors, dict)
             or set(vectors) != {"dense"}
-            or vectors["dense"].size != _DIMENSIONS
+            or vectors["dense"].size != self.dimensions
             or vectors["dense"].distance != models.Distance.COSINE
             or set(sparse) != {"sparse"}
             or sparse["sparse"].modifier != models.Modifier.IDF
@@ -152,6 +178,7 @@ class SearchIndex:
         generation: int,
         client_ids: Sequence[str],
         chunks: Sequence[Mapping],
+        before_embed: Callable[[], None] | None = None,
     ) -> None:
         UUID(publication_id)
         ids = [chunk["id"] for chunk in chunks]
@@ -168,8 +195,13 @@ class SearchIndex:
         ).count
         if existing:
             raise ValueError("publication already staged")
-        vectors = self.embedding.embed(texts)
-        if len(vectors) != len(texts) or any(len(v) != _DIMENSIONS for v in vectors):
+        if self.profile == MISTRAL_INDEX_PROFILE:
+            if before_embed is None:
+                raise ValueError("External index publication requires a processing policy check")
+            vectors = self.embedding.embed(texts, before_batch=before_embed)
+        else:
+            vectors = self.embedding.embed(texts)
+        if len(vectors) != len(texts) or any(len(v) != self.dimensions for v in vectors):
             raise ValueError("invalid embedding dimensions")
         points = [
             models.PointStruct(
@@ -182,7 +214,7 @@ class SearchIndex:
                     "revision": revision,
                     "generation": generation,
                     "client_ids": list(client_ids),
-                    "profile": INDEX_PROFILE,
+                    "profile": self.profile,
                     "chunk_id": chunk_id,
                     "identifiers": sorted(_hash(i) for i in exact_identifiers(text)),
                 },
@@ -216,7 +248,7 @@ class SearchIndex:
         self._validate_schema(self.client.get_collection(self.collection))
         base = [
             _match("connector_id", connector_id),
-            _match("profile", INDEX_PROFILE),
+            _match("profile", self.profile),
             models.FieldCondition(key="client_ids", match=models.MatchAny(any=list(client_ids))),
         ]
         identifiers = sorted(_hash(i) for i in exact_identifiers(query))
@@ -280,7 +312,7 @@ class SearchIndex:
             )
             result["exact"] = convert(points)
         dense = self.embedding.embed([query])
-        if len(dense) != 1 or len(dense[0]) != _DIMENSIONS:
+        if len(dense) != 1 or len(dense[0]) != self.dimensions:
             raise ValueError("invalid embedding dimensions")
         result["dense"] = convert(
             self.client.query_points(

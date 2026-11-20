@@ -4,6 +4,10 @@ x-ai-environment: &ai-environment
   AI_QDRANT_URL: http://ai-qdrant:6333
   AI_SEARCH_INDEX_ENABLED: ${AI_SEARCH_INDEX_ENABLED:-false}
   AI_SEARCH_COLLECTION: ${AI_SEARCH_COLLECTION:-kanzlei_pdf_synthetic_v1}
+  AI_MISTRAL_SEARCH_COLLECTION: ${AI_MISTRAL_SEARCH_COLLECTION:-kanzlei_pdf_mistral_embed_v1}
+  AI_MODEL_PROFILE: ${AI_MODEL_PROFILE:-synthetic}
+  AI_MISTRAL_ENABLED: ${AI_MISTRAL_ENABLED:-false}
+  AI_MISTRAL_ENDPOINT: ${AI_MISTRAL_ENDPOINT:-}
   AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
   AI_CHAT_BROWSER_ERP_ORIGIN: ${AI_CHAT_BROWSER_ERP_ORIGIN:-}
   AI_REDIS_URL: redis://ai-redis:6379/0
@@ -19,6 +23,7 @@ x-ai-environment: &ai-environment
   AI_INGESTION_POLL_SECONDS: ${AI_INGESTION_POLL_SECONDS:-30}
   AI_INGESTION_RECONCILE_SECONDS: ${AI_INGESTION_RECONCILE_SECONDS:-86400}
   AI_INGESTION_PIPELINE_VERSION: ${AI_INGESTION_PIPELINE_VERSION:-pdf-native-v1}
+  AI_INGESTION_OCR_PROFILE: ${AI_INGESTION_OCR_PROFILE:-native}
   AI_ARTIFACT_S3_ENDPOINT: ${AI_ARTIFACT_S3_ENDPOINT:-http://minio:9000}
   AI_ARTIFACT_S3_BUCKET: ${AI_ARTIFACT_S3_BUCKET:-}
   AI_ARTIFACT_S3_ACCESS_KEY: ${AI_ARTIFACT_S3_ACCESS_KEY:-}
@@ -33,7 +38,9 @@ services:
     build:
       context: .
       target: runtime
-    environment: *ai-environment
+    environment:
+      <<: *ai-environment
+      AI_MISTRAL_API_KEY: ${AI_MISTRAL_API_KEY:-}
     ports:
       - "127.0.0.1:${AI_API_PORT:-8180}:8000"
     depends_on:
@@ -56,9 +63,11 @@ services:
     build:
       context: .
       target: documents
-    environment: *ai-environment
+    environment:
+      <<: *ai-environment
+      AI_MISTRAL_API_KEY: ${AI_MISTRAL_API_KEY:-}
     hostname: ai-worker
-    command: [celery, -A, "kanzlei_ai.worker:app", worker, "--hostname=worker@%h", "--loglevel=INFO", "--concurrency=1"]
+    command: [celery, -A, "kanzlei_ai.worker:app", worker, "--hostname=worker@%h", "--loglevel=INFO", "--concurrency=1", "--queues=celery,ocr-mistral"]
     depends_on:
       ai-postgres:
         condition: service_healthy
@@ -75,7 +84,9 @@ services:
     build:
       context: .
       target: runtime
-    environment: *ai-environment
+    environment:
+      <<: *ai-environment
+      AI_MISTRAL_API_KEY: ${AI_MISTRAL_API_KEY:-}
     command: [python, -m, kanzlei_ai.coordinator, run]
     depends_on:
       ai-postgres:

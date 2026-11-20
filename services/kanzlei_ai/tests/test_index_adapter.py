@@ -13,6 +13,41 @@ def test_exact_identifiers_are_complete_and_normalized():
     assert point_id("publication", "chunk") != point_id("other", "chunk")
 
 
+def test_search_index_uses_configured_embedding_profile_and_dimensions():
+    class Embedding1024:
+        def embed(self, texts, *, before_batch=None):
+            if before_batch:
+                before_batch()
+            return [[1.0] + [0.0] * 1023 for _ in texts]
+
+    client = QdrantClient(":memory:")
+    index = SearchIndex(
+        client=client,
+        collection="mistral_test",
+        embedding=Embedding1024(),
+        profile="mistral-embed-v1",
+        dimensions=1024,
+    )
+    publication = str(uuid4())
+    checked = []
+    index.stage(
+        publication_id=publication,
+        connector_id="erp",
+        source_pk=1,
+        revision="r1",
+        generation=1,
+        client_ids=["a"],
+        chunks=[{"id": "c1", "text": "Rechnung RE-2026-0042"}],
+        before_embed=lambda: checked.append(True),
+    )
+    assert checked == [True]
+    assert client.get_collection(index.collection).config.params.vectors["dense"].size == 1024
+    points, _ = client.scroll(index.collection, with_payload=True)
+    assert points[0].payload["profile"] == "mistral-embed-v1"
+    result = index.candidates(query="Rechnung", connector_id="erp", client_ids=["a"], limit=1)
+    assert result["dense"][0].publication_id == publication
+
+
 def test_scoped_hybrid_index_stages_and_returns_only_routing_data():
     client = QdrantClient(":memory:")
     index = SearchIndex(client=client, collection="test_synthetic")

@@ -56,7 +56,17 @@ def create_app(
         try:
             index = SearchIndex.from_settings(settings, check_compatibility=False)
             try:
-                application.state.chat_runtime = ChatRuntime(engine, index)
+                provider = None
+                if settings.model_profile == "mistral":
+                    from kanzlei_ai.providers.mistral import MistralRequestGate
+                    from kanzlei_ai.providers.mistral_chat import MistralChatProvider
+
+                    provider = MistralChatProvider(
+                        endpoint=settings.mistral_endpoint,
+                        api_key=settings.mistral_api_key.get_secret_value(),
+                        gate=MistralRequestGate(settings.redis_url.get_secret_value()),
+                    )
+                application.state.chat_runtime = ChatRuntime(engine, index, provider)
                 yield
             finally:
                 index.client.close()

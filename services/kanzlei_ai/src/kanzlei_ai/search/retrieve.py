@@ -30,6 +30,7 @@ from kanzlei_ai.models import (
 )
 from kanzlei_ai.search.index import (
     INDEX_PROFILE,
+    MISTRAL_INDEX_PROFILE,
     Candidate,
     SearchIndex,
     exact_identifiers,
@@ -83,7 +84,9 @@ async def _scope_clients(
     raise ConnectorError("SEARCH_SCOPE_INCOMPLETE")
 
 
-def _current_chunks(connector_id: str, client_ids: Sequence[str], candidates: Sequence[Candidate]):
+def _current_chunks(
+    connector_id: str, client_ids: Sequence[str], candidates: Sequence[Candidate], profile: str
+):
     source, publication = sources.c, index_publications.c
     artifact, chunk, relation = document_artifacts.c, document_chunks.c, relations.c
     rows = (
@@ -123,7 +126,7 @@ def _current_chunks(connector_id: str, client_ids: Sequence[str], candidates: Se
         .where(
             source.active.is_(True),
             source.connector_id == connector_id,
-            publication.profile == INDEX_PROFILE,
+            publication.profile == profile,
             relation.client_id.in_(client_ids),
             tuple_(
                 publication.publication_id, source.id, source.revision, source.generation, chunk.id
@@ -311,14 +314,19 @@ async def retrieve(
             client_ids = await _scope_clients(scope, connector, access_token, identity)
             if not client_ids:
                 return []
+            profile = getattr(index, "profile", INDEX_PROFILE)
             for pool_size in (max(50, limit * 4), 200):
+                if profile == MISTRAL_INDEX_PROFILE:
+                    await connector.check_processing_policy(
+                        "embed", scope, [], access_token=access_token
+                    )
                 branches = await asyncio.to_thread(
                     _index_candidates, index, query, identity.connector_id, client_ids, pool_size
                 )
                 candidates = tuple(dict.fromkeys(c for branch in branches.values() for c in branch))
                 if not candidates:
                     continue
-                statement = _current_chunks(identity.connector_id, client_ids, candidates)
+                statement = _current_chunks(identity.connector_id, client_ids, candidates, profile)
                 refs = await asyncio.to_thread(_source_refs, engine, statement)
                 allowed = await _authorize(connector, access_token, scope, refs)
                 if not allowed:

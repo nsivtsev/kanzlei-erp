@@ -4,10 +4,14 @@ import asyncio
 import json
 import math
 import time
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 import httpx
+from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
+from redis.exceptions import RedisError
 
 
 class MistralError(RuntimeError):
@@ -26,6 +30,56 @@ class MistralError(RuntimeError):
         self.retryable = retryable
         self.status = status
         self.retry_after = retry_after
+
+
+class MistralRequestGate:
+    """One in-flight request across the processes sharing the AI broker."""
+
+    _LOCK = "kanzlei-ai:mistral:request"
+    _COOLDOWN = "kanzlei-ai:mistral:cooldown"
+
+    def __init__(self, redis_url: str):
+        self._redis_url = redis_url
+
+    @contextmanager
+    def request(self):
+        try:
+            with (
+                Redis.from_url(
+                    self._redis_url, socket_connect_timeout=2, socket_timeout=2
+                ) as broker,
+                broker.lock(self._LOCK, timeout=120, blocking=False),
+            ):
+                if broker.exists(self._COOLDOWN):
+                    raise MistralError("MISTRAL_RATE_LIMITED", status=429)
+                try:
+                    yield
+                except MistralError as error:
+                    if error.status == 429:
+                        broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
+                    raise
+        except RedisError:
+            raise MistralError("MISTRAL_REQUEST_GATE_UNAVAILABLE") from None
+
+    @asynccontextmanager
+    async def request_async(self):
+        try:
+            async with (
+                AsyncRedis.from_url(
+                    self._redis_url, socket_connect_timeout=2, socket_timeout=2
+                ) as broker,
+                broker.lock(self._LOCK, timeout=120, blocking=False),
+            ):
+                if await broker.exists(self._COOLDOWN):
+                    raise MistralError("MISTRAL_RATE_LIMITED", status=429)
+                try:
+                    yield
+                except MistralError as error:
+                    if error.status == 429:
+                        await broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
+                    raise
+        except RedisError:
+            raise MistralError("MISTRAL_REQUEST_GATE_UNAVAILABLE") from None
 
 
 def _retry_after(value: str) -> int | None:
@@ -78,7 +132,9 @@ def _json_object(body: str | bytearray) -> dict:
 
 
 class _MistralEndpoint:
-    def __init__(self, endpoint: str, api_key: str, timeout_seconds: float):
+    def __init__(
+        self, endpoint: str, api_key: str, timeout_seconds: float, gate: MistralRequestGate | None
+    ):
         try:
             url = httpx.URL(endpoint)
         except httpx.InvalidURL:
@@ -98,6 +154,7 @@ class _MistralEndpoint:
         base = str(url).rstrip("/")
         self.base = base if base.endswith("/v1") else f"{base}/v1"
         self.timeout = timeout_seconds
+        self.gate = gate
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json",
@@ -113,9 +170,12 @@ class _MistralEndpoint:
         body = bytearray()
         deadline = time.monotonic() + self.timeout
         try:
-            with client.stream(
-                "POST", f"{self.base}/{path}", headers=self._headers, json=payload
-            ) as response:
+            with (
+                self.gate.request() if self.gate else nullcontext(),
+                client.stream(
+                    "POST", f"{self.base}/{path}", headers=self._headers, json=payload
+                ) as response,
+            ):
                 _check_response(response)
                 for chunk in response.iter_bytes():
                     if time.monotonic() >= deadline:
@@ -136,6 +196,7 @@ class _MistralEndpoint:
         try:
             async with (
                 asyncio.timeout(self.timeout),
+                self.gate.request_async() if self.gate else nullcontext(),
                 httpx.AsyncClient(
                     timeout=self.timeout,
                     transport=transport,

@@ -12,7 +12,7 @@ from kanzlei_ai.documents.parse import (
     ExtractionError,
     TerminalExtractionError,
 )
-from kanzlei_ai.providers.mistral import MistralError, _MistralEndpoint
+from kanzlei_ai.providers.mistral import MistralError, MistralRequestGate, _MistralEndpoint
 
 OCR_MODEL = "mistral-ocr-4-1"
 _MAX_OCR_RESPONSE_BYTES = 2 * 1024 * 1024
@@ -37,8 +37,9 @@ class MistralOcrProvider:
         api_key: str,
         timeout_seconds: float = 30,
         transport: httpx.BaseTransport | None = None,
+        gate: MistralRequestGate | None = None,
     ):
-        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds)
+        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds, gate)
         self._transport = transport
 
     def recognize_page(self, content: bytes, page: int) -> list[Block]:

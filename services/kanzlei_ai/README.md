@@ -171,9 +171,11 @@ broker loss. Broker persistence is enabled in Compose (Redis AOF, one-second
 fsync). Outbox leases are 30s; worker leases are 120s, task soft/hard limits are
 60/90s, and broker visibility is 300s. With ingestion configured, the worker
 fetches a current PDF only through the fixed-ingestion ERP identity, with the
-expected revision and the existing 20 MiB connector bound. Docling uses native
-text with OCR disabled; page-aware chunks and private derived artifacts publish
-only while the source generation and worker lease remain current. Encrypted,
+expected revision and the existing 20 MiB connector bound. Docling extracts
+native text first. The optional [OCR rollout](docs/ocr-rollout.md) adds local
+PaddleOCR and a controlled Mistral cutover for scanned pages. Page-aware chunks
+and private derived artifacts publish only while the source generation and
+worker lease remain current. Encrypted,
 unsupported, and size/page-limited input is terminal; connector and transient
 parser failures retry through the durable job policy.
 Configure the separate private S3-compatible artifact endpoint, bucket,

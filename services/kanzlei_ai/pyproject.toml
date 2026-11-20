@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 documents = ["boto3>=1.35,<2", "docling>=2,<3", "pypdf>=5,<7", "torch>=2.2,<3", "torchvision>=0.17,<1"]
+paddle = ["kanzlei-ai[documents]", "docling==2.150.1", "rapidocr==3.10.0", "onnxruntime==1.32.0"]
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1"]

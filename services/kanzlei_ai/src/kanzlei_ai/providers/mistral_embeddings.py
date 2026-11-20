@@ -1,11 +1,11 @@
 """Fixed-width Mistral text embeddings in caller input order."""
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import httpx
 
-from kanzlei_ai.providers.mistral import MistralError, _MistralEndpoint
+from kanzlei_ai.providers.mistral import MistralError, MistralRequestGate, _MistralEndpoint
 
 EMBEDDING_MODEL = "mistral-embed"
 EMBEDDING_DIMENSIONS = 1024
@@ -24,11 +24,14 @@ class MistralEmbeddingProvider:
         api_key: str,
         timeout_seconds: float = 10,
         transport: httpx.BaseTransport | None = None,
+        gate: MistralRequestGate | None = None,
     ):
-        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds)
+        self._http = _MistralEndpoint(endpoint, api_key, timeout_seconds, gate)
         self._transport = transport
 
-    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+    def embed(
+        self, texts: Sequence[str], *, before_batch: Callable[[], None] | None = None
+    ) -> list[list[float]]:
         batches: list[list[str]] = []
         batch: list[str] = []
         size = 0
@@ -52,6 +55,8 @@ class MistralEmbeddingProvider:
         vectors: list[list[float]] = []
         with self._http.client(self._transport) as client:
             for batch in batches:
+                if before_batch is not None:
+                    before_batch()
                 result = self._http.post(
                     client,
                     "embeddings",

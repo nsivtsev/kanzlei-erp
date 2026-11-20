@@ -66,6 +66,26 @@ def test_client_permissions_are_checked_before_search_without_listing_documents(
     assert tuple(index.calls[0]["client_ids"]) == ("A",)
 
 
+def test_external_question_embedding_checks_policy_before_search():
+    from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE
+
+    class DeniedConnector(ScopeConnector):
+        async def check_processing_policy(self, operation, scope, sources, *, access_token):
+            assert (operation, scope.client_id, sources, access_token) == (
+                "embed",
+                "A",
+                [],
+                "synthetic",
+            )
+            raise ConnectorError("FORBIDDEN", 403)
+
+    index = EmptyIndex()
+    index.profile = MISTRAL_INDEX_PROFILE
+    with pytest.raises(ConnectorError, match="FORBIDDEN"):
+        search("synthetic", Scope(kind="client", client_id="A"), DeniedConnector(), index)
+    assert index.calls == []
+
+
 @pytest.mark.parametrize("kind", ["general", "client"])
 def test_denied_scope_does_not_search(kind):
     connector, index = ScopeConnector(general_access=False), EmptyIndex()

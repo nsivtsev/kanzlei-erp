@@ -58,6 +58,7 @@ class Session:
     connector_id: str
     subject: str
     scope: Scope
+    index_profile: str = INDEX_PROFILE
 
 
 async def database_call(operation, *args):
@@ -118,7 +119,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
                 publication.source_id == source.id,
                 publication.revision == source.revision,
                 publication.generation == source.generation,
-                publication.profile == INDEX_PROFILE,
+                publication.profile == session.index_profile,
             ),
         )
         .join(
