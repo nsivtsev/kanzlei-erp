@@ -3,7 +3,7 @@
 This stage implements delegated user identity, permitted clients and documents,
 batch authorization and bounded retrieval of original stored files. The optional
 local chat uses the ERP session handoff described below. Background ingestion
-uses a separate credential. Email bodies are outside this contract.
+uses a separate credential. The connector also supports opt-in email and DOCX sources.
 
 ## Identity and trust boundary
 
@@ -258,6 +258,32 @@ transaction. Binding replacement scans and locks managed File IDs and URLs to
 match every canonical alias; its cost grows with the number of managed Files,
 but capture does not read file content or call object storage. The AI service uses
 a durable consumer, separate extraction and indexing jobs, and periodic reconciliation.
+
+## Email and DOCX sources
+
+Deploy the updated connector and AI service, then run
+`python -m kanzlei_ai.coordinator migrate` before enabling new source types.
+ERP emits `email:<Communication>` for messages
+and continues to emit `file:<File>` for attachments. Enable email in the ERP
+site's `kanzlei_ai_connector` configuration with `email_enabled: true`, then
+run `python -m kanzlei_ai.coordinator scan` for the existing connector. The flag
+changes the cursor binding. A full scan keeps current PDF artifacts when their
+source and parser versions match. Disabling the flag also requires a fresh scan
+to remove the old mail relationships from the AI service.
+
+Email indexing is limited to incoming and outgoing messages with direct Customer
+links. Attachment authorization also verifies the parent and File. External
+processing for mail sources requires consent from every directly linked Customer. Recognized
+reply and forward material is stripped before indexing. The message envelope
+is stored with the private derived artifact. Each message is searched individually.
+The original action resolves through ERP using the current user's browser session.
+
+To index DOCX files, enable `AI_INGESTION_DOCX_ENABLED` for the coordinator and
+document workers. To include DOCX attachments also enable `docx_enabled: true`
+in the ERP connector configuration. Run a new scan after changing these settings.
+DOCX extracts paragraphs and tables locally. Files with nested tables are
+unsupported. Excerpts cite the original file,
+which the user can download from the current Mandant scope.
 
 ## External processing policy
 

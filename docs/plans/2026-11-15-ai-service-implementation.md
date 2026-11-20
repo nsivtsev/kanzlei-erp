@@ -212,6 +212,18 @@ citations on two fixtures. The production VPN and client archive belong to the p
 3. Cover relationship changes performed by the archive/history linking code; rerun affected email-history and archive tests. Verify changing/removing a Contact alone is not misrepresented as unlinking already-linked Communication records.
 4. Add Office formats after PDF/email acceptance, with format-specific gold fixtures. Do not treat search extraction of a spreadsheet as an accounting calculation engine. Commit focused increments.
 
+The first increment adds directly linked incoming and outgoing email plus separately
+authorized PDF attachments. Each message can be searched on its own. The chat
+accepts German, Russian and English questions and keeps the original language of
+a verified excerpt. Its controls remain in German. The second increment adds
+native DOCX text and table extraction, plus scoped downloads of the cited original.
+See the [connector setup](../../services/kanzlei_ai/docs/erp-connector.md#email-and-docx-sources)
+for the migration, opt-in flags and inventory scan.
+
+Synthetic live Mistral acceptance covered three cross-language email questions
+and one DOCX question. All four expected sources ranked first, and all four
+answers used an exact excerpt with an introduction in the question language.
+
 ## Task 10: General mode and structured ERP answers
 
 **Create:** `services/kanzlei_ai/src/kanzlei_ai/chat/routing.py`, `tests/integration/test_general_scope.py`, `tests/integration/test_work_context.py`; `kanzlei_erp/ai_connector/work_context.py`, `kanzlei_erp/tests/test_ai_connector_work_context.py`.
