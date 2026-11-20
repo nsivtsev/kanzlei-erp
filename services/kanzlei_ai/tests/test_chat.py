@@ -290,7 +290,9 @@ def test_mistral_email_packet_keeps_the_exact_original_text():
     question = "When is the meeting according to the email?"
 
     def complete(request):
-        prompt = json.loads(json.loads(request.content)["messages"][1]["content"])
+        user_content = json.loads(request.content)["messages"][1]["content"]
+        assert "La réunion à Berlin" in user_content
+        prompt = json.loads(user_content)
         assert prompt == {
             "question": question,
             "evidence": [

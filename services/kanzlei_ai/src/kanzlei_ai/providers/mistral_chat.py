@@ -76,7 +76,9 @@ class MistralChatProvider:
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": json.dumps({"question": question, "evidence": evidence}),
+                        "content": json.dumps(
+                            {"question": question, "evidence": evidence}, ensure_ascii=False
+                        ),
                     },
                 ],
                 "response_format": {"type": "json_object"},
