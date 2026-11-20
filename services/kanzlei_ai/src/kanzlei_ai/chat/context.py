@@ -210,7 +210,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
         page = None if row.mime_type in (EMAIL_MIME, DOCX_MIME) else row.page
         title = row.title
         if not title or len(title) > 500 or any(ord(char) < 32 for char in title):
-            title = "E-Mail" if row.mime_type == EMAIL_MIME else "PDF"
+            title = {EMAIL_MIME: "E-Mail", DOCX_MIME: "Word-Dokument"}.get(row.mime_type, "PDF")
         result[dependency] = Evidence(
             dependency, page, row.kind, row.text, title, row.mime_type, row.content_sha256
         )

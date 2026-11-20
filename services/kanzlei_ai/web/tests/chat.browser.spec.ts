@@ -67,3 +67,35 @@ for (const rejected of ['permission', 'locator']) {
     await expect(page).toHaveURL('http://127.0.0.1:19992/');
   });
 }
+
+for (const routeKind of ['drive', 'attachment']) {
+  test(`downloads a DOCX ${routeKind} citation through the ERP session`, async ({ page }) => {
+    const attachment = routeKind === 'attachment';
+    await page.setViewportSize({ width: attachment ? 390 : 1100, height: 800 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
+    await page.getByLabel('Suchbereich').selectOption('a');
+    await page.getByRole('button', { name: 'Neues Gespräch' }).click();
+    await page.getByLabel('Ihre Frage').fill(`What does the Word document say about Berlin (${routeKind})?`);
+    await page.getByRole('button', { name: 'Senden' }).click();
+    await expect(page.getByText('Das Seminar in Berlin beginnt am Montag.', { exact: false })).toBeVisible();
+    if (attachment) {
+      await page.route('**/attachment/original', route => route.fulfill({
+        json: { source_kind: 'docx', locator: '//other.invalid/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment?customer=a&file_id=fixture&revision=' + 'a'.repeat(64) },
+      }), { times: 1 });
+      await page.getByRole('button', { name: 'Agenda.docx · Word-Dokument herunterladen', exact: true }).click();
+      await expect(page.locator('#chat-status')).toContainText('veraltet oder nicht verfügbar');
+      await expect(page).toHaveURL('http://127.0.0.1:19992/');
+    }
+    const original = page.waitForRequest(req => req.url().endsWith(`/${routeKind}/original`));
+    const navigation = page.waitForRequest(req => new URL(req.url()).pathname.includes('/api/method/'));
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Agenda.docx · Word-Dokument herunterladen', exact: true }).click();
+    expect((await original).headers().authorization).toMatch(/^Bearer /);
+    const erpRequest = await navigation;
+    expect(erpRequest.headers().authorization).toBeUndefined();
+    expect(new URL(erpRequest.url()).origin).toBe('http://127.0.0.1:19991');
+    expect((await download).suggestedFilename()).toBe('Agenda.docx');
+    await expect(page.getByText('The document says:', { exact: false })).toBeVisible();
+  });
+}

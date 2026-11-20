@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from kanzlei_ai.chat.context import Evidence
-from kanzlei_ai.chat.language import abstention, email_answer, invoice_answer
+from kanzlei_ai.chat.language import abstention, excerpt_answer, invoice_answer
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.search.index import exact_identifiers
 
@@ -70,7 +70,7 @@ def render_answer(question: str, answer: VerifiedAnswer | None) -> str:
         return abstention(question)
     if isinstance(answer, VerifiedInvoice):
         return invoice_answer(question, answer.amount)
-    return email_answer(question, answer.excerpt)
+    return excerpt_answer(question, answer.excerpt, email=answer.evidence.source_kind == "email")
 
 
 class ChatProvider(Protocol):
@@ -167,7 +167,7 @@ def validate_answer(question, context, packet) -> VerifiedAnswer | None:
     else:
         for evidence in context:
             if (
-                evidence.source_kind == "email"
+                evidence.source_kind in ("email", "docx")
                 and packet.evidence_id == evidence.dependency.chunk_id
                 and packet.quote in evidence.text
             ):

@@ -318,3 +318,44 @@ def test_mistral_email_packet_keeps_the_exact_original_text():
     packet = asyncio.run(provider.generate(question, (evidence,)))
     answer = validate_answer(question, (evidence,), packet)
     assert render_answer(question, answer) == f"The email says:\n\n{excerpt}"
+
+
+@pytest.mark.parametrize(
+    ("question", "lead"),
+    [
+        ("What does the document say about Berlin?", "The document says:"),
+        ("Was steht im Dokument über Berlin?", "Im Dokument steht:"),
+        ("Что сказано о Берлине в документе?", "В документе сказано:"),
+    ],
+)
+def test_docx_uses_a_localized_lead_and_verbatim_excerpt(question, lead):
+    from dataclasses import replace
+
+    from kanzlei_ai.chat.citations import AnswerPacket, render_answer, validate_answer
+    from kanzlei_ai.chat.context import DOCX_MIME
+    from kanzlei_ai.connectors.base import ConnectorError
+
+    text = "Le séminaire à Berlin\ndébute lundi."
+    evidence = replace(fixture_context()[0], page=None, mime_type=DOCX_MIME, text=text)
+    packet = AnswerPacket(evidence.dependency.chunk_id, text)
+    assert render_answer(question, validate_answer(question, (evidence,), packet)) == (
+        f"{lead}\n\n{text}"
+    )
+    with pytest.raises(ConnectorError, match="INVALID_EVIDENCE"):
+        validate_answer(question, (evidence,), replace(packet, quote=text.replace("\n", " ")))
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Can you find Anaïs’s request?", "en"),
+        ("Где?", "ru"),
+        ("Anaïs?", "de"),
+        ("Москва?", "de"),
+        ("RE-2026-0042", "de"),
+    ],
+)
+def test_locale_recognizes_unambiguous_short_questions_and_falls_back_for_names(question, expected):
+    from kanzlei_ai.chat.language import question_language
+
+    assert question_language(question) == expected

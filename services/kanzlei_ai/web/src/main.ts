@@ -503,6 +503,27 @@ async function ask(question: string) {
   }
 }
 
+function originalTarget(lease: Lease, kind: 'email' | 'docx', locator: unknown) {
+  if (typeof locator !== 'string' || !locator.startsWith('/') || /[#\\\x00-\x20\x7f]/.test(locator)) throw Error();
+  const target = new URL(locator, lease.erpOrigin);
+  if (target.origin !== lease.erpOrigin) throw Error();
+  if (kind === 'email') {
+    if (!/^\/desk\/communication\/(?:[A-Za-z0-9._~-]|%[0-9A-F]{2})+$/.test(locator)
+        || target.pathname !== locator || decodeURIComponent(target.pathname).includes(lease.token)) throw Error();
+    return target;
+  }
+
+  const path = locator.split('?', 1)[0];
+  const params = target.searchParams;
+  if (path !== target.pathname || params.size !== 3 || !params.get('customer') || !params.get('file_id')
+      || [...params.values()].some(value => value.includes(lease.token))) throw Error();
+  if (path === '/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment'
+      && /^[0-9a-f]{64}$/.test(params.get('revision') ?? '')) return target;
+  if (path === '/api/method/kanzlei_erp.mandant_documents.download_document'
+      && params.get('disposition') === 'attachment') return target;
+  throw Error();
+}
+
 async function openCitation(turn: string, citation: Citation, focus: string) {
   clearViewer();
   const session = lease, sequence = generation;
@@ -510,21 +531,25 @@ async function openCitation(turn: string, citation: Citation, focus: string) {
   const controller = new AbortController();
   const request = { turn, citation, controller, focus };
   citationRequest = request;
-  status = citation.source_kind === 'email' ? 'E-Mail wird geprüft …' : 'Dokument wird geladen …';
+  status = citation.source_kind === 'email' ? 'E-Mail wird geprüft …'
+    : citation.source_kind === 'docx' ? 'Word-Dokument wird geprüft …' : 'Dokument wird geladen …';
   render(focus);
   const valid = () => current(session, sequence) && citationRequest === request && !controller.signal.aborted;
   try {
     const path = `${conversationPath()}/turns/${encodeURIComponent(turn)}/citations/${encodeURIComponent(citation.id)}`;
-    if (citation.source_kind === 'email') {
+    if (citation.source_kind === 'email' || citation.source_kind === 'docx') {
       const response = await api(session, `${path}/original`, {
         signal: controller.signal, redirect: 'error', cache: 'no-store',
       }, sequence);
       const { locator, source_kind: kind } = await response.json();
       if (!valid()) return;
-      if (kind !== 'email' || typeof locator !== 'string'
-          || !/^\/desk\/communication\/(?:[A-Za-z0-9._~-]|%[0-9A-F]{2})+$/.test(locator)) throw Error();
-      const target = new URL(locator, session.erpOrigin);
-      if (target.origin !== session.erpOrigin || target.pathname !== locator) throw Error();
+      if (kind !== citation.source_kind) throw Error();
+      const target = originalTarget(session, citation.source_kind, locator);
+      if (kind === 'docx') {
+        clearViewer();
+        status = '';
+        render(focus);
+      }
       location.assign(target.href);
       return;
     }
@@ -670,7 +695,7 @@ function renderSidebar() {
 
 function citationLabel(citation: Citation) {
   if (citation.source_kind === 'email') return 'E-Mail im ERP öffnen';
-  if (citation.source_kind === 'docx') return 'Word-Dokument';
+  if (citation.source_kind === 'docx') return 'Word-Dokument herunterladen';
   return `Seite ${citation.page}`;
 }
 

@@ -651,3 +651,97 @@ def test_email_excerpt_and_original_require_current_authorization(chat, database
     assert revoked["status"] == "unavailable"
     assert revoked["citations"] == []
     assert revoked["answer"] is None
+
+
+@pytest.mark.parametrize("mail_attachment", [False, True])
+def test_docx_original_is_bound_to_the_cited_source_and_current_permissions(
+    chat, database, mail_attachment
+):
+    from urllib.parse import urlencode
+
+    from kanzlei_ai.chat.context import DOCX_MIME
+
+    client, erp, runtime, conversation, _ = chat
+    excerpt = "Le séminaire à Berlin débute lundi."
+    name = "Agenda + #?.docx"
+    document = add_source(database, name, ["A"], excerpt, connector_id="fixture-erp")
+    with database.begin() as connection:
+        connection.execute(
+            sources.update()
+            .where(sources.c.id == document.source_pk)
+            .values(manifest={"title": name, "mime_type": DOCX_MIME})
+        )
+        connection.execute(
+            document_chunks.update()
+            .where(document_chunks.c.id == document.chunk_id)
+            .values(page=None)
+        )
+    runtime.index = RankedIndex(dense=[document])
+    event, answer = run_turn(client, conversation, "When does the Berlin seminar begin?")[-1]
+    assert event == "answer"
+    assert answer["answer"] == f"The document says:\n\n{excerpt}"
+    (citation,) = answer["citations"]
+    assert citation == {"id": citation["id"], "title": name, "page": None, "source_kind": "docx"}
+    assert history(client, conversation).json()["items"] == [answer]
+
+    method = (
+        "kanzlei_erp.ai_connector.api.download_mail_attachment"
+        if mail_attachment
+        else "kanzlei_erp.mandant_documents.download_document"
+    )
+    path = f"/api/method/{method}"
+    params = {"customer": "A", "file_id": name}
+    params.update(
+        {"revision": document.revision} if mail_attachment else {"disposition": "attachment"}
+    )
+    locator = f"{path}?{urlencode(params)}"
+    original = pdf_url(conversation, answer).removesuffix("/pdf") + "/original"
+
+    async def resolve(token, scope, source):
+        assert (token, scope.client_id, source.source_id, source.revision) == (
+            "x" * 43,
+            "A",
+            f"file:{name}",
+            document.revision,
+        )
+        return locator
+
+    erp.resolve_source_locator = resolve
+    response = client.get(original)
+    assert response.status_code == 200
+    assert response.json() == {"source_kind": "docx", "locator": locator}
+    assert response.headers["cache-control"] == "private, no-store"
+    assert client.get(pdf_url(conversation, answer)).status_code == 404
+
+    approved = locator
+    for denied_locator in (
+        "https://other.invalid" + approved,
+        "//other.invalid" + approved,
+        approved + "#",
+        approved + "&customer=A",
+        approved + "&token=" + "x" * 43,
+        approved.replace("customer=A", "customer=B"),
+        approved.replace(urlencode({"file_id": name}), "file_id=other.docx"),
+        approved.replace(document.revision, "f" * 64)
+        if mail_attachment
+        else approved.replace("disposition=attachment", "disposition=inline"),
+    ):
+        locator = denied_locator
+        assert client.get(original).status_code == 404
+    locator = approved
+
+    erp.subject = "different-owner"
+    assert client.get(original).status_code == 404
+    erp.subject = "fixture-owner"
+    erp.scope_denied = True
+    assert client.get(original).status_code == 403
+    erp.scope_denied = False
+
+    async def revoke_during_resolve(*args):
+        erp.denied.add(f"file:{name}")
+        return approved
+
+    erp.resolve_source_locator = revoke_during_resolve
+    assert client.get(original).status_code == 404
+    assert history(client, conversation).json()["items"][0]["status"] == "unavailable"
+    assert erp.reads == 0

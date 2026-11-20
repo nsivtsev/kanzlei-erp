@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 from typing import Annotated, Literal
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -21,6 +21,7 @@ from kanzlei_ai.auth import AccessToken, Adapter
 from kanzlei_ai.chat import history
 from kanzlei_ai.chat.citations import ChatProvider, validate_answer
 from kanzlei_ai.chat.context import (
+    DOCX_MIME,
     EMAIL_MIME,
     PDF_MIME,
     Session,
@@ -30,7 +31,7 @@ from kanzlei_ai.chat.context import (
     retrieve_context,
 )
 from kanzlei_ai.connectors.base import ConnectorError
-from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Identity, Scope
+from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Identity, Scope, SourceRef
 from kanzlei_ai.models import document_artifacts, index_publications, jobs, relations, sources
 from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
@@ -44,6 +45,8 @@ _MAX_ACTIVE_REQUESTS = 8
 _MAX_ACTIVE_TURNS = 4
 _PDF_LIMIT = 20 * 1024 * 1024
 _SOURCE_PAGE_SIZE = 25
+_MAIL_ATTACHMENT_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
+_DRIVE_DOWNLOAD_PATH = "/api/method/kanzlei_erp.mandant_documents.download_document"
 
 
 class ChatRuntime:
@@ -304,7 +307,8 @@ async def _list_source_page(service, session, cursor, query="", status="all"):
     entries = [
         doc
         for doc in page.items
-        if doc.mime_type in (PDF_MIME, EMAIL_MIME) and query.casefold() in doc.title.casefold()
+        if doc.mime_type in (PDF_MIME, EMAIL_MIME, DOCX_MIME)
+        and query.casefold() in doc.title.casefold()
     ]
     statuses = (
         await database_call(_source_status, service.engine, session, entries) if entries else {}
@@ -482,6 +486,49 @@ async def citation_pdf(
     )
 
 
+def _valid_original_locator(kind: str, source: SourceRef, locator: str, token: str) -> bool:
+    prefix, _, name = source.source_id.partition(":")
+    if (
+        not isinstance(locator, str)
+        or "#" in locator
+        or "\\" in locator
+        or any(ord(char) < 32 or ord(char) == 127 for char in locator + name)
+    ):
+        return False
+    if kind == "email":
+        return (
+            prefix == "email"
+            and name not in ("", ".", "..")
+            and token not in name
+            and locator == "/desk/communication/" + quote(name, safe="")
+        )
+    if kind != "docx" or prefix != "file" or not name:
+        return False
+    path, _, query = locator.partition("?")
+    expected = {"customer": source.client_id, "file_id": name}
+    if path == _MAIL_ATTACHMENT_PATH:
+        expected["revision"] = source.revision
+    elif path == _DRIVE_DOWNLOAD_PATH:
+        expected["disposition"] = "attachment"
+    else:
+        return False
+    try:
+        pairs = parse_qsl(
+            query,
+            keep_blank_values=True,
+            strict_parsing=True,
+            errors="strict",
+            max_num_fields=len(expected),
+        )
+    except ValueError:
+        return False
+    return (
+        len(pairs) == len(expected)
+        and dict(pairs) == expected
+        and all(token not in value for value in expected.values())
+    )
+
+
 @router.get("/{conversation_id}/turns/{turn_id}/citations/{citation_id}/original")
 async def citation_original(
     conversation_id: str,
@@ -496,27 +543,20 @@ async def citation_original(
         service.engine, session, conversation_id, _id(turn_id), _id(citation_id)
     )
     source = evidence.dependency.source
-    prefix, _, name = source.source_id.partition(":")
-    if (
-        citation.source_kind != "email"
-        or prefix != "email"
-        or name in ("", ".", "..")
-        or any(ord(char) < 32 or ord(char) == 127 for char in name)
-    ):
+    if citation.source_kind not in ("email", "docx"):
         raise ConnectorError("NOT_FOUND", 404)
-    expected = "/desk/communication/" + quote(name, safe="")
     try:
         locator = await adapter.resolve_source_locator(access_token, session.scope, source)
     except ConnectorError as error:
         if error.status in (403, 404, 409):
             raise ConnectorError("NOT_FOUND", 404) from None
         raise
-    if locator != expected:
+    if not _valid_original_locator(citation.source_kind, source, locator, access_token):
         raise ConnectorError("NOT_FOUND", 404)
     await _verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
     return JSONResponse(
-        {"source_kind": "email", "locator": locator},
+        {"source_kind": citation.source_kind, "locator": locator},
         headers={"Cache-Control": "private, no-store"},
     )

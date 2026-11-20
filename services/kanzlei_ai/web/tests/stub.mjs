@@ -3,6 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 const port=Number(process.env.STUB_PORT||19991);
 const conversations = new Map();
+const downloadPaths = {
+  attachment: '/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment',
+  drive: '/api/method/kanzlei_erp.mandant_documents.download_document',
+};
+const downloadQuery = kind => new URLSearchParams({
+  customer: 'a',
+  file_id: 'Agenda + #?.docx',
+  ...(kind === 'attachment' ? { revision: 'a'.repeat(64) } : { disposition: 'attachment' }),
+}).toString();
 const examplePdf = Buffer.from(
   readFileSync(new URL('../../tests/fixtures/documents/synthetic-german-native.pdf.b64', import.meta.url), 'utf8'),
   'base64',
@@ -41,6 +50,7 @@ if (u.pathname.endsWith('/turns')) {
   const { question } = JSON.parse(body);
   const invoice = /RE-2026-0042/iu.test(question);
   const email = question === 'What does the email say about Berlin?';
+  const docx = question.includes('Word document') ? (question.includes('(attachment)') ? 'attachment' : 'drive') : null;
   const russian = question === 'Когда встреча?';
   const answered = thread?.conversation.client_id !== 'b' && !russian;
   const answer = {
@@ -50,14 +60,40 @@ if (u.pathname.endsWith('/turns')) {
     question,
     answer: russian ? 'Не найдено достаточных подтверждений.' : !answered ? null
       : email ? 'The email says:\n\nDie Besprechung in Berlin ist am Montag.'
+      : docx ? 'The document says:\n\nDas Seminar in Berlin beginnt am Montag.'
       : invoice ? 'Der Rechnungsbetrag beträgt 1.249,50 EUR.' : 'Testantwort',
     citations: email ? [{ id: 'email', title: 'Termin', page: null, source_kind: 'email' }]
+      : docx ? [{ id: docx, title: 'Agenda.docx', page: null, source_kind: 'docx' }]
       : answered ? [{ id: invoice ? 'invoice' : 'x', title: invoice ? 'Rechnung RE-2026-0042.pdf' : 'Testdokument', page: invoice ? 2 : 1 }] : [],
   };
   thread?.turns.push(answer);
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
   res.write('event: status\ndata: {"phase":"retrieving"}\n\n');
   res.end('event: answer\ndata: ' + JSON.stringify(answer) + '\n\n');
+  return;
+}
+const citationKind = u.pathname.split('/').at(-2);
+if (u.pathname.endsWith('/original') && Object.hasOwn(downloadPaths, citationKind)) {
+  if (!owner || owner !== thread?.owner) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  return json(res, { source_kind: 'docx', locator: downloadPaths[citationKind] + '?' + downloadQuery(citationKind) });
+}
+const downloadKind = Object.keys(downloadPaths).find(kind => downloadPaths[kind] === u.pathname);
+if (downloadKind) {
+  const hasSession = req.headers.cookie?.split('; ').includes('erp_fixture=active');
+  if (!hasSession || owner || u.searchParams.toString() !== downloadQuery(downloadKind)) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Disposition': 'attachment; filename="Agenda.docx"',
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  res.end(Buffer.from('Download fixture bytes'));
   return;
 }
 if (u.pathname.endsWith('/email/original')) {

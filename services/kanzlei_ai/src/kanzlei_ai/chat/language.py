@@ -4,7 +4,7 @@ import re
 
 _ENGLISH = frozenset(
     "what when where who which why how is are were did does the this about please "
-    "tell show summarize email invoice total amount much".split()
+    "can you find tell show summarize email invoice total amount much".split()
 )
 _GERMAN = frozenset(
     "was wann wo wer welcher welche welches warum wie ist sind hat der die das den dem "
@@ -16,9 +16,12 @@ _RUSSIAN = frozenset(
 )
 _WORD = re.compile(r"[^\W\d_]+")
 _CYRILLIC = re.compile(r"[а-яё]+")
+_SHORT_RUSSIAN = re.compile(r"(?:где|когда|почему|сколько|что)\?", re.IGNORECASE)
 
 
 def question_language(question: str) -> str:
+    if _SHORT_RUSSIAN.fullmatch(question.strip()):
+        return "ru"
     words = set(_WORD.findall(question.casefold()))
     en = len(words & _ENGLISH)
     de = len(words & _GERMAN)
@@ -46,6 +49,12 @@ _EMAIL = {
     "ru": "В письме сказано:",
 }
 
+_DOCUMENT = {
+    "de": "Im Dokument steht:",
+    "en": "The document says:",
+    "ru": "В документе сказано:",
+}
+
 
 def abstention(question: str) -> str:
     return _ABSTENTION[question_language(question)]
@@ -55,5 +64,6 @@ def invoice_answer(question: str, amount: str) -> str:
     return _AMOUNT[question_language(question)].format(amount)
 
 
-def email_answer(question: str, excerpt: str) -> str:
-    return f"{_EMAIL[question_language(question)]}\n\n{excerpt}"
+def excerpt_answer(question: str, excerpt: str, *, email: bool) -> str:
+    lead = _EMAIL if email else _DOCUMENT
+    return f"{lead[question_language(question)]}\n\n{excerpt}"
