@@ -1,7 +1,9 @@
-"""Mistral OCR on a selected page of an inline PDF."""
+"""Mistral OCR on an isolated page sent as an inline PDF."""
 
+import logging
 import re
 from base64 import b64encode
+from io import BytesIO
 
 import httpx
 
@@ -18,6 +20,16 @@ OCR_MODEL = "mistral-ocr-4-1"
 _MAX_OCR_RESPONSE_BYTES = 2 * 1024 * 1024
 _PLACEHOLDER = re.compile(r"(!?)\[((?:img|tbl)-\d+\.[a-z]+)\]\(\2\)")
 _ATX_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.M)
+_PAGE_RENDER_KEYS = {
+    "/Type",
+    "/Contents",
+    "/Resources",
+    "/Group",
+    "/UserUnit",
+    "/Rotate",
+    "/MediaBox",
+    "/CropBox",
+}
 
 
 class MistralOcrError(ExtractionError):
@@ -49,13 +61,14 @@ class MistralOcrProvider:
             raise TerminalExtractionError("SOURCE_LIMIT_EXCEEDED")
         if not content.startswith(b"%PDF-"):
             raise TerminalExtractionError("UNSUPPORTED_MEDIA")
+        isolated_page = _isolate_page(content, page)
         payload = {
             "model": OCR_MODEL,
             "document": {
                 "type": "document_url",
-                "document_url": f"data:application/pdf;base64,{b64encode(content).decode('ascii')}",
+                "document_url": f"data:application/pdf;base64,{b64encode(isolated_page).decode()}",
             },
-            "pages": [page - 1],
+            "pages": [0],
             "table_format": "markdown",
             "include_image_base64": False,
             "include_blocks": False,
@@ -79,13 +92,48 @@ class MistralOcrProvider:
         return _page_blocks(result, page)
 
 
+def _isolate_page(content: bytes, page: int) -> bytes:
+    try:
+        from pypdf import PdfReader, PdfWriter
+        from pypdf.errors import PyPdfError
+    except ImportError:
+        raise MistralOcrError("OCR_UNAVAILABLE") from None
+
+    logger = logging.getLogger("pypdf")
+    previous_level = logger.level
+    logger.setLevel(logging.CRITICAL)
+    try:
+        with BytesIO(content) as original, BytesIO() as output:
+            reader = PdfReader(original, strict=False)
+            if reader.is_encrypted:
+                raise TerminalExtractionError("ENCRYPTED_PDF")
+            page_count = len(reader.pages)
+            if page_count > MAX_PAGES:
+                raise TerminalExtractionError("PAGE_LIMIT_EXCEEDED")
+            if page > page_count:
+                raise TerminalExtractionError("OCR_INVALID_PAGE")
+            selected = reader.pages[page - 1]
+            # Page annotations, actions and article threads can link to other pages.
+            ignored = [key for key in selected if key not in _PAGE_RENDER_KEYS]
+            writer = PdfWriter()
+            writer.add_page(selected, excluded_keys=ignored)
+            writer.write(output)
+            if output.tell() > MAX_SOURCE_BYTES:
+                raise TerminalExtractionError("SOURCE_LIMIT_EXCEEDED")
+            return output.getvalue()
+    except (PyPdfError, ValueError, TypeError, KeyError, IndexError, RecursionError):
+        raise TerminalExtractionError("UNSUPPORTED_MEDIA") from None
+    finally:
+        logger.setLevel(previous_level)
+
+
 def _page_blocks(result: dict, page: int) -> list[Block]:
     pages = result.get("pages")
     if not isinstance(pages, list) or len(pages) != 1 or not isinstance(pages[0], dict):
         raise MistralOcrError("OCR_INVALID_RESPONSE")
     requested = pages[0]
     index, markdown = requested.get("index"), requested.get("markdown")
-    if type(index) is not int or index != page - 1 or not isinstance(markdown, str):
+    if type(index) is not int or index != 0 or not isinstance(markdown, str):
         raise MistralOcrError("OCR_INVALID_RESPONSE")
 
     raw_tables = requested.get("tables")

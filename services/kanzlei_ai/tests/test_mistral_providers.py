@@ -1,9 +1,13 @@
 import asyncio
 import base64
 import json
+from io import BytesIO
+from pathlib import Path
 
 import httpx
 import pytest
+from pypdf import PdfReader, PdfWriter
+from pypdf.annotations import Link
 
 from kanzlei_ai.chat.citations import AnswerPacket, supported_amount, validate_answer
 from kanzlei_ai.chat.context import Dependency, Evidence
@@ -21,7 +25,9 @@ from kanzlei_ai.providers.mistral_ocr import MistralOcrProvider
 
 ENDPOINT = "https://mistral.invalid/v1/"
 SECRET = "synthetic-key"
-PDF = b"%PDF-1.7 synthetic"
+PDF = base64.b64decode(
+    (Path(__file__).parent / "fixtures/documents/synthetic-german-native.pdf.b64").read_bytes()
+)
 TABLE = "| Artikel | Betrag |\n| --- | --- |\n| Gesamt | 42,00 EUR |"
 QUESTION = "Wie hoch ist der Betrag für Rechnung RE-2026-123?"
 SOURCE = SourceRef(source_id="file:private-source", revision="1" * 64, client_id="private-id")
@@ -37,18 +43,30 @@ def provider(provider_type, handler, **kwargs):
     )
 
 
-def test_ocr_posts_original_inline_and_keeps_page_and_table_order():
+def test_ocr_posts_only_requested_page_and_keeps_original_provenance():
+    source = PdfWriter(clone_from=BytesIO(PDF))
+    source.add_annotation(1, Link(rect=(0, 0, 10, 10), target_page_index=0))
+    with BytesIO() as original:
+        source.write(original)
+        content = original.getvalue()
+    assert b"Muster GmbH" in content
+
     def handler(request):
         assert str(request.url) == "https://mistral.invalid/v1/ocr"
         assert request.method == "POST"
         assert request.headers["Authorization"] == f"Bearer {SECRET}"
         body = json.loads(request.content)
-        assert body["document"] == {
-            "type": "document_url",
-            "document_url": f"data:application/pdf;base64,{base64.b64encode(PDF).decode()}",
-        }
+        assert body["document"]["type"] == "document_url"
+        prefix, encoded = body["document"]["document_url"].split(",", 1)
+        assert prefix == "data:application/pdf;base64"
+        submitted = base64.b64decode(encoded, validate=True)
+        assert b"Muster GmbH" not in submitted
+        extracted = PdfReader(BytesIO(submitted))
+        assert len(extracted.pages) == 1
+        assert "1.249,50 EUR" in extracted.pages[0].extract_text()
+        assert "/Annots" not in extracted.pages[0]
         assert body["model"] == "mistral-ocr-4-1"
-        assert body["pages"] == [2]
+        assert body["pages"] == [0]
         assert body["table_format"] == "markdown"
         assert body["include_image_base64"] is False
         return httpx.Response(
@@ -56,7 +74,7 @@ def test_ocr_posts_original_inline_and_keeps_page_and_table_order():
             json={
                 "pages": [
                     {
-                        "index": 2,
+                        "index": 0,
                         "markdown": (
                             "# Rechnung\n\n[tbl-0.md](tbl-0.md)\n\n"
                             "![img-0.jpeg](img-0.jpeg)\n\nZahlbar sofort."
@@ -70,26 +88,32 @@ def test_ocr_posts_original_inline_and_keeps_page_and_table_order():
 
     ocr = provider(MistralOcrProvider, handler)
     assert ocr.profile == "mistral-ocr-4-1"
-    assert ocr.recognize_page(PDF, 3) == [
-        Block(3, "text", "Rechnung"),
-        Block(3, "table", TABLE),
-        Block(3, "text", "Zahlbar sofort."),
+    assert ocr.recognize_page(content, 2) == [
+        Block(2, "text", "Rechnung"),
+        Block(2, "table", TABLE),
+        Block(2, "text", "Zahlbar sofort."),
     ]
 
 
-@pytest.mark.parametrize("page", [0, -1, True, 201])
+@pytest.mark.parametrize("page", [0, -1, True, 4, 201])
 def test_ocr_rejects_invalid_page_locally(page):
     ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
     with pytest.raises(TerminalExtractionError):
         ocr.recognize_page(PDF, page)
 
 
-@pytest.mark.parametrize("pages", [[], [{"index": 0, "markdown": "Wrong page"}]])
+@pytest.mark.parametrize("pages", [[], [{"index": 2, "markdown": "Wrong page"}]])
 def test_ocr_rejects_missing_or_wrong_page(pages):
     ocr = provider(MistralOcrProvider, lambda _: httpx.Response(200, json={"pages": pages}))
     with pytest.raises(ExtractionError, match="OCR_INVALID_RESPONSE") as error:
         ocr.recognize_page(PDF, 3)
     assert error.value.retryable
+
+
+def test_ocr_rejects_malformed_pdf_without_contacting_provider():
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
+    with pytest.raises(TerminalExtractionError, match="^UNSUPPORTED_MEDIA$"):
+        ocr.recognize_page(b"%PDF-1.7 malformed", 1)
 
 
 def test_ocr_does_not_treat_blank_page_as_provider_failure():
