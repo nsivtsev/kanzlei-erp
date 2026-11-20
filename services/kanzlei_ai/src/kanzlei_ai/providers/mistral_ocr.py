@@ -1,8 +1,9 @@
-"""Mistral OCR on an isolated page sent as an inline PDF."""
+"""Mistral OCR on a rendered page sent as an inline PNG."""
 
-import logging
+import math
 import re
 from base64 import b64encode
+from contextlib import closing
 from io import BytesIO
 
 import httpx
@@ -17,19 +18,13 @@ from kanzlei_ai.documents.parse import (
 from kanzlei_ai.providers.mistral import MistralError, MistralRequestGate, _MistralEndpoint
 
 OCR_MODEL = "mistral-ocr-4-1"
+_RENDER_SCALE = 200 / 72  # DPI
+_MAX_RENDER_EDGE = 5000
+_MAX_RENDER_PIXELS = 16_000_000
+_MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024
 _MAX_OCR_RESPONSE_BYTES = 2 * 1024 * 1024
 _PLACEHOLDER = re.compile(r"(!?)\[((?:img|tbl)-\d+\.[a-z]+)\]\(\2\)")
 _ATX_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.M)
-_PAGE_RENDER_KEYS = {
-    "/Type",
-    "/Contents",
-    "/Resources",
-    "/Group",
-    "/UserUnit",
-    "/Rotate",
-    "/MediaBox",
-    "/CropBox",
-}
 
 
 class MistralOcrError(ExtractionError):
@@ -61,14 +56,13 @@ class MistralOcrProvider:
             raise TerminalExtractionError("SOURCE_LIMIT_EXCEEDED")
         if not content.startswith(b"%PDF-"):
             raise TerminalExtractionError("UNSUPPORTED_MEDIA")
-        isolated_page = _isolate_page(content, page)
+        image = _render_page(content, page)
         payload = {
             "model": OCR_MODEL,
             "document": {
-                "type": "document_url",
-                "document_url": f"data:application/pdf;base64,{b64encode(isolated_page).decode()}",
+                "type": "image_url",
+                "image_url": f"data:image/png;base64,{b64encode(image).decode('ascii')}",
             },
-            "pages": [0],
             "table_format": "markdown",
             "include_image_base64": False,
             "include_blocks": False,
@@ -92,39 +86,48 @@ class MistralOcrProvider:
         return _page_blocks(result, page)
 
 
-def _isolate_page(content: bytes, page: int) -> bytes:
+def _render_page(content: bytes, page: int) -> bytes:
     try:
-        from pypdf import PdfReader, PdfWriter
-        from pypdf.errors import PyPdfError
+        import pypdfium2 as pdfium
     except ImportError:
         raise MistralOcrError("OCR_UNAVAILABLE") from None
 
-    logger = logging.getLogger("pypdf")
-    previous_level = logger.level
-    logger.setLevel(logging.CRITICAL)
     try:
-        with BytesIO(content) as original, BytesIO() as output:
-            reader = PdfReader(original, strict=False)
-            if reader.is_encrypted:
+        with pdfium.PdfDocument(content) as source:
+            if pdfium.raw.FPDF_GetSecurityHandlerRevision(source) >= 0:
                 raise TerminalExtractionError("ENCRYPTED_PDF")
-            page_count = len(reader.pages)
+            page_count = len(source)
             if page_count > MAX_PAGES:
                 raise TerminalExtractionError("PAGE_LIMIT_EXCEEDED")
             if page > page_count:
                 raise TerminalExtractionError("OCR_INVALID_PAGE")
-            selected = reader.pages[page - 1]
-            # Page annotations, actions and article threads can link to other pages.
-            ignored = [key for key in selected if key not in _PAGE_RENDER_KEYS]
-            writer = PdfWriter()
-            writer.add_page(selected, excluded_keys=ignored)
-            writer.write(output)
-            if output.tell() > MAX_SOURCE_BYTES:
-                raise TerminalExtractionError("SOURCE_LIMIT_EXCEEDED")
-            return output.getvalue()
-    except (PyPdfError, ValueError, TypeError, KeyError, IndexError, RecursionError):
+            with closing(source[page - 1]) as selected:
+                dimensions = selected.get_size()
+                if not all(math.isfinite(value) and value > 0 for value in dimensions):
+                    raise TerminalExtractionError("UNSUPPORTED_MEDIA")
+                width, height = (math.ceil(value * _RENDER_SCALE) for value in dimensions)
+                if max(width, height) > _MAX_RENDER_EDGE or width * height > _MAX_RENDER_PIXELS:
+                    raise TerminalExtractionError("OCR_IMAGE_LIMIT_EXCEEDED")
+                # Only the visible pixels are re-encoded. A copied PDF page can
+                # retain resources used exclusively by other pages.
+                bitmap = selected.render(
+                    scale=_RENDER_SCALE,
+                    draw_annots=False,
+                    may_draw_forms=False,
+                    limit_image_cache=True,
+                    rev_byteorder=True,
+                )
+                with closing(bitmap), bitmap.to_pil() as image, BytesIO() as output:
+                    image.save(output, format="PNG")
+                    if output.tell() > _MAX_OCR_IMAGE_BYTES:
+                        raise TerminalExtractionError("OCR_IMAGE_LIMIT_EXCEEDED")
+                    return output.getvalue()
+    except pdfium.PdfiumError as error:
+        if error.err_code in {pdfium.raw.FPDF_ERR_PASSWORD, pdfium.raw.FPDF_ERR_SECURITY}:
+            raise TerminalExtractionError("ENCRYPTED_PDF") from None
         raise TerminalExtractionError("UNSUPPORTED_MEDIA") from None
-    finally:
-        logger.setLevel(previous_level)
+    except (ValueError, OSError):
+        raise TerminalExtractionError("UNSUPPORTED_MEDIA") from None
 
 
 def _page_blocks(result: dict, page: int) -> list[Block]:

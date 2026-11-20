@@ -5,19 +5,29 @@ from io import BytesIO
 from pathlib import Path
 
 import httpx
+import pypdfium2
 import pytest
+from PIL import Image
 from pypdf import PdfReader, PdfWriter
-from pypdf.annotations import Link
+from pypdf.generic import (
+    ArrayObject,
+    DecodedStreamObject,
+    DictionaryObject,
+    NameObject,
+    NumberObject,
+)
 
 from kanzlei_ai.chat.citations import AnswerPacket, supported_amount, validate_answer
 from kanzlei_ai.chat.context import Dependency, Evidence
 from kanzlei_ai.connectors.contracts import SourceRef
 from kanzlei_ai.documents.parse import (
+    MAX_PAGES,
     MAX_SOURCE_BYTES,
     Block,
     ExtractionError,
     TerminalExtractionError,
 )
+from kanzlei_ai.providers import mistral_ocr
 from kanzlei_ai.providers.mistral import MistralError
 from kanzlei_ai.providers.mistral_chat import MistralChatProvider
 from kanzlei_ai.providers.mistral_embeddings import MistralEmbeddingProvider
@@ -43,30 +53,74 @@ def provider(provider_type, handler, **kwargs):
     )
 
 
-def test_ocr_posts_only_requested_page_and_keeps_original_provenance():
-    source = PdfWriter(clone_from=BytesIO(PDF))
-    source.add_annotation(1, Link(rect=(0, 0, 10, 10), target_page_index=0))
+def _pdf_bytes(writer):
     with BytesIO() as original:
-        source.write(original)
-        content = original.getvalue()
-    assert b"Muster GmbH" in content
+        writer.write(original)
+        return original.getvalue()
+
+
+def _pdf_with_shared_resources():
+    source = PdfWriter()
+    forms = DictionaryObject()
+    for name, paint in (
+        ("/Neighbor", b"% PRIVATE-NEIGHBOR-RESOURCE\n1 0 0 rg"),
+        ("/Selected", b"0 1 0 rg"),
+    ):
+        form = DecodedStreamObject()
+        form.set_data(paint + b"\n0 0 72 72 re f")
+        form.update(
+            {
+                NameObject("/Type"): NameObject("/XObject"),
+                NameObject("/Subtype"): NameObject("/Form"),
+                NameObject("/BBox"): ArrayObject(map(NumberObject, (0, 0, 72, 72))),
+            }
+        )
+        forms[NameObject(name)] = source._add_object(form)
+    resources = source._add_object(DictionaryObject({NameObject("/XObject"): forms}))
+    for name in forms:
+        page = source.add_blank_page(width=72, height=72)
+        paint_form = DecodedStreamObject()
+        paint_form.set_data(f"{name} Do".encode("ascii"))
+        page[NameObject("/Contents")] = source._add_object(paint_form)
+        page[NameObject("/Resources")] = resources
+    return _pdf_bytes(source)
+
+
+def test_ocr_posts_only_rendered_page_and_keeps_original_provenance(monkeypatch):
+    content = _pdf_with_shared_resources()
+    original_pages = PdfReader(BytesIO(content)).pages
+    assert len(original_pages) == 2
+    resources = original_pages[1]["/Resources"]["/XObject"]
+    assert b"PRIVATE-NEIGHBOR-RESOURCE" in resources["/Neighbor"].get_data()
+    assert original_pages[1].get_contents().get_data() == b"/Selected Do"
+    loaded_pages = []
+    get_page = pypdfium2.PdfDocument.get_page
+
+    def track_page(document, index):
+        loaded_pages.append(index)
+        return get_page(document, index)
+
+    monkeypatch.setattr(pypdfium2.PdfDocument, "get_page", track_page)
 
     def handler(request):
         assert str(request.url) == "https://mistral.invalid/v1/ocr"
         assert request.method == "POST"
         assert request.headers["Authorization"] == f"Bearer {SECRET}"
         body = json.loads(request.content)
-        assert body["document"]["type"] == "document_url"
-        prefix, encoded = body["document"]["document_url"].split(",", 1)
-        assert prefix == "data:application/pdf;base64"
+        assert body["document"].keys() == {"type", "image_url"}
+        assert body["document"]["type"] == "image_url"
+        prefix, encoded = body["document"]["image_url"].split(",", 1)
+        assert prefix == "data:image/png;base64"
         submitted = base64.b64decode(encoded, validate=True)
-        assert b"Muster GmbH" not in submitted
-        extracted = PdfReader(BytesIO(submitted))
-        assert len(extracted.pages) == 1
-        assert "1.249,50 EUR" in extracted.pages[0].extract_text()
-        assert "/Annots" not in extracted.pages[0]
+        assert b"PRIVATE-NEIGHBOR-RESOURCE" not in submitted
+        assert submitted.endswith(bytes.fromhex("0000000049454e44ae426082"))  # PNG IEND
+        with Image.open(BytesIO(submitted)) as image:
+            assert image.format == "PNG"
+            assert image.n_frames == 1
+            assert not image.info
+            assert image.getextrema() == ((0, 0), (255, 255), (0, 0))
         assert body["model"] == "mistral-ocr-4-1"
-        assert body["pages"] == [0]
+        assert "pages" not in body
         assert body["table_format"] == "markdown"
         assert body["include_image_base64"] is False
         return httpx.Response(
@@ -93,6 +147,7 @@ def test_ocr_posts_only_requested_page_and_keeps_original_provenance():
         Block(2, "table", TABLE),
         Block(2, "text", "Zahlbar sofort."),
     ]
+    assert loaded_pages == [1]
 
 
 @pytest.mark.parametrize("page", [0, -1, True, 4, 201])
@@ -114,6 +169,41 @@ def test_ocr_rejects_malformed_pdf_without_contacting_provider():
     ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
     with pytest.raises(TerminalExtractionError, match="^UNSUPPORTED_MEDIA$"):
         ocr.recognize_page(b"%PDF-1.7 malformed", 1)
+
+
+def test_ocr_rejects_empty_password_encryption_without_contacting_provider():
+    source = PdfWriter()
+    source.add_blank_page(width=72, height=72)
+    source.encrypt("")
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
+    with pytest.raises(TerminalExtractionError, match="^ENCRYPTED_PDF$"):
+        ocr.recognize_page(_pdf_bytes(source), 1)
+
+
+def test_ocr_rejects_document_above_page_limit():
+    source = PdfWriter()
+    for _ in range(MAX_PAGES + 1):
+        source.add_blank_page(width=72, height=72)
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
+    with pytest.raises(TerminalExtractionError, match="^PAGE_LIMIT_EXCEEDED$"):
+        ocr.recognize_page(_pdf_bytes(source), 1)
+
+
+@pytest.mark.parametrize(("width", "height"), [(2000, 72), (1500, 1500)])
+def test_ocr_rejects_oversized_bitmap_before_render(monkeypatch, width, height):
+    source = PdfWriter()
+    source.add_blank_page(width=width, height=height)
+    monkeypatch.setattr(pypdfium2.PdfPage, "render", lambda *a, **k: pytest.fail("render started"))
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
+    with pytest.raises(TerminalExtractionError, match="^OCR_IMAGE_LIMIT_EXCEEDED$"):
+        ocr.recognize_page(_pdf_bytes(source), 1)
+
+
+def test_ocr_rejects_oversized_encoded_image(monkeypatch):
+    monkeypatch.setattr(mistral_ocr, "_MAX_OCR_IMAGE_BYTES", 32, raising=False)
+    ocr = provider(MistralOcrProvider, lambda _: pytest.fail("unexpected request"))
+    with pytest.raises(TerminalExtractionError, match="^OCR_IMAGE_LIMIT_EXCEEDED$"):
+        ocr.recognize_page(PDF, 1)
 
 
 def test_ocr_does_not_treat_blank_page_as_provider_failure():
@@ -153,6 +243,19 @@ def test_ocr_rate_limit_carries_retry_after_without_http_retry():
         provider(MistralOcrProvider, handler).recognize_page(PDF, 1)
     assert error.value.retry_after == 17
     assert len(requests) == 1
+
+
+def test_ocr_obeys_the_existing_request_gate():
+    class CooldownGate:
+        def request(self):
+            raise MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=9)
+
+    ocr = provider(
+        MistralOcrProvider, lambda _: pytest.fail("unexpected request"), gate=CooldownGate()
+    )
+    with pytest.raises(ExtractionError, match="^OCR_RATE_LIMITED$") as error:
+        ocr.recognize_page(PDF, 1)
+    assert error.value.retry_after == 9
 
 
 def test_embeddings_batch_split_and_restore_input_order():
