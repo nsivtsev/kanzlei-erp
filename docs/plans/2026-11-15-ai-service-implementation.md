@@ -224,14 +224,19 @@ Synthetic live Mistral acceptance covered three cross-language email questions
 and one DOCX question. All four expected sources ranked first, and all four
 answers used an exact excerpt with an introduction in the question language.
 
-## Task 10: General mode and structured ERP answers
+## Task 10: General search across clients
 
-**Create:** `services/kanzlei_ai/src/kanzlei_ai/chat/routing.py`, `tests/integration/test_general_scope.py`, `tests/integration/test_work_context.py`; `kanzlei_erp/ai_connector/work_context.py`, `kanzlei_erp/tests/test_ai_connector_work_context.py`.
+**Create:** `tests/integration/test_general_scope.py` and migration `0009_chat_general_scope`.
 
 1. Add red tests that distinguish a user's readable clients from permission to use general mode. Test mixed-client sources, scope changes, denied candidates and permission revocation across saved general answers.
-2. Implement general retrieval with source/client labels and the same per-source authorization. Keep one-client and general histories separate.
-3. Add bounded ERP queries for unresolved Questions, tasks and FiBu states. Test exhaustive enumeration/counts independently of top-k retrieval and require the verified user's existing record access.
-4. Run the targeted service/ERP modules and one browser question across two synthetic clients, then switch to one-client context and verify isolation. Commit independently.
+2. Implement general retrieval across indexed documents and emails with source and client labels and the same per-source authorization. Keep one-client and general histories separate.
+3. Run the targeted service/ERP modules and one browser question across two synthetic clients, then switch to one-client context and verify isolation. Commit independently.
+
+General chat uses exact and lexical retrieval over the existing index. Cloud
+generation still requires authorization for every supplied source. For migration
+and role setup, see the [general chat instructions](../../services/kanzlei_ai/docs/erp-connector.md#general-chat).
+
+Structured ERP answers for unresolved Questions, tasks and FiBu states are deferred until those workflows are in use.
 
 ## Task 11: Pilot operations and release preparation
 

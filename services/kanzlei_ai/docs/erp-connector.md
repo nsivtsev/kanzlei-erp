@@ -315,7 +315,20 @@ projection. The reply grants the entire batch only when the ERP returns
 Clients call `FrappeConnector.check_processing_policy(operation, scope, sources,
 access_token=...)` immediately before sending data to an external provider.
 For a question-only embedding use the current authorized client scope and an
-empty source list. A question in general scope has no explicit Mandant grant.
+empty source list. General chat uses the existing exact and lexical index
+instead of sending the question for embedding.
 For sourced generation include every excerpt's source reference, including all
 referenced Mandanten in general scope. For background OCR or document embeddings
 send the current source references. Each retry rechecks permission online.
+
+## General chat
+
+Apply the AI database migration before enabling general chat. Give pilot users
+an existing ERP role listed in `kanzlei_ai_connector.general_roles`. The
+default empty list keeps general chat disabled. Sign in to load the available
+search scopes.
+
+General chat searches the existing index across Mandanten the signed-in user
+can currently read. It checks each source in ERP and lists conversations
+separately from each Mandant's history. Removing the role takes effect on
+subsequent requests. No reindex is required.
