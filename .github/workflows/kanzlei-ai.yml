@@ -63,10 +63,7 @@ jobs:
           docker compose -f compose.ci.yml run --rm --no-deps checks ruff format --check --no-cache src tests scripts
           docker compose -f compose.ci.yml run --rm --no-deps checks python -m kanzlei_ai.coordinator migrate
           docker compose -f compose.ci.yml run --rm --no-deps checks pytest -q -p no:cacheprovider
-          # Table recognition is model acceptance. The current Linux fixture loses its table shape.
-          docker compose -f compose.ci.yml run --rm --no-deps checks pytest -q -p no:cacheprovider -m integration \
-            --deselect=tests/test_pdf_extraction.py::test_docling_native_fixture_preserves_german_table_and_page_provenance \
-            --deselect=tests/integration/test_history_permissions.py::test_native_fixture_answers_from_the_published_table
+          docker compose -f compose.ci.yml run --rm --no-deps checks pytest -q -p no:cacheprovider -m integration
       - name: Remove disposable stores
         if: always() && env.CI_DOCLING_MODELS_DIR != ''
         run: docker compose -f compose.ci.yml down -v --remove-orphans

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -117,6 +118,25 @@ def test_parser_does_not_turn_prose_page_into_table_from_pipe_character():
     ]
 
 
+def test_native_table_recovery_requires_the_emitted_page_text():
+    from docling.datamodel.base_models import AssembledUnit, Cluster, Page, TextElement
+    from docling_core.types.doc.page import TextCell
+
+    from kanzlei_ai.documents.parse import Block, document_blocks
+
+    emitted = "Leistung | Betrag Beratung | 1.249,50 EUR"
+    item = SimpleNamespace(
+        text=emitted, prov=[SimpleNamespace(page_no=2, charspan=(0, len(emitted)))]
+    )
+    document = SimpleNamespace(iterate_items=lambda: [(item, 0)])
+    lines = ["Leistung | Betrag", "Beratung | 1.249,50 EUR", "Zusatz | 99 EUR"]
+    cells = [TextCell.model_construct(text=line) for line in lines]
+    element = TextElement.model_construct(cluster=Cluster.model_construct(cells=cells))
+    page = Page(page_no=2, assembled=AssembledUnit(elements=[element]))
+
+    assert document_blocks(document, pages=[page]) == [Block(page=2, kind="text", text=emitted)]
+
+
 @pytest.mark.integration
 def test_docling_native_fixture_preserves_german_table_and_page_provenance():
     from kanzlei_ai.documents.parse import parse_pdf
@@ -132,8 +152,10 @@ def test_docling_native_fixture_preserves_german_table_and_page_provenance():
         assert fact["value"] in text_by_page[fact["page"]]
     table = next(block for block in parsed.blocks if block.kind == "table")
     assert table.page == 2
-    assert " | ".join(gold["table"]["headers"]) in table.text
-    assert " | ".join(gold["table"]["row"]) in table.text
+    assert table.text.splitlines() == [
+        " | ".join(gold["table"]["headers"]),
+        " | ".join(gold["table"]["row"]),
+    ]
     assert all(block.page != gold["empty_page"] for block in parsed.blocks)
 
 

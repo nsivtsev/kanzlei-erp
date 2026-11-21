@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from docling.datamodel.base_models import Page
     from docling_core.types.doc import DoclingDocument
 
 PARSER_VERSION = "docling-native-v1"
@@ -163,7 +164,27 @@ def _text_blocks(page: int, parts: list[str]) -> list[Block]:
     return blocks
 
 
-def document_blocks(document: DoclingDocument) -> list[Block]:
+def _native_table_blocks(page: Page, parts: list[str]) -> list[Block]:
+    if page.assembled is None or sum(part.count(" | ") for part in parts) < 2:
+        return []
+    from docling.datamodel.base_models import TextElement
+    from docling.utils.text_normalization import cell_text_lines, normalize_extracted_text
+
+    lines = [
+        normalize_extracted_text(line)
+        for element in page.assembled.elements
+        if isinstance(element, TextElement)
+        for line in cell_text_lines(element.cluster.cells)
+    ]
+    # Docling joins text cells into paragraphs. Recover their row boundaries
+    # only when every word, in order, is already present in the final page.
+    if " ".join(lines).split() != " ".join(parts).split():
+        return []
+    blocks = _text_blocks(page.page_no, lines)
+    return blocks if any(block.kind == "table" for block in blocks) else []
+
+
+def document_blocks(document: DoclingDocument, *, pages: Iterable[Page] = ()) -> list[Block]:
     """Export page-provenanced prose and tables from a Docling document."""
     blocks: list[Block] = []
     page_text: dict[int, list[str]] = {}
@@ -184,12 +205,19 @@ def document_blocks(document: DoclingDocument) -> list[Block]:
             part = text[start:end].strip()
             if part:
                 page_text.setdefault(source_span.page_no, []).append(part)
+    native_pages = {page.page_no: page for page in pages}
+    structured_pages = {block.page for block in blocks}
     for page, parts in page_text.items():
         # TableItem carries the preferred structure. Some Docling backends
         # instead emit adjacent pipe-delimited text rows within one or more
         # provenance spans; require matching neighbours so one prose
         # separator cannot change a whole page.
-        blocks.extend(_text_blocks(page, parts))
+        restored = (
+            _native_table_blocks(native_pages[page], parts)
+            if page in native_pages and page not in structured_pages
+            else []
+        )
+        blocks.extend(restored or _text_blocks(page, parts))
     return blocks
 
 
@@ -247,7 +275,7 @@ def parse_pdf(
         page_count = int(document.num_pages())
         if page_count != expected_page_count:
             raise TerminalExtractionError("PARSE_INCOMPLETE")
-        blocks = document_blocks(document)
+        blocks = document_blocks(document, pages=getattr(result, "pages", ()))
         if time.monotonic() - started > deadline_seconds:
             raise TerminalExtractionError("PARSE_TIMEOUT")
         extracted = extract_blocks(blocks, page_count=page_count)

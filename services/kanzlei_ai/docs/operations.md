@@ -18,11 +18,9 @@ search and chat only for the fixture paths under test. Browser CI runs the
 synthetic stub in an isolated loopback network. Python CI provisions pinned
 public Docling layout and table weights before running tests on an internal
 Docker network. The Paddle unit tests use local test doubles for OCR models.
-Neither test path requires production credentials.
-The pinned Linux Docling model currently flattens the native German table
-fixture into text. The model-dependent table and answer checks belong to
-separate model acceptance. CI covers service behavior with synthetic evidence,
-including permissions, publication and recovery.
+Both test paths use synthetic data and disposable credentials. CI includes
+the native German fixture's exact table rows, cited invoice answer, and
+service-level permissions, publication and recovery checks.
 
 ## Pilot prerequisites
 
@@ -236,6 +234,9 @@ reconciling and restarting any authorized remote worker.
   until null. A full rebuild needs every current publication, including rows
   PostgreSQL previously marked indexed. Verify index coverage and citations
   after the queue drains.
+- To correct table rows in previously extracted native PDFs, run
+  `coordinator requeue-extract SOURCE_ID` for the affected sources. Let
+  extraction and indexing finish before checking the new citations.
 - Redis AOF is useful for restart recovery. PostgreSQL retains durable jobs,
   leases and the outbox. If the broker is lost, bring up the dedicated AI Redis,
   allow stale leases to expire, then run `coordinator recover` and
