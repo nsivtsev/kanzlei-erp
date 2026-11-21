@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import insert, inspect, select, text, update
+from sqlalchemy import event, insert, inspect, select, text, update
 
 from kanzlei_ai import jobs as job_service
 from kanzlei_ai import outbox, sync
@@ -416,6 +416,32 @@ def test_exhausted_index_job_can_requeue_without_losing_extract(database):
     assert publication.reindex(database, "synthetic").queued == 1
     index = next(row for row in _rows(database, jobs) if row["id"] == index_id)
     assert (index["status"], index["attempts"], index["error_code"]) == ("queued", 0, None)
+
+
+def test_dispatch_acknowledgement_does_not_lock_job_against_claim(database):
+    _extract(database)
+    index_id = _index_job(database)
+    sent = []
+    claims = []
+
+    # Force the worker claim while the publisher's acknowledgement writes are uncommitted.
+    # A write to jobs in this transaction makes the real SKIP LOCKED claim return no lease.
+    def claim_on_ack(_conn):
+        if sent and not claims:
+            claims.append(None)
+            claims[0] = job_service.claim(database, index_id, stage="index")
+
+    event.listen(database, "commit", claim_on_ack)
+    try:
+        assert outbox.dispatch(database, lambda _: None, publish_index=sent.append) == 2
+    finally:
+        event.remove(database, "commit", claim_on_ack)
+
+    assert sent == [index_id]
+    assert len(claims) == 1 and claims[0] is not None
+    assert (
+        next(row for row in _rows(database, jobs) if row["id"] == index_id)["status"] == "running"
+    )
 
 
 def test_real_worker_rebuilds_deleted_collection_via_reindex_cli(database, monkeypatch, capsys):

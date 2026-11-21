@@ -1,5 +1,6 @@
 """At-least-once outbox and independent broker-loss recovery."""
 
+import logging
 import uuid
 from datetime import timedelta
 
@@ -7,6 +8,8 @@ from sqlalchemy import and_, func, insert, or_, select, text, update
 
 from kanzlei_ai.jobs import MAX_ATTEMPTS, clear_index_batches, exhausted_code
 from kanzlei_ai.models import jobs, outbox, sources
+
+log = logging.getLogger(__name__)
 
 
 def dispatch(
@@ -42,7 +45,7 @@ def dispatch(
                     )
                     .order_by(outbox.c.id)
                     .limit(1)
-                    .with_for_update(of=outbox, skip_locked=True)
+                    .with_for_update(of=(outbox, jobs), skip_locked=True)
                 )
                 .mappings()
                 .first()
@@ -53,6 +56,13 @@ def dispatch(
                 update(outbox)
                 .where(outbox.c.id == row["id"])
                 .values(lease_token=token, lease_until=now + text("interval '30 seconds'"))
+            )
+            # Refresh the broker-loss grace period before publishing. A post-send job
+            # lock can make a just-delivered worker skip its claim and drop the delivery.
+            conn.execute(
+                update(jobs)
+                .where(jobs.c.id == row["job_id"], jobs.c.status == "queued")
+                .values(updated_at=now)
             )
         try:
             publisher = publish_index if row["stage"] == "index" else routes[row["ocr_profile"]]
@@ -82,13 +92,7 @@ def dispatch(
                 )
                 .values(published_at=func.clock_timestamp(), lease_until=None, lease_token=None)
             )
-            if result.rowcount:
-                conn.execute(
-                    update(jobs)
-                    .where(jobs.c.id == row["job_id"])
-                    .values(updated_at=func.clock_timestamp())
-                )
-                count += 1
+            count += result.rowcount
     return count
 
 
@@ -201,4 +205,6 @@ def recover(engine, limit=100, *, include_index=False, index_profile=None):
             if pending is None:
                 conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
                 count += 1
+    if count:
+        log.info("Outbox recovery requeued %d jobs", count)
     return count

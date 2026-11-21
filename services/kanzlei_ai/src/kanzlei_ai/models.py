@@ -30,6 +30,7 @@ connectors = Table(
     Column("watermark", Text),
     Column("changes_cursor", Text),
     Column("scan_completed_at", DateTime(timezone=True)),
+    Column("last_successful_poll_at", DateTime(timezone=True)),
     Column("ocr_profile_override", String(16)),
 )
 sources = Table(
@@ -73,6 +74,7 @@ jobs = Table(
     Column("lease_until", DateTime(timezone=True)),
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("retry_not_before", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint(
         "source_id",

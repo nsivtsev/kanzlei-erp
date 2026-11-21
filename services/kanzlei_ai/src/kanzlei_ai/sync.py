@@ -407,6 +407,7 @@ def apply_inventory(
                 watermark=watermark,
                 phase="changes" if next_cursor is None else "inventory",
                 changes_cursor=watermark if next_cursor is None else None,
+                last_successful_poll_at=func.clock_timestamp(),
                 scan_completed_at=func.clock_timestamp()
                 if next_cursor is None
                 else state["scan_completed_at"],
@@ -476,6 +477,9 @@ def apply_changes(
         conn.execute(
             update(connectors)
             .where(connectors.c.id == connector_id)
-            .values(changes_cursor=page["next_cursor"])
+            .values(
+                changes_cursor=page["next_cursor"],
+                last_successful_poll_at=func.clock_timestamp(),
+            )
         )
         return True

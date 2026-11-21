@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from kanzlei_ai import outbox, sync
+from kanzlei_ai import ops, outbox, sync
 from kanzlei_ai.connectors.frappe import FrappeConnector
 from kanzlei_ai.db import engine_from_settings, migrate
 from kanzlei_ai.models import connectors
@@ -125,6 +125,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     for command in ("migrate", "scan", "sync-once", "recover", "dispatch", "run"):
         commands.add_parser(command)
+    ops_parser = commands.add_parser("ops-status", help="Report connector operations aggregates")
+    ops_parser.add_argument("--json", action="store_true", required=True)
     reindex_parser = commands.add_parser("reindex", help="Queue indexing of saved artifacts")
     reindex_parser.add_argument("--connector")
     reindex_parser.add_argument("--cursor", type=int, default=0)
@@ -166,6 +168,15 @@ def main():
             _recover(engine, settings)
         elif args.command == "dispatch":
             _dispatch(engine, settings)
+        elif args.command == "ops-status":
+            with engine.connect().execution_options(isolation_level="REPEATABLE READ") as conn:
+                conn.exec_driver_sql("SET TRANSACTION READ ONLY")
+                status = ops.collect_status(
+                    conn,
+                    settings.ingestion_connector_id,
+                    index_profile=configured_index_profile(settings),
+                )
+            print(json.dumps(status, sort_keys=True))
         elif args.command == "reindex":
             result = reindex(
                 engine,
@@ -200,6 +211,8 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig()
+    logging.getLogger(outbox.__name__).setLevel(logging.INFO)
     try:
         main()
     except Exception:
