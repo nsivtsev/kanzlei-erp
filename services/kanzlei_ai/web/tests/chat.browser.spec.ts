@@ -3,7 +3,7 @@ for (const width of [1100, 390]) test(`German chat flow at ${width}px`,async ({p
   await page.setViewportSize({width,height:800}); await page.goto('/');
   await page.getByRole('button',{name:'Mit ERP anmelden'}).click();
   await expect(page.getByLabel('Suchbereich')).toBeVisible();
-  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
   await page.getByRole('button',{name:'Neues Gespräch'}).click();
   await page.getByLabel('Ihre Frage').fill('Testfrage'); await page.getByRole('button',{name:'Senden'}).click();
   await expect(page.getByText('Testantwort')).toBeVisible();
@@ -18,7 +18,7 @@ for (const width of [1100, 390]) test(`German chat flow at ${width}px`,async ({p
     await page.getByRole('button',{name:'Dokument schließen'}).click();
   }
   await expect(page.locator('#pdf-canvas')).toHaveCount(0);
-  await page.getByLabel('Suchbereich').selectOption('b'); await expect(page.getByText('Testantwort')).toHaveCount(0);
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant B' }); await expect(page.getByText('Testantwort')).toHaveCount(0);
   await page.getByRole('button',{name:'Abmelden'}).click(); await expect(page.getByRole('button',{name:'Mit ERP anmelden'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
@@ -26,7 +26,7 @@ for (const width of [1100, 390]) test(`German chat flow at ${width}px`,async ({p
 test('opens an email citation via fresh authorization and keeps German controls', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
   await page.getByRole('button', { name: 'Neues Gespräch' }).click();
   const question = page.getByLabel('Ihre Frage');
   await question.fill('Когда встреча?');
@@ -54,7 +54,7 @@ for (const rejected of ['permission', 'locator']) {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/');
     await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-    await page.getByLabel('Suchbereich').selectOption('a');
+    await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
     await page.getByRole('button', { name: 'Neues Gespräch' }).click();
     await page.getByLabel('Ihre Frage').fill('What does the email say about Berlin?');
     await page.getByRole('button', { name: 'Senden' }).click();
@@ -74,7 +74,7 @@ for (const routeKind of ['drive', 'attachment']) {
     await page.setViewportSize({ width: attachment ? 390 : 1100, height: 800 });
     await page.goto('/');
     await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-    await page.getByLabel('Suchbereich').selectOption('a');
+    await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
     await page.getByRole('button', { name: 'Neues Gespräch' }).click();
     await page.getByLabel('Ihre Frage').fill(`What does the Word document say about Berlin (${routeKind})?`);
     await page.getByRole('button', { name: 'Senden' }).click();

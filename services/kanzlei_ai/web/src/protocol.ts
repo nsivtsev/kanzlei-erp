@@ -1,3 +1,19 @@
+export type ChatScope = { kind: 'client'; client_id: string } | { kind: 'general' };
+
+export function chatScopeOptionValue(scope: ChatScope) {
+  return scope.kind === 'general' ? 'general' : `client:${scope.client_id}`;
+}
+
+export function conversationCreateBody(scope: ChatScope) {
+  return scope.kind === 'general' ? { scope: { kind: 'general' } } : { client_id: scope.client_id };
+}
+
+export function conversationQuery(scope: ChatScope) {
+  return new URLSearchParams(scope.kind === 'general'
+    ? { scope: 'general' }
+    : { client_id: scope.client_id }).toString();
+}
+
 export function validTicketMessage(value: unknown, state: string): value is {type:string;state:string;ticket:string} {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;

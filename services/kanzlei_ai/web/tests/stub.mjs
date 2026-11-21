@@ -12,6 +12,12 @@ const downloadQuery = new URLSearchParams({
   file_id: 'Agenda + #?.docx',
   revision: 'a'.repeat(64),
 }).toString();
+const generalDownloadQuery = new URLSearchParams(downloadQuery);
+generalDownloadQuery.set('customer', 'b');
+const generalClients = {
+  pdf: { id: 'a', label: 'Mandant A <em>Aktuell</em>' },
+  docx: { id: 'b', label: 'Mandant B & Partner' },
+};
 const examplePdf = Buffer.from(
   readFileSync(new URL('../../tests/fixtures/documents/synthetic-german-native.pdf.b64', import.meta.url), 'utf8'),
   'base64',
@@ -26,13 +32,19 @@ if(u.pathname==='/v1/connector/clients')return json(res,{items:[{id:'a',label:'M
 const owner = req.headers.authorization;
 const client = u.searchParams.get('client_id');
 if (u.pathname === '/v1/chat/conversations' && req.method === 'POST') {
-  const conversation = { id: randomUUID(), client_id: JSON.parse(body).client_id, created_at: new Date().toISOString() };
+  const selection = JSON.parse(body);
+  const general = selection.scope?.kind === 'general';
+  const conversation = {
+    id: randomUUID(), client_id: general ? null : selection.client_id, created_at: new Date().toISOString(),
+    ...(general ? { scope: { kind: 'general' } } : {}),
+  };
   conversations.set(conversation.id, { owner, conversation, turns: [] });
   return json(res, conversation);
 }
 if (u.pathname === '/v1/chat/conversations') {
+  const clientId = u.searchParams.get('scope') === 'general' ? null : client;
   const items = [...conversations.values()]
-    .filter(row => row.owner === owner && row.conversation.client_id === client)
+    .filter(row => row.owner === owner && row.conversation.client_id === clientId)
     .map(row => row.conversation);
   return json(res, { items, next_cursor: null });
 }
@@ -52,6 +64,7 @@ if (u.pathname.endsWith('/turns')) {
   const email = question === 'What does the email say about Berlin?';
   const docx = question.includes('Word document') ? (question.includes('(attachment)') ? 'attachment' : 'drive') : null;
   const russian = question === 'Когда встреча?';
+  const general = thread?.conversation.scope?.kind === 'general';
   const answered = thread?.conversation.client_id !== 'b' && !russian;
   const answer = {
     id: thread?.turns.length ? randomUUID() : 't',
@@ -66,6 +79,9 @@ if (u.pathname.endsWith('/turns')) {
       : docx ? [{ id: docx, title: 'Agenda.docx', page: null, source_kind: 'docx' }]
       : answered ? [{ id: invoice ? 'invoice' : 'x', title: invoice ? 'Rechnung RE-2026-0042.pdf' : 'Testdokument', page: invoice ? 2 : 1 }] : [],
   };
+  if (general && answer.citations.length === 1) {
+    answer.citations[0].client = generalClients[docx ? 'docx' : 'pdf'];
+  }
   thread?.turns.push(answer);
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
   res.write('event: status\ndata: {"phase":"retrieving"}\n\n');
@@ -79,12 +95,13 @@ if (u.pathname.endsWith('/original') && Object.hasOwn(downloadPaths, citationKin
     res.end();
     return;
   }
-  return json(res, { source_kind: 'docx', locator: downloadPaths[citationKind] + '?' + downloadQuery });
+  const query = thread.conversation.scope?.kind === 'general' ? generalDownloadQuery : downloadQuery;
+  return json(res, { source_kind: 'docx', locator: downloadPaths[citationKind] + '?' + query });
 }
 const downloadKind = Object.keys(downloadPaths).find(kind => downloadPaths[kind] === u.pathname);
 if (downloadKind) {
   const hasSession = req.headers.cookie?.split('; ').includes('erp_fixture=active');
-  if (!hasSession || owner || u.searchParams.toString() !== downloadQuery) {
+  if (!hasSession || owner || ![downloadQuery, generalDownloadQuery.toString()].includes(u.searchParams.toString())) {
     res.writeHead(403);
     res.end();
     return;

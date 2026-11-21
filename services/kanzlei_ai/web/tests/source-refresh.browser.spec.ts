@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 async function openChat(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
   await page.getByRole('button', { name: 'Neues Gespräch' }).click();
   await expect(page.getByLabel('Ihre Frage')).toBeVisible();
 }
@@ -57,7 +57,7 @@ test('a delayed catalogue page cannot populate a different scope', async ({ page
   const requested = page.waitForRequest('**/sources');
   await page.getByRole('button', { name: 'Dokumente', exact: true }).click();
   await requested;
-  await page.getByLabel('Suchbereich').selectOption('b');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant B' });
   release();
   await page.getByRole('button', { name: 'Dokumente', exact: true }).click();
   await expect(page.getByText('Dokument B')).toBeVisible();

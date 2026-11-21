@@ -2,7 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 const waitGate=()=>{let release!:()=>void; const promise=new Promise<void>(r=>release=r); setTimeout(()=>release(),5000);return {promise,release};};
 const item={id:'t',created_at:'2026-01-01T00:00:00Z',status:'answered',question:'Testfrage',answer:'Testantwort',citations:[{id:'x',title:'Erste Quelle',page:1},{id:'y',title:'Zweite Quelle',page:1}]};
 async function login(page:Page){await page.getByRole('button',{name:'Mit ERP anmelden'}).click();await expect(page.getByLabel('Suchbereich')).toBeVisible();}
-async function chat(page:Page){await login(page);await page.getByLabel('Suchbereich').selectOption('a');await page.getByRole('button',{name:'Neues Gespräch'}).click();}
+async function chat(page:Page){await login(page);await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });await page.getByRole('button',{name:'Neues Gespräch'}).click();}
 async function ask(page:Page){await page.getByLabel('Ihre Frage').fill('Testfrage');await page.getByRole('button',{name:'Senden'}).click();}
 test('old session client page and delayed 401 cannot replace or log out the new session',async({page})=>{
  const gate=waitGate(),entered=waitGate();let exchanges=0;const observed:string[]=[];

@@ -18,7 +18,7 @@ test('theme starts from system preference and the explicit choice persists', asy
 test('switching the theme leaves the draft, PDF canvas and scope in place', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
   await page.getByRole('button', { name: 'Neues Gespräch' }).click();
   const field = page.getByLabel('Ihre Frage');
   await field.fill('Testfrage');
@@ -40,7 +40,7 @@ test('switching the theme leaves the draft, PDF canvas and scope in place', asyn
   expect(buttonColor).toBe('rgb(21, 29, 40)');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await expect(field).toHaveValue('Noch nicht gesendet');
-  await expect(page.getByLabel('Suchbereich')).toHaveValue('a');
+  await expect(page.getByLabel('Suchbereich').locator('option:checked')).toHaveText('Mandant A');
   await expect(canvas).toHaveAttribute('data-same-node', 'yes');
 });
 
@@ -52,7 +52,7 @@ test('the narrow layout keeps controls reachable with reduced motion', async ({ 
   await expect(dark).toHaveAttribute('aria-pressed', 'true');
   await expect(dark).toHaveCSS('transition-duration', '0s');
   await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
-  await page.getByLabel('Suchbereich').selectOption('a');
+  await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
   await page.getByRole('button', { name: 'Neues Gespräch' }).click();
   await expect(page.getByRole('button', { name: 'Senden' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);

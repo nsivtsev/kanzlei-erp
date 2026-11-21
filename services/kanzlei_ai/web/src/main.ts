@@ -1,11 +1,14 @@
-import { SSEParser, validTicketMessage, randomBinding, challenge } from './protocol';
+import {
+  SSEParser, validTicketMessage, randomBinding, challenge,
+  chatScopeOptionValue, conversationCreateBody, conversationQuery, type ChatScope,
+} from './protocol';
 import { themeSwitcher } from './theme';
 import './style.css';
 
 type Client = { id: string; label: string };
-type Citation =
+type Citation = { client?: Client } & (
   | { id: string; title: string; page: number; source_kind?: 'pdf' }
-  | { id: string; title: string; page: null; source_kind: 'email' | 'docx' };
+  | { id: string; title: string; page: null; source_kind: 'email' | 'docx' });
 type Item = {
   id: string;
   created_at: string;
@@ -17,9 +20,10 @@ type Item = {
 type Processing = 'pending' | 'ready' | 'failed';
 type Source = { source_id: string; title: string; status: Processing };
 type Filters = { query: string; status: 'all' | Processing };
-type Conversation = { id: string; client_id: string; created_at: string };
-type Grant = { access_token: string; token_type: string; identity: { expires_at: number } };
-type Lease = { token: string; expiry: number; erpOrigin: string; controller: AbortController };
+type Conversation = { id: string; created_at: string }
+  & ({ client_id: string } | { client_id: null; scope: { kind: 'general' } });
+type Grant = { access_token: string; token_type: string; identity: { expires_at: number; general_access?: unknown } };
+type Lease = { token: string; expiry: number; erpOrigin: string; generalAccess: boolean; controller: AbortController };
 type Page<T> = { items: T[]; next_cursor: string | null };
 type Viewer = { citation: Citation; canvas: HTMLCanvasElement; pages: number; zoom: number };
 type CitationRequest = { turn: string; citation: Citation; controller: AbortController; focus: string };
@@ -39,7 +43,8 @@ let expiryTimer = 0, generation = 0, loginGeneration = 0;
 let popupCleanup: (() => void) | null = null;
 let scopeController = new AbortController();
 let clients: Client[] = [], conversations: Conversation[] = [], history: Item[] = [];
-let client = '', conversation = '', draft = '', status = '';
+let chatScope: ChatScope | null = null;
+let conversation = '', draft = '', status = '';
 let askController: AbortController | null = null;
 let activeQuestion = '';
 let historyCheck: object | null = null;
@@ -130,6 +135,7 @@ function resetConversation() {
 function resetScope() {
   resetCatalogue();
   resetConversation();
+  chatScope = null;
   conversations = [];
 }
 
@@ -152,7 +158,6 @@ function logout(localOnly = false) {
   previous?.controller.abort();
   resetScope();
   clients = [];
-  client = '';
   status = '';
   render();
   if (previous && !localOnly) {
@@ -217,7 +222,6 @@ async function login() {
   lease = null;
   signedIn = false;
   clients = [];
-  client = '';
   resetScope();
   const state = randomBinding(), verifier = randomBinding();
   let done = false, timer = 0, poll = 0, origin = '';
@@ -244,7 +248,10 @@ async function login() {
       if (attempt !== loginGeneration) return;
       if (grant.token_type !== 'bearer' || typeof grant.access_token !== 'string'
           || !Number.isFinite(grant.identity?.expires_at) || grant.identity.expires_at * 1000 <= Date.now()) throw Error();
-      const session = { token: grant.access_token, expiry: grant.identity.expires_at * 1000, erpOrigin: origin, controller: new AbortController() };
+      const session: Lease = {
+        token: grant.access_token, expiry: grant.identity.expires_at * 1000, erpOrigin: origin,
+        generalAccess: grant.identity.general_access === true, controller: new AbortController(),
+      };
       lease = session;
       window.clearTimeout(expiryTimer);
       expiryTimer = window.setTimeout(() => {
@@ -298,15 +305,17 @@ async function login() {
   }
 }
 
-async function selectClient(value: string) {
+async function selectScope(scope: ChatScope | null) {
+  const session = lease;
+  if (scope?.kind === 'general' && !session?.generalAccess) return;
   resetScope();
-  client = value;
+  chatScope = scope;
   status = '';
   render();
-  const session = lease, sequence = generation;
-  if (!client || !session) return;
+  const sequence = generation;
+  if (!scope || !session) return;
   try {
-    const list = await pages<Conversation>(session, `/v1/chat/conversations?client_id=${encodeURIComponent(client)}`, sequence);
+    const list = await pages<Conversation>(session, `/v1/chat/conversations?${conversationQuery(scope)}`, sequence);
     if (!current(session, sequence)) return;
     conversations = list;
     render();
@@ -376,11 +385,11 @@ async function selectConversation(id: string) {
 }
 
 async function newConversation() {
-  const session = lease, sequence = generation;
-  if (!session || !client) return;
+  const session = lease, sequence = generation, scope = chatScope;
+  if (!session || !scope) return;
   try {
     const result = await (await api(session, '/v1/chat/conversations', {
-      method: 'POST', body: JSON.stringify({ client_id: client }),
+      method: 'POST', body: JSON.stringify(conversationCreateBody(scope)),
     }, sequence)).json() as Conversation;
     if (!current(session, sequence)) return;
     conversations = [result, ...conversations];
@@ -391,8 +400,8 @@ async function newConversation() {
 }
 
 async function loadCatalogue(trail: (string | null)[], nextFilters = filters) {
-  const session = lease, sequence = generation;
-  if (!session || !client) return;
+  const session = lease, sequence = generation, scope = chatScope;
+  if (!session || scope?.kind !== 'client') return;
   catalogueRequest?.abort();
   const request = new AbortController();
   catalogueRequest = request;
@@ -405,7 +414,7 @@ async function loadCatalogue(trail: (string | null)[], nextFilters = filters) {
   try {
     const result = await (await api(session, '/v1/chat/conversations/sources', {
       method: 'POST',
-      body: JSON.stringify({ client_id: client, cursor, ...nextFilters }),
+      body: JSON.stringify({ client_id: scope.client_id, cursor, ...nextFilters }),
       signal: request.signal,
     }, sequence)).json() as Page<Source>;
     if (!current(session, sequence) || catalogueRequest !== request) return;
@@ -422,7 +431,7 @@ async function loadCatalogue(trail: (string | null)[], nextFilters = filters) {
 }
 
 function showCatalogue() {
-  if (!client) return;
+  if (chatScope?.kind !== 'client') return;
   catalogue = true;
   clearViewer();
   void loadCatalogue([null]);
@@ -625,17 +634,27 @@ function closeCitation() {
 function renderHeader() {
   const header = el('header', undefined, 'topbar');
   header.append(el('strong', 'Kanzlei AI', 'wordmark'));
-  if (signedIn && clients.length) {
+  const generalAccess = lease?.generalAccess;
+  if (signedIn && (clients.length || generalAccess)) {
     const scope = el('div', undefined, 'scope');
     const label = el('label', 'Suchbereich');
     label.htmlFor = 'client';
     const select = el('select');
     select.id = 'client';
     select.dataset.focus = 'scope';
-    select.append(new Option('Mandant auswählen', ''));
-    for (const entry of clients) select.append(new Option(entry.label, entry.id));
-    select.value = client;
-    select.onchange = () => void selectClient(select.value);
+    select.append(new Option(generalAccess ? 'Suchbereich auswählen' : 'Mandant auswählen', ''));
+    const choices = clients.map<{ label: string; selection: ChatScope }>(({ id, label }) => ({
+      label, selection: { kind: 'client', client_id: id },
+    }));
+    if (generalAccess) choices.unshift({ label: 'Alle berechtigten Mandanten', selection: { kind: 'general' } });
+    const selections = new Map<string, ChatScope>();
+    for (const { label, selection } of choices) {
+      const value = chatScopeOptionValue(selection);
+      selections.set(value, selection);
+      select.append(new Option(label, value));
+    }
+    select.value = chatScope ? chatScopeOptionValue(chatScope) : '';
+    select.onchange = () => void selectScope(selections.get(select.value) ?? null);
     scope.append(label, select);
     header.append(scope);
   }
@@ -648,12 +667,12 @@ function renderHeader() {
 
 function renderSidebar() {
   const aside = el('aside', undefined, 'sidebar');
-  aside.setAttribute('aria-label', 'Gespräche und Dokumente');
+  aside.setAttribute('aria-label', chatScope?.kind === 'general' ? 'Gespräche' : 'Gespräche und Dokumente');
   const create = button('+ Neues Gespräch', () => void newConversation(), 'new-chat', 'new-chat');
   create.setAttribute('aria-label', 'Neues Gespräch');
-  create.disabled = !client;
+  create.disabled = !chatScope;
   aside.append(create);
-  if (client) {
+  if (chatScope) {
     const format = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
     if (narrow.matches && conversations.length) {
       const label = el('label', 'Gespräche');
@@ -678,6 +697,8 @@ function renderSidebar() {
       }
       aside.append(title, list);
     }
+  }
+  if (chatScope?.kind === 'client') {
     const navigation = el('nav', undefined, 'sidebar-nav');
     if (conversation) {
       const chat = button('Zum Gespräch', showChat, 'quiet');
@@ -693,9 +714,11 @@ function renderSidebar() {
 }
 
 function citationLabel(citation: Citation) {
-  if (citation.source_kind === 'email') return 'E-Mail im ERP öffnen';
-  if (citation.source_kind === 'docx') return 'Word-Dokument herunterladen';
-  return `Seite ${citation.page}`;
+  const clientName = chatScope?.kind === 'general' ? citation.client?.label : undefined;
+  const action = citation.source_kind === 'email' ? 'E-Mail im ERP öffnen'
+    : citation.source_kind === 'docx' ? 'Word-Dokument herunterladen'
+      : `Seite ${citation.page}`;
+  return clientName ? `${clientName} · ${action}` : action;
 }
 
 function renderTurn(item: Item) {
@@ -752,7 +775,8 @@ function renderChat() {
   const named = history.find(item => item.status === 'answered' && item.citations.length)?.citations[0]?.title;
   content.append(el('h1', named?.replace(/\.pdf$/i, '') || (conversation ? 'Gespräch' : 'Dokumentenchat')));
   if (!conversation) {
-    const introduction = client ? 'Beginnen Sie ein neues Gespräch oder öffnen Sie den Verlauf.'
+    const introduction = chatScope ? 'Beginnen Sie ein neues Gespräch oder öffnen Sie den Verlauf.'
+      : lease?.generalAccess ? 'Wählen Sie einen Suchbereich, um Fragen zu den Dokumenten zu stellen.'
       : clients.length ? 'Wählen Sie einen Mandanten, um Fragen zu seinen Dokumenten zu stellen.'
       : 'Für dieses Konto sind keine Mandanten freigegeben.';
     content.append(el('p', introduction, 'muted'));
