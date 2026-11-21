@@ -89,17 +89,27 @@ async def verify_session(session: Session) -> None:
     await session.connector.check_scope(session.token, session.scope)
 
 
+def _conversation_filter(connector_id, subject, conversation_id):
+    return (*_owner_filter(connector_id, subject), chat_conversations.c.id == conversation_id)
+
+
+def _require_conversation(connection, connector_id, subject, conversation_id, *, lock=False):
+    statement = select(chat_conversations.c.scope_kind, chat_conversations.c.client_id).where(
+        *_conversation_filter(connector_id, subject, conversation_id)
+    )
+    if lock:
+        statement = statement.with_for_update(read=True, key_share=True)
+    row = connection.execute(statement).one_or_none()
+    if row is None:
+        raise ConnectorError("NOT_FOUND", 404)
+    return row
+
+
 def lookup(engine, connector_id, subject, conversation_id) -> Scope:
     with engine.begin() as connection:
         configure_query(connection)
-        row = connection.execute(
-            select(chat_conversations.c.scope_kind, chat_conversations.c.client_id).where(
-                chat_conversations.c.id == conversation_id, *_owner_filter(connector_id, subject)
-            )
-        ).one_or_none()
-    if row is None:
-        raise ConnectorError("NOT_FOUND", 404)
-    return Scope(kind=row.scope_kind, client_id=row.client_id)
+        row = _require_conversation(connection, connector_id, subject, conversation_id)
+        return Scope(kind=row.scope_kind, client_id=row.client_id)
 
 
 def _conversation_view(row):
@@ -142,6 +152,46 @@ def list_conversations(engine, session: Session):
         return [_conversation_view(row) for row in rows]
 
 
+def list_for_management(engine, connector_id, subject, cursor):
+    table = chat_conversations.c
+    owner = _owner_filter(connector_id, subject)
+    with engine.begin() as connection:
+        configure_query(connection)
+        statement = select(table.id, table.created_at, table.scope_kind).where(*owner)
+        if cursor is not None:
+            anchor = connection.execute(
+                select(table.created_at).where(*owner, table.id == cursor)
+            ).scalar_one_or_none()
+            if anchor is None:
+                raise ConnectorError("INVALID_REQUEST", 422)
+            statement = statement.where(tuple_(table.created_at, table.id) < (anchor, cursor))
+        rows = connection.execute(
+            statement.order_by(table.created_at.desc(), table.id.desc()).limit(
+                CONVERSATION_LIMIT + 1
+            )
+        ).all()
+    page = rows[:CONVERSATION_LIMIT]
+    return {
+        "items": [
+            {"id": row.id, "created_at": row.created_at.isoformat(), "scope_kind": row.scope_kind}
+            for row in page
+        ],
+        "next_cursor": page[-1].id if len(rows) > CONVERSATION_LIMIT else None,
+    }
+
+
+def delete_conversation(engine, connector_id, subject, conversation_id):
+    with engine.begin() as connection:
+        configure_query(connection)
+        deleted = connection.execute(
+            chat_conversations.delete().where(
+                *_conversation_filter(connector_id, subject, conversation_id)
+            )
+        )
+        if not deleted.rowcount:
+            raise ConnectorError("NOT_FOUND", 404)
+
+
 def store_turn(
     engine,
     session: Session,
@@ -179,6 +229,9 @@ def store_turn(
     )
     with engine.begin() as connection:
         configure_query(connection)
+        _require_conversation(
+            connection, session.connector_id, session.subject, conversation_id, lock=True
+        )
         # Hold the SQL fences through commit so no local invalidation can
         # race the write against a new revision, artifact, or membership.
         current = current_evidence(connection, session, dependencies, lock=True)

@@ -207,6 +207,38 @@ async def list_owned(
     return {"items": items}
 
 
+@router.get("/owned")
+async def conversations_for_management(
+    adapter: Adapter,
+    access_token: AccessToken,
+    service: Runtime,
+    cursor: HistoryCursor = None,
+):
+    identity = await history.current_identity(adapter, access_token)
+    return await database_call(
+        history.list_for_management,
+        service.engine,
+        identity.connector_id,
+        identity.subject,
+        _id(cursor, cursor=True) if cursor is not None else None,
+    )
+
+
+@router.delete("/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: str, adapter: Adapter, access_token: AccessToken, service: Runtime
+):
+    identity = await history.current_identity(adapter, access_token)
+    await database_call(
+        history.delete_conversation,
+        service.engine,
+        identity.connector_id,
+        identity.subject,
+        _id(conversation_id),
+    )
+    return Response(status_code=204)
+
+
 @router.get("/{conversation_id}/history")
 async def conversation_history(
     conversation_id: str,
@@ -414,6 +446,13 @@ async def _stream(service, session, question, conversation_id, commit: history.T
                 commit,
             )
             labels = await _refresh_context(service, session, context, include_labels=True)
+            await database_call(
+                history.lookup,
+                service.engine,
+                session.connector_id,
+                session.subject,
+                conversation_id,
+            )
             if answer is not None and labels is not None:
                 history.label_citation(item, answer.evidence.dependency.source, labels)
         yield _sse("answer", item)

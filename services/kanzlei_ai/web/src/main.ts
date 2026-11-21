@@ -22,11 +22,23 @@ type Source = { source_id: string; title: string; status: Processing };
 type Filters = { query: string; status: 'all' | Processing };
 type Conversation = { id: string; created_at: string }
   & ({ client_id: string } | { client_id: null; scope: { kind: 'general' } });
+type OwnedConversation = { id: string; created_at: string; scope_kind: 'client' | 'general' };
 type Grant = { access_token: string; token_type: string; identity: { expires_at: number; general_access?: unknown } };
 type Lease = { token: string; expiry: number; erpOrigin: string; generalAccess: boolean; controller: AbortController };
 type Page<T> = { items: T[]; next_cursor: string | null };
 type Viewer = { citation: Citation; canvas: HTMLCanvasElement; pages: number; zoom: number };
 type CitationRequest = { turn: string; citation: Citation; controller: AbortController; focus: string };
+type ConversationManagement = {
+  dialog: HTMLDialogElement;
+  session: Lease;
+  controller: AbortController;
+  items: OwnedConversation[];
+  next: string | null;
+  confirming: OwnedConversation | null;
+  loading: boolean;
+  deleting: boolean;
+  message: string;
+};
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const narrow = matchMedia('(max-width: 760px)');
@@ -58,6 +70,8 @@ let citationRequest: CitationRequest | null = null;
 let viewer: Viewer | null = null;
 let pdfTask: import('pdfjs-dist').PDFDocumentLoadingTask | null = null;
 let pdfRender: import('pdfjs-dist').RenderTask | null = null;
+let management: ConversationManagement | null = null;
+const deletedConversations = new Set<string>();
 
 let catalogue = false;
 let catalogueRequest: AbortController | null = null;
@@ -168,6 +182,8 @@ function logout(localOnly = false) {
   lease = null;
   signedIn = false;
   previous?.controller.abort();
+  closeConversationManagement(false);
+  deletedConversations.clear();
   resetScope();
   clients = [];
   status = '';
@@ -279,6 +295,8 @@ async function login() {
   }
   const attempt = ++loginGeneration;
   lease?.controller.abort();
+  closeConversationManagement(false);
+  deletedConversations.clear();
   lease = null;
   signedIn = false;
   clients = [];
@@ -378,7 +396,7 @@ async function selectScope(scope: ChatScope | null) {
   try {
     const list = await pages<Conversation>(session, `${conversationsPath}?${conversationQuery(scope)}`, sequence);
     if (!current(session, sequence)) return;
-    conversations = list;
+    conversations = list.filter(item => !deletedConversations.has(item.id));
     render();
   } catch {
     if (current(session, sequence)) setStatus('Gespräche konnten nicht geladen werden.');
@@ -444,6 +462,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function selectConversation(id: string) {
+  if (deletedConversations.has(id)) return;
   resetCatalogue();
   resetConversation();
   conversation = id;
@@ -465,6 +484,145 @@ async function newConversation() {
   } catch {
     if (current(session, sequence)) setStatus('Gespräch konnte nicht erstellt werden.');
   }
+}
+
+function closeConversationManagement(restoreFocus = true) {
+  const state = management;
+  if (!state) return;
+  management = null;
+  state.controller.abort();
+  state.dialog.close();
+  state.dialog.remove();
+  if (restoreFocus) app.querySelector<HTMLElement>('[data-focus="manage-conversations"]')?.focus();
+}
+
+function conversationDate(value: string) {
+  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+    .format(new Date(value));
+}
+
+function renderConversationManagement(state: ConversationManagement, focus?: string) {
+  const heading = el('h2', state.confirming ? 'Gespräch löschen?' : 'Gespräche verwalten');
+  heading.id = 'conversation-management-heading';
+  const actions = el('div', undefined, 'conversation-management-actions');
+  const feedback = el('p', state.message, 'muted');
+  feedback.setAttribute('role', 'status');
+  feedback.hidden = !state.message;
+  if (state.confirming) {
+    const summary = el('p', `Das Gespräch vom ${conversationDate(state.confirming.created_at)} wird dauerhaft gelöscht.`);
+    const cancel = button('Abbrechen', () => {
+      const previous = state.confirming?.id;
+      state.confirming = null;
+      state.message = '';
+      renderConversationManagement(state, previous);
+    }, 'quiet', 'cancel-delete');
+    const remove = button('Gespräch löschen', () => void deleteManagedConversation(state),
+      'danger', 'confirm-delete');
+    cancel.disabled = remove.disabled = state.deleting;
+    actions.append(cancel, remove);
+    state.dialog.replaceChildren(heading, summary, feedback, actions);
+  } else {
+    const list = el('ul', undefined, 'managed-conversations');
+    for (const item of state.items) {
+      const row = el('li');
+      const details = el('div');
+      details.append(el('strong', conversationDate(item.created_at)),
+        el('small', item.scope_kind === 'general' ? 'Mandantenübergreifend' : 'Mandantengespräch'));
+      const remove = button('Löschen', () => {
+        state.confirming = item;
+        state.message = '';
+        renderConversationManagement(state, 'cancel-delete');
+      }, 'quiet', item.id);
+      remove.setAttribute('aria-label', `Löschen: ${conversationDate(item.created_at)}`);
+      row.append(details, remove);
+      list.append(row);
+    }
+    if (state.next) {
+      const more = button('Weitere Gespräche', () => void loadManagedConversations(state, state.next), 'quiet', 'more-owned');
+      more.disabled = state.loading;
+      actions.append(more);
+    }
+    actions.append(button('Schließen', () => closeConversationManagement(), 'quiet', 'close-management'));
+    state.dialog.replaceChildren(heading, list, feedback, actions);
+  }
+  if (focus) {
+    state.dialog.querySelector<HTMLElement>(`[data-focus="${CSS.escape(focus)}"]`)?.focus();
+  }
+}
+
+async function loadManagedConversations(state: ConversationManagement, cursor: string | null = null) {
+  if (state.loading) return;
+  state.loading = true;
+  state.message = 'Gespräche werden geladen …';
+  renderConversationManagement(state, cursor ? 'more-owned' : 'close-management');
+  try {
+    const path = `${conversationsPath}/owned${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const page = await (await api(state.session, path, {
+      cache: 'no-store', signal: state.controller.signal,
+    })).json() as Page<OwnedConversation>;
+    if (management !== state) return;
+    const items = cursor ? [...state.items, ...page.items] : page.items;
+    state.items = items.filter(item => !deletedConversations.has(item.id));
+    state.next = page.next_cursor;
+    state.message = state.items.length ? '' : 'Keine gespeicherten Gespräche.';
+  } catch {
+    state.message = 'Gespräche konnten nicht geladen werden.';
+  } finally {
+    state.loading = false;
+    if (management === state) renderConversationManagement(state,
+      state.next && cursor ? 'more-owned' : 'close-management');
+  }
+}
+
+async function deleteManagedConversation(state: ConversationManagement) {
+  const id = state.confirming?.id;
+  if (!id || state.deleting) return;
+  state.deleting = true;
+  state.message = 'Gespräch wird gelöscht …';
+  if (conversation === id) {
+    resetCatalogue();
+    resetConversation();
+    render();
+  }
+  renderConversationManagement(state);
+  try {
+    await api(state.session, conversationPath(id), { method: 'DELETE', signal: state.controller.signal });
+    if (management !== state) return;
+    deletedConversations.add(id);
+    conversations = conversations.filter(item => item.id !== id);
+    state.items = state.items.filter(item => item.id !== id);
+    state.confirming = null;
+    state.message = 'Gespräch gelöscht.';
+    if (state.next === id) state.next = state.items.at(-1)?.id ?? null;
+    render();
+  } catch {
+    state.message = 'Das Gespräch konnte nicht gelöscht werden.';
+  } finally {
+    state.deleting = false;
+    if (management === state) renderConversationManagement(state,
+      state.confirming ? 'cancel-delete' : 'close-management');
+  }
+}
+
+function openConversationManagement() {
+  if (!lease || management) return;
+  clearViewer();
+  render();
+  const dialog = el('dialog', undefined, 'conversation-management');
+  dialog.setAttribute('aria-labelledby', 'conversation-management-heading');
+  const state: ConversationManagement = {
+    dialog, session: lease, controller: new AbortController(),
+    items: [], next: null, confirming: null, loading: false, deleting: false, message: '',
+  };
+  management = state;
+  dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    if (!state.deleting) closeConversationManagement();
+  });
+  document.body.append(dialog);
+  renderConversationManagement(state);
+  dialog.showModal();
+  void loadManagedConversations(state);
 }
 
 async function loadCatalogue(trail: (string | null)[], nextFilters = filters) {
@@ -738,7 +896,8 @@ function renderSidebar() {
   const create = button('+ Neues Gespräch', () => void newConversation(), 'new-chat', 'new-chat');
   create.setAttribute('aria-label', 'Neues Gespräch');
   create.disabled = !chatScope;
-  aside.append(create);
+  aside.append(create, button('Gespräche verwalten', openConversationManagement,
+    'quiet manage-conversations', 'manage-conversations'));
   if (chatScope) {
     const format = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
     if (narrow.matches && conversations.length) {

@@ -17,7 +17,7 @@ from kanzlei_ai.chat.citations import AnswerPacket
 from kanzlei_ai.chat.context import DOCX_MIME, Dependency, database_call, read_current
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import ClientPage, ClientRecord, Scope, SourceRef
-from kanzlei_ai.models import chat_turns, index_publications, sources
+from kanzlei_ai.models import chat_conversations, chat_turns, index_publications, sources
 from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
 from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE
 
@@ -201,6 +201,80 @@ def test_general_uses_live_role_even_with_an_affirmative_identity_hint(
     )
     assert client.get(pdf_url(general, answer)).status_code == 403
     assert history(client, legacy).status_code == 200
+
+
+def test_owner_can_delete_revoked_chat_and_only_its_turns(chat, general_erp, database):
+    client, erp, _, legacy, _ = chat
+    general = _create_general(client)["id"]
+    event, answer = run_turn(client, general)[-1]
+    assert event == "answer"
+    assert run_turn(client, legacy)[-1][0] == "answer"
+
+    erp.general_allowed = False
+    assert history(client, general).status_code == 403
+    reply = client.get(f"{_PREFIX}/owned")
+    assert reply.status_code == 200
+    listed = reply.json()["items"]
+    assert [(item["id"], item["scope_kind"]) for item in listed] == [
+        (general, "general"),
+        (legacy, "client"),
+    ]
+    assert all(set(item) == {"id", "created_at", "scope_kind"} for item in listed)
+    assert client.delete(f"{_PREFIX}/{general}").status_code == 204
+    assert client.delete(f"{_PREFIX}/{general}").status_code == 404
+    assert history(client, general).status_code == 404
+    assert client.get(pdf_url(general, answer)).status_code == 404
+    assert len(history(client, legacy).json()["items"]) == 1
+    with database.connect() as connection:
+        assert connection.scalars(select(chat_turns.c.conversation_id)).all() == [legacy]
+        assert connection.scalar(select(sources.c.id).limit(1)) is not None
+
+
+@pytest.mark.parametrize("identity_field", ["subject", "connector_id"])
+def test_management_listing_and_delete_respect_live_owner(chat, identity_field):
+    client, erp, _, own, _ = chat
+    setattr(erp, identity_field, "other")
+    assert client.get(f"{_PREFIX}/owned").json() == {"items": [], "next_cursor": None}
+    assert client.get(f"{_PREFIX}/owned", params={"cursor": own}).status_code == 422
+    assert client.delete(f"{_PREFIX}/{own}").status_code == 404
+
+
+def test_owned_chat_management_paginates(chat, general_erp, monkeypatch):
+    client, _, _, legacy, _ = chat
+    general = _create_general(client)["id"]
+    monkeypatch.setattr(api.history, "CONVERSATION_LIMIT", 1)
+    first = client.get(f"{_PREFIX}/owned").json()
+    assert [entry["id"] for entry in first["items"]] == [general]
+    assert first["next_cursor"] == general
+    second = client.get(f"{_PREFIX}/owned", params={"cursor": first["next_cursor"]}).json()
+    assert [entry["id"] for entry in second["items"]] == [legacy]
+    assert second["next_cursor"] is None
+
+
+@pytest.mark.parametrize("after_commit", [False, True])
+def test_deleting_chat_during_a_turn_prevents_late_disclosure(
+    chat, general_erp, retrieved, database, monkeypatch, after_commit
+):
+    client, _, _, _, _ = chat
+    general = _create_general(client)["id"]
+    original = api.history.store_turn
+
+    def store_with_delete(*args):
+        if after_commit:
+            item = original(*args)
+        with database.begin() as connection:
+            connection.execute(
+                chat_conversations.delete().where(chat_conversations.c.id == general)
+            )
+        if after_commit:
+            return item
+        return original(*args)
+
+    monkeypatch.setattr(api.history, "store_turn", store_with_delete)
+    assert run_turn(client, general)[-1] == ("error", {"code": "NOT_FOUND"})
+    assert history(client, general).status_code == 404
+    with database.connect() as connection:
+        assert connection.scalars(select(chat_turns.c.conversation_id)).all() == []
 
 
 def test_history_cites_fresh_client_name_and_requires_every_dependency(
