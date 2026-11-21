@@ -33,6 +33,7 @@ class TestAIProcessingPolicy(TestCase):
 			(inventory, "current_permission_context", {"side_effect": self._current}),
 			(inventory, "refresh_principal_permissions", {"side_effect": self.events.append}),
 			(policy, "check_scope", {"side_effect": self._scope}),
+			(policy, "_mail_ids", {"return_value": set()}),
 			(policy, "authorize_sources", {"side_effect": self._authorize}),
 		):
 			patcher = patch.object(target, name, **options)
@@ -57,7 +58,8 @@ class TestAIProcessingPolicy(TestCase):
 		self.events.append(("scope", scope))
 		return {"version": 1, "allowed": self.scope_allowed}
 
-	def _authorize(self, scope, sources):
+	def _authorize(self, scope, sources, *, expected_mail_ids):
+		self.assertEqual(expected_mail_ids, set())
 		self.events.append(("refs", scope, sources))
 		decisions = self.decisions
 		if decisions is None:
