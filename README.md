@@ -333,4 +333,6 @@ Run the overview and navigation modules through Bench and the client checks with
 
 Local ERP and AI containers share the root Compose project. Existing AI data
 keeps its legacy named volumes. Before the first unified start, stop the old
-`kanzlei-ai` project without removing volumes. See [AI operations](services/kanzlei_ai/README.md).
+`kanzlei-ai` project without removing volumes. See the [local AI setup](services/kanzlei_ai/README.md)
+and [pilot operations](services/kanzlei_ai/docs/operations.md). Production AI
+is disabled by default and uses separate images and stores.

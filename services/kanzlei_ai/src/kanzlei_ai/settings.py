@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     mistral_enabled: bool = False
     mistral_endpoint: Literal["https://api.eu.mistral.ai", "https://api.mistral.ai"] | None = None
     mistral_api_key: SecretStr | None = None
+    coordinator_only: bool = False
     chat_enabled: bool = False
     chat_browser_erp_origin: HttpUrl | None = None
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:56379/0")
@@ -59,9 +60,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_mistral_configuration(self):
+        if self.coordinator_only and self.chat_enabled:
+            raise ValueError("Coordinator cannot enable chat")
         if self.model_profile == "mistral" and not self.mistral_enabled:
             raise ValueError("Mistral model profile requires explicit external processing opt-in")
-        if self.mistral_enabled and (not self.mistral_endpoint or not self.mistral_api_key):
+        if self.mistral_enabled and (
+            not self.mistral_endpoint or (not self.coordinator_only and not self.mistral_api_key)
+        ):
             raise ValueError("Mistral requires an approved endpoint and API key")
         if self.mistral_search_collection == self.search_collection:
             raise ValueError("Mistral and synthetic indexes require separate collections")

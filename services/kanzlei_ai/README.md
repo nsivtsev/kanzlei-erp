@@ -1,14 +1,16 @@
 # Kanzlei AI service
 
 Independent FastAPI service in the ERP monorepo. It has its own Python environment,
-PostgreSQL, Qdrant and Redis. The local and production services share one Compose
-project and network with ERP, while keeping application code and storage separate.
-It does not import Frappe or read ERP database tables.
+PostgreSQL, Qdrant and Redis. Local and production services share one Compose
+project with ERP. The production AI stores use a dedicated internal network.
+The service accesses ERP data through the connector.
 
 The service provides health endpoints, durable PDF extraction and indexing jobs,
 and an optional ERP connector with delegated identity and online permissions.
 The optional local chat uses internal hybrid search with source citations. No
 model API keys or real documents are needed for the synthetic fixture.
+For production prerequisites, rollout, retention and recovery, see the
+[pilot operations runbook](docs/operations.md).
 
 ## Start locally
 
@@ -72,8 +74,8 @@ The API can start with all dependencies absent; liveness still works and readine
 returns 503. Compose waits for PostgreSQL and Redis health before starting the API
 and worker. API readiness also covers Qdrant. The worker uses the separate AI
 Redis broker; its availability is checked with Celery's targeted ping above.
-Readiness currently checks infrastructure, not migrations, collections, model
-availability or future ingestion workers. It will expand with those features.
+Readiness covers infrastructure connectivity. Use the operations runbook to
+check migrations, ingestion workers and index coverage.
 
 ## Local Python development and tests
 
@@ -121,9 +123,8 @@ macOS packages use PyPI. No document model weights are downloaded in the build.
 docker compose --env-file ../../.env -f ../../compose.yml run --rm --no-deps ai-worker python -c 'from docling.document_converter import DocumentConverter; import torch; print("Docling import OK; torch", torch.__version__)'
 ```
 
-This checks binary/import compatibility, not OCR or model quality. A future
-document-processing stage will configure model artifacts and evaluate synthetic
-German documents before live data is used.
+This checks binary/import compatibility. Stage the pinned native PDF weights
+as described in [pilot operations](docs/operations.md#pilot-prerequisites).
 
 ## Architecture and next stage
 
@@ -191,12 +192,9 @@ query/serving feature must authorize again at query time.
 
 Start the standalone coordinator after migration with `docker compose --env-file ../../.env -f ../../compose.yml up -d
 ai-coordinator ai-worker`. A stopped worker does not stop polling or recovery.
-Historical receipts, jobs and
-published outbox rows are not automatically pruned in this stage. Retention
-and operator cleanup policy must be defined before a production pilot; deleting
-cursor or receipt history requires a deliberate full rescan and reconciliation.
-Artifact retention is deliberately deferred to Task 11: there is no artifact
-sweep before the pilot, so operators must provision bounded private storage.
+Operators run eligible artifact, index and operational record cleanup during a
+locked offline window. Conversation history has no expiration and stays
+outside operator retention. See [status and retention](docs/operations.md#status-and-retention).
 
 The ingestion integration tests create their own PostgreSQL schema and Redis
 namespace, start only their own worker, and clean those resources afterward:
@@ -211,9 +209,9 @@ diagnostics private; driver tracebacks can include connection parameters.
 
 ### Hybrid search on synthetic data
 
-Keep `AI_SEARCH_INDEX_ENABLED=false` on existing and production stands. On an
-isolated local stand with synthetic inputs, migrate the AI database before
-enabling the flag for the coordinator and worker. Set `AI_SEARCH_COLLECTION`
+On an isolated local stand with synthetic inputs, migrate the AI database
+before enabling `AI_SEARCH_INDEX_ENABLED` for the coordinator and worker.
+Set `AI_SEARCH_COLLECTION`
 to a collection reserved for that stand. `AI_INGESTION_ENABLED` can stay off
 when indexing previously extracted fixtures.
 
@@ -230,7 +228,8 @@ it establishes retrieval mechanics without measuring semantic quality. PostgreSQ
 activates the staged publication only after all points are written. A replacement
 or deletion makes old points ineligible immediately, and an index failure does
 not require extracting the PDF again. Qdrant storage is private derived data;
-it can be rebuilt from the persisted chunks. Old points are not yet pruned.
+it can be rebuilt from the persisted chunks. Use the offline retention
+procedure to clean up eligible stale points.
 
 Internal retrieval filters every query by connector and allowed client IDs. It
 checks the current PostgreSQL publication and delegates authorization to the ERP
@@ -239,8 +238,8 @@ partial output. There is no public search endpoint in this stage.
 
 ### Chat on an isolated synthetic stand
 
-Keep `AI_CHAT_ENABLED=false` on the regular stand. On the isolated stand, migrate
-the AI database to `0005`, enable the index and chat, and set
+On the isolated stand, migrate the AI database to the current head, enable
+the index and chat, and set
 `AI_CHAT_BROWSER_ERP_ORIGIN` to the exact ERP origin visible to the browser.
 Continue to configure the API-to-ERP origin and service key separately. The
 isolated ERP site's `kanzlei_ai_connector.browser_chat_origin` must match the

@@ -21,7 +21,7 @@ EXPOSE 8000
 CMD ["uvicorn", "kanzlei_ai.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
 # Only the document worker carries Docling and CPU inference dependencies.
-FROM runtime AS documents
+FROM runtime AS document-dependencies
 USER root
 RUN apt-get update \
     && apt-get install --no-install-recommends -y libglib2.0-0 libgl1 libgomp1 \
@@ -30,3 +30,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra documents --no-editable
 USER app
 CMD ["celery", "-A", "kanzlei_ai.worker:app", "worker", "--loglevel=INFO", "--concurrency=1"]
+
+FROM document-dependencies AS checks
+USER root
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv lock --check && uv sync --locked --extra paddle --no-editable
+USER app
+
+FROM document-dependencies AS documents

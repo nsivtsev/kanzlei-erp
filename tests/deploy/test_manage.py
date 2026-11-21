@@ -421,6 +421,69 @@ class DeploymentTests(unittest.TestCase):
 		self.assertFalse(any("migrate" in call for call in commands.calls))
 		self.assertTrue(any("up" in call and "scheduler" in call for call in commands.calls))
 
+	def test_ai_paddle_bootstrap_requires_private_artifact_configuration(self):
+		base = self.config.read_text()
+		options = self.ai_fixture_config() | {
+			"AI_INGESTION_ENABLED": "true",
+			"AI_INGESTION_OCR_PROFILE": "paddle",
+		}
+		self.write_ai_config(base, options)
+		with self.assertRaisesRegex(ValueError, "AI_ARTIFACT_S3_ENDPOINT"):
+			manager.read_config(self.root)
+		options.update(self.artifact_fixture_config())
+		self.write_ai_config(base, options)
+		config = manager.read_config(self.root)
+		self.assertEqual(config["AI_INGESTION_OCR_PROFILE"], "paddle")
+
+	def test_ai_mistral_backfill_and_chat_have_separate_prerequisites(self):
+		base = self.config.read_text()
+		options = self.ai_fixture_config() | self.artifact_fixture_config() | {
+			"AI_INGESTION_ENABLED": "true",
+			"AI_SEARCH_INDEX_ENABLED": "true",
+			"AI_MODEL_PROFILE": "mistral",
+			"AI_MISTRAL_ENABLED": "true",
+			"AI_MISTRAL_ENDPOINT": "https://api.eu.mistral.ai",
+		}
+		self.write_ai_config(base, options)
+		with self.assertRaisesRegex(ValueError, "AI_WORKER_MISTRAL_API_KEY"):
+			manager.read_config(self.root)
+		options["AI_WORKER_MISTRAL_API_KEY"] = "synthetic-worker"
+		self.write_ai_config(base, options)
+		config = manager.read_config(self.root)
+		backfill = manager.Compose(self.root, self.release, self.new_image, FakeCommands(), config)
+		self.assertEqual(backfill.env["AI_API_MODEL_PROFILE"], "synthetic")
+		options.update(AI_CHAT_ENABLED="true", AI_CHAT_BROWSER_ERP_ORIGIN="https://erp.example.com")
+		self.write_ai_config(base, options)
+		with self.assertRaisesRegex(ValueError, "AI_API_MISTRAL_API_KEY"):
+			manager.read_config(self.root)
+		options["AI_API_MISTRAL_API_KEY"] = "synthetic-api"
+		self.write_ai_config(base, options)
+		config = manager.read_config(self.root)
+		chat = manager.Compose(self.root, self.release, self.new_image, FakeCommands(), config)
+		self.assertEqual(chat.env["AI_API_MODEL_PROFILE"], "mistral")
+
+	def ai_fixture_config(self):
+		return {
+			"AI_ENABLED": "1",
+			"AI_API_IMAGE": "example/api@sha256:" + "a" * 64,
+			"AI_WORKER_IMAGE": "example/worker@sha256:" + "b" * 64,
+			"AI_POSTGRES_PASSWORD": "p" * 32,
+			"AI_ERP_SERVICE_KEY": "d" * 32,
+			"AI_INGESTION_KEY": "i" * 32,
+		}
+
+	def artifact_fixture_config(self):
+		return {
+			"AI_ARTIFACT_S3_ENDPOINT": "https://storage.example.invalid",
+			"AI_ARTIFACT_S3_BUCKET": "synthetic-ai",
+			"AI_ARTIFACT_S3_ACCESS_KEY": "synthetic-access",
+			"AI_ARTIFACT_S3_SECRET_KEY": "synthetic-secret",
+			"AI_DOCLING_MODELS_DIR": str(self.root),
+		}
+
+	def write_ai_config(self, base, values):
+		self.config.write_text(base + "".join(f"{key}={value}\n" for key, value in values.items()))
+
 	def test_unhealthy_ai_api_does_not_publish_release(self):
 		digest = "c" * 64
 		with self.config.open("a") as handle:

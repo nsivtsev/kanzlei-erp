@@ -358,8 +358,8 @@ or restore is pending. If the restored release predates AI support, deploy an
 AI-capable approved ERP release before using this command.
 
 ERP backups do **not** include AI PostgreSQL, Redis, Qdrant or its job and cursor
-history. AI backup, retention and restore procedures are not yet implemented;
-do not rely on ERP backups to recover those records. ERP restore stops AI and
+history. Use the [AI pilot operations runbook](../services/kanzlei_ai/docs/operations.md)
+for the separate AI backup, retention and recovery procedures. ERP restore stops AI and
 retains the current AI settings and credentials, and sets `AI_ENABLED=0` in the restored configuration. Before re-enabling it, an
 operator must reconcile AI state with restored ERP data and initiate a full scan;
 Qdrant is a rebuildable projection, but AI PostgreSQL history is not included in

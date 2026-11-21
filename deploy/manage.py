@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 APP_SERVICES = ["backend", "frontend", "websocket", "queue-short", "queue-long", "scheduler"]
 WEB_SERVICES = ["backend", "frontend", "websocket"]
@@ -55,6 +56,57 @@ def validate_release(image, revision, tag):
 		raise ValueError("Revision must be a full Git commit SHA")
 	if not TAG_RE.fullmatch(tag):
 		raise ValueError("Release tag must have the form vX.Y.Z")
+
+
+def require_ai_setting(config, key):
+	value = config.get(key, "")
+	if not value or value.startswith("REPLACE_"):
+		raise ValueError("Configure " + key + " in production.env")
+	return value
+
+
+def validate_ai_features(config):
+	for key in (
+		"AI_INGESTION_ENABLED", "AI_INGESTION_DOCX_ENABLED", "AI_SEARCH_INDEX_ENABLED",
+		"AI_CHAT_ENABLED", "AI_MISTRAL_ENABLED",
+	):
+		if config.setdefault(key, "false") not in ("true", "false"):
+			raise ValueError(key + " must be true or false")
+	ingestion = config["AI_INGESTION_ENABLED"] == "true"
+	search = config["AI_SEARCH_INDEX_ENABLED"] == "true"
+	chat = config["AI_CHAT_ENABLED"] == "true"
+	cloud = config["AI_MISTRAL_ENABLED"] == "true"
+	ocr = config.setdefault("AI_INGESTION_OCR_PROFILE", "native")
+	if ocr not in ("native", "paddle") or (cloud and ocr == "paddle"):
+		raise ValueError("AI_INGESTION_OCR_PROFILE must be native or use Paddle before Mistral cutover")
+	if config.setdefault("AI_MODEL_PROFILE", "synthetic") != ("mistral" if cloud else "synthetic"):
+		raise ValueError("AI_MODEL_PROFILE must match the explicit AI_MISTRAL_ENABLED opt-in")
+	if ingestion:
+		key = require_ai_setting(config, "AI_INGESTION_KEY")
+		if not 32 <= len(key) <= 256 or key == config["AI_ERP_SERVICE_KEY"]:
+			raise ValueError("AI_INGESTION_KEY must be independent and have 32 to 256 characters")
+		endpoint = urlsplit(require_ai_setting(config, "AI_ARTIFACT_S3_ENDPOINT"))
+		if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username is not None
+			or endpoint.path not in ("", "/") or endpoint.query or endpoint.fragment):
+			raise ValueError("AI_ARTIFACT_S3_ENDPOINT must be the private HTTPS origin")
+		for key in ("AI_ARTIFACT_S3_BUCKET", "AI_ARTIFACT_S3_ACCESS_KEY", "AI_ARTIFACT_S3_SECRET_KEY"):
+			require_ai_setting(config, key)
+		models = Path(require_ai_setting(config, "AI_DOCLING_MODELS_DIR"))
+		if not models.is_absolute() or not models.is_dir():
+			raise ValueError("AI_DOCLING_MODELS_DIR must be an existing absolute path")
+	if chat and (
+		not search or config.get("AI_CHAT_BROWSER_ERP_ORIGIN") != "https://" + config["DOMAIN"]
+		or config.get("HTTPS_ENABLED") != "1"
+	):
+		raise ValueError("AI chat requires search and AI_CHAT_BROWSER_ERP_ORIGIN equal to the public HTTPS ERP origin")
+	if cloud:
+		if not ingestion or not search:
+			raise ValueError("Mistral requires AI_INGESTION_ENABLED and AI_SEARCH_INDEX_ENABLED")
+		if config.get("AI_MISTRAL_ENDPOINT") not in ("https://api.eu.mistral.ai", "https://api.mistral.ai"):
+			raise ValueError("Configure the approved AI_MISTRAL_ENDPOINT")
+		worker_key = require_ai_setting(config, "AI_WORKER_MISTRAL_API_KEY")
+		if chat and require_ai_setting(config, "AI_API_MISTRAL_API_KEY") == worker_key:
+			raise ValueError("AI_API_MISTRAL_API_KEY must differ from AI_WORKER_MISTRAL_API_KEY")
 
 
 def read_config(root, path=None):
@@ -104,12 +156,7 @@ def read_config(root, path=None):
 		config.setdefault("AI_API_PORT", "8180")
 		if not config["AI_API_PORT"].isdigit() or not 1024 <= int(config["AI_API_PORT"]) <= 65535:
 			raise ValueError("AI_API_PORT must be between 1024 and 65535")
-		if config.get("AI_INGESTION_ENABLED", "false") not in ("true", "false"):
-			raise ValueError("AI_INGESTION_ENABLED must be true or false")
-		if config.get("AI_INGESTION_ENABLED") == "true" and not 32 <= len(config.get("AI_INGESTION_KEY", "")) <= 256:
-			raise ValueError("Configure AI_INGESTION_KEY with 32 to 256 characters")
-		if config.get("AI_INGESTION_ENABLED") == "true" and config["AI_INGESTION_KEY"] == config["AI_ERP_SERVICE_KEY"]:
-			raise ValueError("AI_INGESTION_KEY must differ from AI_ERP_SERVICE_KEY")
+		validate_ai_features(config)
 	if not re.fullmatch(r"kanzlei-[a-z0-9-]+", config["PROJECT_NAME"]):
 		raise ValueError(
 			"PROJECT_NAME must start with kanzlei- and contain lowercase letters, digits or hyphens"
@@ -157,7 +204,15 @@ class Compose:
 		self.root, self.release = Path(root), Path(release)
 		self.image, self.commands = image, commands
 		self.config = config or read_config(self.root)
-		self.env = {**os.environ, **self.config, "APP_IMAGE": image}
+		self.env = {key: value for key, value in os.environ.items() if not key.startswith("AI_")}
+		self.env.update(self.config, APP_IMAGE=image)
+		api_cloud = self.config.get("AI_CHAT_ENABLED") == self.config.get("AI_MISTRAL_ENABLED") == "true"
+		self.env["AI_API_MODEL_PROFILE"] = "mistral" if api_cloud else "synthetic"
+		self.env["AI_API_MISTRAL_ENABLED"] = "true" if api_cloud else "false"
+		if not api_cloud:
+			self.env["AI_API_MISTRAL_API_KEY"] = ""
+		if self.config.get("AI_MISTRAL_ENABLED") != "true":
+			self.env["AI_WORKER_MISTRAL_API_KEY"] = ""
 		self.prefix = [
 			"docker",
 			"compose",
