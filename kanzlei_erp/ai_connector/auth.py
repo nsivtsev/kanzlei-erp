@@ -231,8 +231,33 @@ def resolve(access_token):
 
 
 def general_access(subject):
-	roles = config().get("general_roles", [])
-	return isinstance(roles, list) and bool(set(roles) & set(frappe.get_roles(subject)))
+	configured_roles = config().get("general_roles", [])
+	if not isinstance(configured_roles, list) or not configured_roles:
+		return False
+
+	from frappe.permissions import ALL_USER_ROLE, AUTOMATIC_ROLES, GUEST_ROLE, SYSTEM_USER_ROLE
+
+	from kanzlei_erp.ai_connector.inventory import current_permission_context
+
+	# A concurrent request can repopulate Frappe's role cache before a
+	# revocation commits. Read committed memberships without that cache.
+	with current_permission_context():
+		if subject == "Administrator":
+			return bool(set(configured_roles).intersection(frappe.get_all("Role", pluck="name")))
+		if subject == "Guest":
+			return GUEST_ROLE in configured_roles
+		assigned_roles = frappe.get_all(
+			"Has Role",
+			filters={"parenttype": "User", "parent": subject, "role": ["not in", AUTOMATIC_ROLES]},
+			pluck="role",
+		)
+		current_roles = {ALL_USER_ROLE, GUEST_ROLE, *assigned_roles}
+		if (
+			SYSTEM_USER_ROLE in configured_roles
+			and frappe.db.get_value("User", subject, "user_type") == "System User"
+		):
+			current_roles.add(SYSTEM_USER_ROLE)
+		return bool(current_roles.intersection(configured_roles))
 
 
 def identity_record(record):

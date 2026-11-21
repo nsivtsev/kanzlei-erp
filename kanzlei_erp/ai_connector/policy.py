@@ -531,4 +531,6 @@ def read_source(requested_scope, source, *, lock_current=True, managed_only=Fals
 		raise
 	if current_revision != value["revision"]:
 		fail("STALE_SOURCE", 409)
+	if requested_scope["kind"] == "general":
+		scope(requested_scope)
 	return content

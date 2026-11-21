@@ -13,7 +13,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from werkzeug.test import EnvironBuilder
-from werkzeug.wrappers import Request
+from werkzeug.wrappers import Request, Response
 
 from kanzlei_erp.tests import test_mandant_documents as document_fixtures
 
@@ -404,6 +404,105 @@ class TestAIConnector(FrappeTestCase):
 			).status_code,
 			403,
 		)
+
+	def test_general_scope_accepts_configured_frappe_automatic_roles(self):
+		self.committed = True
+		frappe.db.commit()
+		token = self.grant()
+		for role in ("All", "Guest", "Desk User"):
+			with self.subTest(role=role):
+				self.config["general_roles"] = [role]
+				self.assertTrue(self.call("identity", access_token=token)["general_access"])
+		self.config["general_roles"] = ["projects user", "Administrator"]
+		self.assertFalse(self.call("identity", access_token=token)["general_access"])
+
+	def test_committed_general_role_removal_ignores_stale_redis_roles(self):
+		self.config["general_roles"] = ["Projects User"]
+		self.config["external_processing"] = {self.customer.name: {"generate": True}}
+		self.committed = True
+		frappe.db.commit()
+		token = self.grant()
+		manifest = self.documents(token)["items"][0]
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
+		allowed = {"version": 1, "allowed": True}
+		general = {"access_token": token, "scope": {"kind": "general"}}
+		self.assertTrue(self.call("identity", access_token=token)["general_access"])
+		self.assertEqual(self.call("check_scope", **general), allowed)
+		self.assertTrue(self.call("authorize_sources", **general, sources=[ref])["decisions"][0]["allowed"])
+		self.assertIn("locator", self.call("resolve_source_locator", **general, source=ref))
+		self.assertEqual(self.call("read_source", **general, source=ref).get_data(), self.original)
+		self.assertEqual(
+			self.call("check_processing_policy", **general, operation="generate", sources=[ref]), allowed
+		)
+
+		stale_roles = frappe.get_roles(self.reader.name)
+		self.assertIn("Projects User", stale_roles)
+		self._commit_general_role_removal()
+
+		for method, kwargs in (
+			("identity", {"access_token": token}),
+			("check_scope", general),
+			("authorize_sources", {**general, "sources": [ref]}),
+			("resolve_source_locator", {**general, "source": ref}),
+			("read_source", {**general, "source": ref}),
+			("check_processing_policy", {**general, "operation": "generate", "sources": [ref]}),
+		):
+			with self.subTest(method=method), patch.object(frappe.local, "cache", {}):
+				# Simulate an older request repopulating the role hash.
+				frappe.cache.hset("roles", self.reader.name, stale_roles)
+				frappe.local.cache.clear()
+				self.assertEqual(frappe.cache.hget("roles", self.reader.name), stale_roles)
+				response = self.call(method, **kwargs)
+				if method == "identity":
+					self.assertFalse(response["general_access"])
+				else:
+					self.assertIsInstance(response, Response)
+					self.assertEqual(response.status_code, 403)
+
+		self.assertEqual(self.call("check_scope", access_token=token, scope=self.scope()), allowed)
+
+	def test_ordinary_general_read_rechecks_role_after_loading_bytes(self):
+		from kanzlei_erp.object_storage import open_file
+
+		self.config["general_roles"] = ["Projects User"]
+		self.committed = True
+		frappe.db.commit()
+		token = self.grant()
+		manifest = self.documents(token)["items"][0]
+		ref = {
+			"source_id": manifest["source_id"],
+			"revision": manifest["revision"],
+			"client_id": self.customer.name,
+		}
+
+		@contextmanager
+		def revoking_reader(file):
+			with open_file(file) as stream:
+				yield stream
+			self._commit_general_role_removal()
+
+		with patch("kanzlei_erp.object_storage.open_file", revoking_reader):
+			response = self.call("read_source", access_token=token, scope={"kind": "general"}, source=ref)
+		self.assertEqual(response.status_code, 403)
+
+	def _commit_general_role_removal(self):
+		site, subject = frappe.local.site, self.reader.name
+
+		def remove_role():
+			frappe.init(site)
+			frappe.connect()
+			try:
+				frappe.db.delete("Has Role", {"parenttype": "User", "parent": subject, "role": "Projects User"})
+				frappe.db.commit()
+			finally:
+				frappe.destroy()
+
+		with ThreadPoolExecutor(max_workers=1) as executor:
+			executor.submit(remove_role).result(timeout=15)
 
 	def test_signed_pagination_is_bound_to_user_and_client(self):
 		frappe.set_user("Administrator")
