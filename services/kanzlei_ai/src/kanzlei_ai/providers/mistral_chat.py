@@ -56,7 +56,7 @@ class MistralChatProvider:
         ):
             raise MistralError("MISTRAL_INPUT_LIMIT_EXCEEDED", retryable=False)
         references = {str(index): item for index, item in enumerate(context, start=1)}
-        sources: dict[tuple[str, str, int], int] = {}
+        sources: dict[tuple[str, str, int, str], int] = {}
         evidence = []
         for alias, item in references.items():
             source = sources.setdefault(item.dependency.version_key(), len(sources) + 1)
