@@ -40,7 +40,7 @@ class Dependency:
     chunk_id: str
 
     def version_key(self):
-        return self.source.source_id, self.source.revision, self.generation
+        return self.source.source_id, self.source.revision, self.generation, self.source.client_id
 
     def key(self):
         return (*self.version_key(), self.chunk_id)
@@ -86,7 +86,9 @@ def configure_query(connection):
 async def granted(session: Session, dependencies: Iterable[Dependency]) -> set[SourceRef]:
     refs = list(dict.fromkeys(dependency.source for dependency in dependencies))
     allowed = set()
-    if any(ref.client_id != session.scope.client_id for ref in refs):
+    if session.scope.kind == "client" and any(
+        ref.client_id != session.scope.client_id for ref in refs
+    ):
         raise ConnectorError("CHAT_UNAVAILABLE", 503)
     for offset in range(0, len(refs), 50):
         batch = refs[offset : offset + 50]
@@ -153,7 +155,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             ),
         )
     )
-    version = (source.source_id, source.revision, source.generation)
+    version = (source.source_id, source.revision, source.generation, scope_relation.client_id)
     mime = source.manifest["mime_type"].as_string()
     statement = (
         select(
@@ -169,7 +171,6 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
         .select_from(joined)
         .where(
             source.connector_id == session.connector_id,
-            scope_relation.client_id == session.scope.client_id,
             source.active.is_(True),
             or_(
                 mime.in_((EMAIL_MIME, DOCX_MIME)),
@@ -178,6 +179,8 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             func.char_length(chunk.text).between(1, CHUNK_LIMIT),
         )
     )
+    if session.scope.kind == "client":
+        statement = statement.where(scope_relation.client_id == session.scope.client_id)
     if expand:
         statement = (
             statement.where(
@@ -185,7 +188,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
                 chunk.kind == "table",
                 chunk.id.not_in([d.chunk_id for d in dependencies]),
             )
-            .order_by(source.source_id, chunk.page, chunk.id)
+            .order_by(source.source_id, chunk.page, chunk.id, scope_relation.client_id)
             .limit(RELATED_TABLE_LIMIT)
         )
     else:
@@ -202,7 +205,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             SourceRef(
                 source_id=row.source_id,
                 revision=row.revision,
-                client_id=session.scope.client_id,
+                client_id=row.client_id,
             ),
             row.generation,
             row.id,
@@ -254,7 +257,7 @@ async def retrieve_context(engine, index, session: Session, question: str) -> tu
             if evidence.source_kind == "pdf" and identifiers & exact_identifiers(evidence.text)
         }
     )
-    # Tables may be on another page. Expand only within the exact authorized source version.
+    # Tables may be on another page of the same authorized source version and client.
     if expandable:
 
         def expand():

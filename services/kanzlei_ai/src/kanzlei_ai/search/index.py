@@ -295,6 +295,7 @@ class SearchIndex:
         client_ids: Sequence[str],
         limit: int,
         before_query_embed: Callable[[], None] | None = None,
+        lexical_only: bool = False,
     ) -> dict[str, list[Candidate]]:
         result: dict[str, list[Candidate]] = {"exact": [], "dense": [], "sparse": []}
         if limit <= 0 or not client_ids:
@@ -367,22 +368,23 @@ class SearchIndex:
                 with_payload=True,
             )
             result["exact"] = convert(points)
-        if self.profile == MISTRAL_INDEX_PROFILE:
-            if before_query_embed is None:
-                raise ValueError("External query embedding requires a processing policy check")
-            before_query_embed()
-        dense = self.embedding.embed([query])
-        if len(dense) != 1 or len(dense[0]) != self.dimensions:
-            raise ValueError("invalid embedding dimensions")
-        result["dense"] = convert(
-            self.client.query_points(
-                self.collection,
-                query=dense[0],
-                using="dense",
-                query_filter=models.Filter(must=base),
-                limit=limit,
-            ).points
-        )
+        if not lexical_only:
+            if self.profile == MISTRAL_INDEX_PROFILE:
+                if before_query_embed is None:
+                    raise ValueError("External query embedding requires a processing policy check")
+                before_query_embed()
+            dense = self.embedding.embed([query])
+            if len(dense) != 1 or len(dense[0]) != self.dimensions:
+                raise ValueError("invalid embedding dimensions")
+            result["dense"] = convert(
+                self.client.query_points(
+                    self.collection,
+                    query=dense[0],
+                    using="dense",
+                    query_filter=models.Filter(must=base),
+                    limit=limit,
+                ).points
+            )
         sparse = _sparse(query, query=True)
         if sparse.indices:
             result["sparse"] = convert(

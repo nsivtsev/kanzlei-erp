@@ -39,7 +39,7 @@ class ScopeConnector:
     async def check_scope(self, access_token, scope):
         assert access_token == "synthetic"
         self.probes.append(scope.client_id)
-        if scope.client_id != "A":
+        if scope.kind == "client" and scope.client_id != "A":
             raise ConnectorError("FORBIDDEN", 403)
 
 
@@ -136,8 +136,50 @@ def test_general_search_uses_deduplicated_complete_client_list():
     connector = ScopeConnector(pages=[page(["B", "A"], "more"), page(["C", "B"], None)])
     index = EmptyIndex()
     assert search("synthetic", Scope(kind="general"), connector, index) == []
+    assert connector.probes == [None]
     assert connector.cursors == [None, "more"]
     assert tuple(index.calls[0]["client_ids"]) == ("A", "B", "C")
+
+
+def test_live_general_check_runs_before_client_discovery():
+    class RevokedGeneralScope(ScopeConnector):
+        async def check_scope(self, access_token, scope):
+            assert scope == Scope(kind="general")
+            raise ConnectorError("FORBIDDEN", 403)
+
+    connector, index = RevokedGeneralScope(pages=[page(["A"], None)]), EmptyIndex()
+    with pytest.raises(ConnectorError, match="FORBIDDEN"):
+        search("synthetic", Scope(kind="general"), connector, index)
+    assert connector.cursors == []
+    assert index.calls == []
+
+
+def test_authorized_client_labels_come_from_the_complete_erp_list():
+    from kanzlei_ai.search.retrieve import list_authorized_clients
+
+    connector = ScopeConnector(
+        pages=[
+            ClientPage(items=[ClientRecord(id="B", label="Synthetic Beta")], next_cursor="more"),
+            ClientPage(items=[ClientRecord(id="A", label="Synthetic Alpha")], next_cursor=None),
+        ]
+    )
+    assert asyncio.run(list_authorized_clients(connector, "synthetic")) == {
+        "A": "Synthetic Alpha",
+        "B": "Synthetic Beta",
+    }
+
+
+def test_general_search_fails_closed_on_inconsistent_client_labels():
+    connector = ScopeConnector(
+        pages=[
+            page(["A"], "more"),
+            ClientPage(items=[ClientRecord(id="A", label="Changed label")], next_cursor=None),
+        ]
+    )
+    index = EmptyIndex()
+    with pytest.raises(ConnectorError, match="SEARCH_SCOPE_INCOMPLETE"):
+        search("synthetic", Scope(kind="general"), connector, index)
+    assert index.calls == []
 
 
 @pytest.mark.parametrize(

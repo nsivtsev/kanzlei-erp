@@ -1,10 +1,13 @@
 import asyncio
 import hashlib
+import os
 import uuid
 from contextlib import closing
 from dataclasses import replace
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import (
@@ -29,7 +32,7 @@ class RankedIndex:
         self.branches = branches
         self.calls = []
 
-    def candidates(self, *, query, connector_id, client_ids, limit):
+    def candidates(self, *, query, connector_id, client_ids, limit, lexical_only=False):
         self.calls.append((connector_id, tuple(client_ids), limit))
         return {branch: candidates[:limit] for branch, candidates in self.branches.items()}
 
@@ -46,7 +49,9 @@ class DelegatedConnector:
         return Identity(subject="person", connector_id="origin", expires_at=1, general_access=True)
 
     async def check_scope(self, access_token, scope):
-        assert access_token == "synthetic" and scope.client_id in {"A", "B"}
+        assert access_token == "synthetic" and (
+            scope.kind == "general" or scope.client_id in {"A", "B"}
+        )
 
     async def list_clients(self, access_token, limit=50, cursor=None):
         assert access_token == "synthetic"
@@ -121,7 +126,7 @@ def add_source(
             .values(
                 connector_id=connector_id,
                 source_id=f"file:{name}",
-                manifest={},
+                manifest={"mime_type": "application/pdf"},
                 active=active,
                 status="ready",
                 **document_fields,
@@ -207,11 +212,149 @@ def test_dense_retrieval_is_scope_bound_with_shared_and_duplicate_sources(search
 def test_general_search_selects_a_deterministic_authorized_membership(search_db):
     engine, run = search_db
     shared = add_source(engine, "shared", ["B", "A"])
-    index = RankedIndex(dense=[shared])
-    assert run(index, DelegatedConnector(), scope=_GENERAL, limit=1)[0].source.client_id == "A"
+    dense_only = add_source(engine, "dense-only", ["B"])
+    index = RankedIndex(exact=[shared], sparse=[shared], dense=[dense_only])
+    hits = run(index, DelegatedConnector(), scope=_GENERAL, limit=2)
+    assert [(hit.chunk_id, hit.source.client_id) for hit in hits] == [(shared.chunk_id, "A")]
     erp = DelegatedConnector(denied={("file:shared", "A")})
     assert run(index, erp, scope=_GENERAL, limit=1)[0].source.client_id == "B"
     assert [ref.client_id for ref in erp.batches[0]] == ["A", "B"]
+
+
+def test_general_search_uses_exact_and_sparse_queries_without_outbound_embeddings(search_db):
+    from qdrant_client import QdrantClient
+
+    from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE, SearchIndex
+
+    class ExternalEmbedding:
+        def embed(self, texts):
+            pytest.fail("A general question reached the external embedding provider")
+
+    class GeneralConnector(DelegatedConnector):
+        async def check_processing_policy(self, operation, scope, sources, *, access_token):
+            assert operation == "embed"
+            pytest.fail("General search attempted to authorize question embedding")
+
+    engine, run = search_db
+    documents = [
+        ("exact", ["A", "B"], ["A", "B"], "RE-2026-0042"),
+        ("sparse", ["A"], ["A"], "synthetic"),
+        ("outside", ["C"], ["A", "C"], "RE-2026-0042 synthetic"),
+    ]
+    url = os.environ.get("TASK6_QDRANT_TEST_URL")
+    collection = "task10_lexical_" + uuid.uuid4().hex
+    with closing(QdrantClient(url=url, timeout=2) if url else QdrantClient(":memory:")) as client:
+        index = SearchIndex(
+            client=client,
+            collection=collection,
+            profile=MISTRAL_INDEX_PROFILE,
+            embedding=ExternalEmbedding(),
+        )
+        try:
+            for name, clients, indexed_clients, text in documents:
+                source = add_source(engine, name, clients, text, profile=MISTRAL_INDEX_PROFILE)
+                index.stage_vectors(
+                    publication_id=source.publication_id,
+                    connector_id="origin",
+                    source_pk=source.source_pk,
+                    revision=source.revision,
+                    generation=source.generation,
+                    client_ids=indexed_clients,
+                    chunks=[{"id": source.chunk_id, "text": text}],
+                    vectors=[[1.0] + [0.0] * 63],
+                )
+            erp = GeneralConnector(denied={("file:exact", "A")})
+            hits = run(index, erp, scope=_GENERAL, query="synthetic RE-2026-0042", limit=2)
+        finally:
+            client.delete_collection(collection)
+    assert [(hit.source.source_id, hit.source.client_id) for hit in hits] == [
+        ("file:exact", "B"),
+        ("file:sparse", "A"),
+    ]
+    assert [(ref.source_id, ref.client_id) for ref in erp.batches[0]] == [
+        ("file:exact", "A"),
+        ("file:exact", "B"),
+        ("file:sparse", "A"),
+    ]
+
+
+def test_general_search_cannot_fall_back_to_denied_alias_after_relation_revocation(search_db):
+    engine, run = search_db
+    shared = add_source(engine, "shared", ["A", "B"])
+
+    def revoke():
+        with engine.begin() as connection:
+            connection.execute(
+                relations.delete().where(
+                    relations.c.source_id == shared.source_pk, relations.c.client_id == "B"
+                )
+            )
+
+    erp = DelegatedConnector(denied={("file:shared", "A")}, on_authorize=revoke)
+    assert run(RankedIndex(sparse=[shared]), erp, scope=_GENERAL, limit=1) == []
+    assert [ref.client_id for ref in erp.batches[0]] == ["A", "B"]
+
+
+def test_general_context_expands_with_the_chosen_client_relation(search_db):
+    from kanzlei_ai.chat.context import Session, retrieve_context
+
+    engine, _ = search_db
+    shared = add_source(engine, "shared", ["A", "B"], "Belegnummer RE-2026-0042")
+    with engine.begin() as connection:
+        original = (
+            connection.execute(
+                select(document_chunks).where(document_chunks.c.id == shared.chunk_id)
+            )
+            .mappings()
+            .one()
+        )
+        connection.execute(
+            document_chunks.insert().values(
+                **{**original, "id": "table", "kind": "table", "ordinal": 1, "page": 1}
+            )
+        )
+
+    index = RankedIndex(exact=[shared], sparse=[shared])
+    erp = DelegatedConnector(denied={("file:shared", "A")})
+    session = Session(erp, "synthetic", "origin", "person", _GENERAL)
+
+    evidence = asyncio.run(retrieve_context(engine, index, session, "RE-2026-0042"))
+
+    assert [(item.dependency.chunk_id, item.dependency.source.client_id) for item in evidence] == [
+        (shared.chunk_id, "B"),
+        ("table", "B"),
+    ]
+    assert [ref.client_id for ref in erp.batches[-1]] == ["B"]
+
+
+def test_general_context_locks_only_the_chosen_client_relation(search_db):
+    from kanzlei_ai.chat.context import Dependency, Session, current_evidence
+    from kanzlei_ai.connectors.contracts import SourceRef
+
+    engine, _ = search_db
+    shared = add_source(engine, "shared", ["A", "B"])
+    chosen = Dependency(
+        SourceRef(source_id="file:shared", revision=shared.revision, client_id="B"),
+        shared.generation,
+        shared.chunk_id,
+    )
+    session = Session(DelegatedConnector(), "synthetic", "origin", "person", _GENERAL)
+    delete = relations.delete().where(relations.c.source_id == shared.source_pk)
+    with engine.begin() as reader:
+        assert set(current_evidence(reader, session, [chosen], lock=True)) == {chosen}
+        with pytest.raises(OperationalError) as locked, engine.begin() as writer:
+            writer.exec_driver_sql("SET LOCAL lock_timeout = '100ms'")
+            writer.execute(delete.where(relations.c.client_id == "B"))
+        assert locked.value.orig.sqlstate == "55P03"
+        with engine.begin() as writer:
+            writer.exec_driver_sql("SET LOCAL lock_timeout = '100ms'")
+            writer.execute(delete.where(relations.c.client_id == "A"))
+    with engine.begin() as connection:
+        connection.execute(delete.where(relations.c.client_id == "B"))
+        connection.execute(
+            relations.insert().values(source_id=shared.source_pk, client_id="A", seen_epoch=1)
+        )
+        assert current_evidence(connection, session, [chosen], lock=True) == {}
 
 
 def test_exact_branch_checks_whole_identifiers_in_authoritative_sql_text(search_db):
@@ -278,12 +421,13 @@ def test_only_matching_active_publications_and_exact_chunks_are_visible(search_d
 
 
 @pytest.mark.parametrize("mode", ["outage", "missing", "reordered", "invalid"])
-def test_bad_erp_reply_fails_without_partial_hits(search_db, mode):
+@pytest.mark.parametrize("scope", [_CLIENT_A, _GENERAL], ids=["client", "general"])
+def test_bad_erp_reply_fails_without_partial_hits(search_db, mode, scope):
     engine, run = search_db
     a = add_source(engine, "a", ["A"])
     b = add_source(engine, "b", ["A"])
     with pytest.raises(ConnectorError):
-        run(RankedIndex(dense=[a, b]), DelegatedConnector(mode=mode), limit=2)
+        run(RankedIndex(sparse=[a, b]), DelegatedConnector(mode=mode), scope=scope, limit=2)
 
 
 @pytest.mark.parametrize("change", ["trash", "generation", "revision", "relation", "publication"])

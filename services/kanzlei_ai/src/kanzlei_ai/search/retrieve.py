@@ -45,6 +45,7 @@ _MAX_CLIENTS = 1000
 _MAX_SOURCE_REFS = 2000
 _AUTH_BATCH_SIZE = 50
 _BRANCHES = ("exact", "dense", "sparse")
+_LEXICAL_BRANCHES = ("exact", "sparse")
 _RRF_K = 60
 
 
@@ -60,26 +61,32 @@ class SearchHit:
 async def _scope_clients(
     scope: Scope, connector: ERPConnector, access_token: str, identity: Identity
 ) -> tuple[str, ...]:
+    if scope.kind == "general" and not identity.general_access:
+        raise ConnectorError("FORBIDDEN", 403)
+    await connector.check_scope(access_token, scope)
     if scope.kind == "client":
         assert scope.client_id is not None
-        await connector.check_scope(access_token, scope)
         return (scope.client_id,)
-    if not identity.general_access:
-        raise ConnectorError("FORBIDDEN", 403)
+    return tuple(sorted(await list_authorized_clients(connector, access_token)))
 
-    clients: set[str] = set()
+
+async def list_authorized_clients(connector: ERPConnector, access_token: str) -> dict[str, str]:
+    """Read the complete current ERP client list after the caller checks general scope."""
+    clients: dict[str, str] = {}
     seen_cursors: set[str] = set()
     cursor = None
     for _ in range(_MAX_CLIENT_PAGES):
         page = await connector.list_clients(access_token, limit=_CLIENT_PAGE_SIZE, cursor=cursor)
         if not isinstance(page, ClientPage) or len(page.items) > _CLIENT_PAGE_SIZE:
             raise ConnectorError()
-        clients.update(client.id for client in page.items)
+        for client in page.items:
+            if clients.setdefault(client.id, client.label) != client.label:
+                raise ConnectorError("SEARCH_SCOPE_INCOMPLETE")
         cursor = page.next_cursor
         if len(clients) > _MAX_CLIENTS or cursor in seen_cursors or cursor == "":
             break
         if cursor is None:
-            return tuple(sorted(clients))
+            return clients
         seen_cursors.add(cursor)
     raise ConnectorError("SEARCH_SCOPE_INCOMPLETE")
 
@@ -215,6 +222,7 @@ def _authorized_hits(
                 [_ref_values(ref) for ref in allowed]
             )
         )
+        # Select one alias only after the exact authorized memberships are filtered.
         .distinct(chunk.id)
         .order_by(chunk.id, relation.client_id)
     )
@@ -256,7 +264,9 @@ def _rank(
     exact_matches = set(exact)
     scores: dict[Candidate, float] = defaultdict(float)
     for branch in ("dense", "sparse"):
-        remaining = (candidate for candidate in ranked[branch] if candidate not in exact_matches)
+        remaining = (
+            candidate for candidate in ranked.get(branch, ()) if candidate not in exact_matches
+        )
         for rank, candidate in enumerate(remaining, start=1):
             scores[candidate] += 1 / (_RRF_K + rank)
     fused = sorted(
@@ -277,10 +287,16 @@ def _index_candidates(
     connector_id: str,
     client_ids: Sequence[str],
     limit: int,
+    *,
+    lexical_only: bool,
     before_query_embed=None,
 ) -> dict[str, list[Candidate]]:
     try:
-        kwargs = {"before_query_embed": before_query_embed} if before_query_embed else {}
+        kwargs = {}
+        if lexical_only:
+            kwargs["lexical_only"] = True
+        if before_query_embed is not None:
+            kwargs["before_query_embed"] = before_query_embed
         candidates = index.candidates(
             query=query, connector_id=connector_id, client_ids=client_ids, limit=limit, **kwargs
         )
@@ -290,7 +306,7 @@ def _index_candidates(
                 for c in candidates.get(branch, [])[:limit]
                 if c.point_id == point_id(c.publication_id, c.chunk_id)
             ]
-            for branch in _BRANCHES
+            for branch in (_LEXICAL_BRANCHES if lexical_only else _BRANCHES)
         }
     except ConnectorError:
         raise
@@ -323,13 +339,16 @@ async def retrieve(
             if not client_ids:
                 return []
             profile = getattr(index, "profile", INDEX_PROFILE)
+            lexical_only = scope.kind == "general"
 
             def authorize_query():
                 asyncio.run(
                     connector.check_processing_policy("embed", scope, [], access_token=access_token)
                 )
 
-            before_query_embed = authorize_query if profile == MISTRAL_INDEX_PROFILE else None
+            before_query_embed = (
+                authorize_query if profile == MISTRAL_INDEX_PROFILE and not lexical_only else None
+            )
             for pool_size in (max(50, limit * 4), 200):
                 branches = await asyncio.to_thread(
                     _index_candidates,
@@ -338,7 +357,8 @@ async def retrieve(
                     identity.connector_id,
                     client_ids,
                     pool_size,
-                    before_query_embed,
+                    lexical_only=lexical_only,
+                    before_query_embed=before_query_embed,
                 )
                 candidates = tuple(dict.fromkeys(c for branch in branches.values() for c in branch))
                 if not candidates:
