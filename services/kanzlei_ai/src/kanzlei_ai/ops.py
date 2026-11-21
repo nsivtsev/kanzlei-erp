@@ -14,7 +14,7 @@ from kanzlei_ai.models import (
 )
 
 _JOB_STATUSES = ("queued", "running", "completed", "failed", "superseded")
-_SOURCE_STATUSES = ("queued", "awaiting_extraction", "extracted", "failed")
+_SOURCE_STATUSES = ("queued", "awaiting_extraction", "extracted", "ready", "failed")
 _OCR_PROFILES = ("native", "paddle", "mistral")
 _CONNECTOR_PHASES = ("idle", "inventory", "changes")
 

@@ -148,6 +148,7 @@ def test_ops_status_cli_is_connector_scoped_bounded_and_read_only(database, monk
             .values(last_successful_poll_at=OLD, inventory_cursor="private-opaque-cursor")
         )
         indexed = _source(conn, "private-document-indexed")
+        conn.execute(update(sources).where(sources.c.id == indexed).values(status="ready"))
         wrong_profile = _source(conn, "private-document-profile")
         old_generation = _source(conn, "private-document-generation")
         old_revision = _source(conn, "private-document-revision")
@@ -281,7 +282,7 @@ def test_ops_status_cli_is_connector_scoped_bounded_and_read_only(database, monk
         "current_artifacts": 2,
         "current_index_publications": 1,
         "without_current_index_publication": 3,
-        "by_status": {"extracted": 2, "failed": 1, "other": 1},
+        "by_status": {"extracted": 1, "ready": 1, "failed": 1, "other": 1},
         "error_codes": {"OCR_REQUIRED": 1, "other": 1},
     }
     assert status["outbox"] == {
