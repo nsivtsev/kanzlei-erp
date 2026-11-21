@@ -1,4 +1,4 @@
-"""Opt-in client-scoped chat routes with delegated authorization and bounded SSE."""
+"""Opt-in chat routes with delegated authorization and bounded SSE."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
 from sqlalchemy import and_, select, tuple_
 from sqlalchemy.engine import Engine
 from starlette.requests import ClientDisconnect
@@ -45,6 +45,7 @@ _MAX_ACTIVE_REQUESTS = 8
 _MAX_ACTIVE_TURNS = 4
 _PDF_LIMIT = 20 * 1024 * 1024
 _SOURCE_PAGE_SIZE = 25
+_GENERAL_SCOPE = Scope(kind="general")
 _MAIL_ATTACHMENT_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
 _DRIVE_DOWNLOAD_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
 
@@ -91,9 +92,22 @@ SourceCursor = Annotated[str | None, Query(min_length=1, max_length=4096)]
 HistoryCursor = Annotated[str | None, Query(min_length=1, max_length=36)]
 
 
-class CreateBody(BaseModel):
+class ClientBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     client_id: Identifier
+
+
+class GeneralScopeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["general"]
+
+
+class GeneralBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    scope: GeneralScopeBody
+
+
+CreateBody = RootModel[ClientBody | GeneralBody]
 
 
 class TurnBody(BaseModel):
@@ -101,7 +115,7 @@ class TurnBody(BaseModel):
     question: Annotated[str, Field(min_length=1, max_length=1000, repr=False)]
 
 
-class SourcePageBody(CreateBody):
+class SourcePageBody(ClientBody):
     cursor: Annotated[str, Field(min_length=1, max_length=4096)] | None = Field(
         default=None, repr=False
     )
@@ -138,24 +152,24 @@ async def _identity(adapter, access_token):
     return identity
 
 
-async def _session(adapter, access_token, service, *, client_id=None, conversation_id=None):
+async def _session(adapter, access_token, service, *, scope=None, conversation_id=None):
     identity = await _identity(adapter, access_token)
     if conversation_id is not None:
-        client_id = await database_call(
+        scope = await database_call(
             history.lookup,
             service.engine,
             identity.connector_id,
             identity.subject,
             _id(conversation_id),
         )
-    if "\x00" in client_id:
+    if scope.client_id is not None and "\x00" in scope.client_id:
         raise ConnectorError("INVALID_REQUEST", 422)
     session = Session(
         adapter,
         access_token,
         identity.connector_id,
         identity.subject,
-        Scope(kind="client", client_id=client_id),
+        scope,
         index_profile=getattr(service.index, "profile", INDEX_PROFILE),
     )
     await adapter.check_scope(access_token, session.scope)
@@ -169,19 +183,42 @@ async def _verify_session(session):
     await session.connector.check_scope(session.token, session.scope)
 
 
+async def _verify_general_session(session):
+    if session.scope == _GENERAL_SCOPE:
+        await _verify_session(session)
+
+
 @router.post("", status_code=201)
 async def create(request: Request, adapter: Adapter, access_token: AccessToken, service: Runtime):
-    body = await _body(request, CreateBody)
-    session = await _session(adapter, access_token, service, client_id=body.client_id)
-    return await database_call(history.create_conversation, service.engine, session)
+    body = (await _body(request, CreateBody)).root
+    scope = (
+        _GENERAL_SCOPE
+        if isinstance(body, GeneralBody)
+        else Scope(kind="client", client_id=body.client_id)
+    )
+    session = await _session(adapter, access_token, service, scope=scope)
+    result = await database_call(history.create_conversation, service.engine, session)
+    await _verify_general_session(session)
+    return result
 
 
 @router.get("")
 async def list_owned(
-    client_id: Identifier, adapter: Adapter, access_token: AccessToken, service: Runtime
+    adapter: Adapter,
+    access_token: AccessToken,
+    service: Runtime,
+    client_id: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    scope: Literal["general"] | None = None,
 ):
-    session = await _session(adapter, access_token, service, client_id=client_id)
-    return {"items": await database_call(history.list_conversations, service.engine, session)}
+    if (scope is None) == (client_id is None):
+        raise ConnectorError("INVALID_REQUEST", 422)
+    requested_scope = (
+        _GENERAL_SCOPE if scope == "general" else Scope(kind="client", client_id=client_id)
+    )
+    session = await _session(adapter, access_token, service, scope=requested_scope)
+    items = await database_call(history.list_conversations, service.engine, session)
+    await _verify_general_session(session)
+    return {"items": items}
 
 
 @router.get("/{conversation_id}/history")
@@ -193,12 +230,14 @@ async def conversation_history(
     cursor: HistoryCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    return await history.read_history(
+    page = await history.read_history(
         service.engine,
         session,
         conversation_id,
         _id(cursor, cursor=True) if cursor is not None else None,
     )
+    await _verify_general_session(session)
+    return page
 
 
 def _source_status(engine, session, entries):
@@ -276,6 +315,8 @@ async def source_list(
     cursor: SourceCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
+    if session.scope.kind == "general":
+        raise ConnectorError("NOT_FOUND", 404)
     return await _list_source_page(service, session, cursor)
 
 
@@ -284,7 +325,9 @@ async def source_catalogue(
     request: Request, adapter: Adapter, access_token: AccessToken, service: Runtime
 ):
     body = await _body(request, SourcePageBody)
-    session = await _session(adapter, access_token, service, client_id=body.client_id)
+    session = await _session(
+        adapter, access_token, service, scope=Scope(kind="client", client_id=body.client_id)
+    )
     return await _list_source_page(service, session, body.cursor, body.query.strip(), body.status)
 
 
@@ -325,12 +368,18 @@ def _sse(event, payload):
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n"
 
 
-async def _refresh_context(service, session, context):
+async def _refresh_context(service, session, context, *, include_labels=False):
     await _verify_session(session)
     deps = [item.dependency for item in context]
-    current = await checked_evidence(service.engine, session, deps)
+    labels = None
+    if include_labels:
+        current, labels = await history.checked_dependencies(service.engine, session, deps)
+    else:
+        current = await checked_evidence(service.engine, session, deps)
     if any(current.get(item.dependency) != item for item in context):
         raise ConnectorError("STALE_SOURCE", 409)
+    await _verify_general_session(session)
+    return labels
 
 
 async def _generate(service, session, question, context):
@@ -370,7 +419,7 @@ async def _stream(service, session, question, conversation_id, commit: history.T
             packet = await _generate(service, session, question, context) if context else None
             yield _sse("status", {"phase": "validating"})
             answer = validate_answer(question, context, packet)
-            await _refresh_context(service, session, context)
+            await _refresh_context(service, session, context, include_labels=True)
             item = await database_call(
                 history.store_turn,
                 service.engine,
@@ -381,7 +430,9 @@ async def _stream(service, session, question, conversation_id, commit: history.T
                 answer,
                 commit,
             )
-            await _refresh_context(service, session, context)
+            labels = await _refresh_context(service, session, context, include_labels=True)
+            if answer is not None and labels is not None:
+                history.label_citation(item, answer.evidence.dependency.source, labels)
         yield _sse("answer", item)
     except ConnectorError as error:
         yield _sse("error", {"code": error.code})
@@ -459,6 +510,7 @@ async def citation_pdf(
     )
     if citation.source_kind != "pdf":
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_general_session(session)
     try:
         content = await adapter.read_source(access_token, session.scope, evidence.dependency.source)
     except ConnectorError as error:
@@ -475,6 +527,7 @@ async def citation_pdf(
     await _verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_general_session(session)
     return Response(
         content,
         media_type="application/pdf",
@@ -541,6 +594,7 @@ async def citation_original(
     source = evidence.dependency.source
     if citation.source_kind not in ("email", "docx"):
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_general_session(session)
     try:
         locator = await adapter.resolve_source_locator(access_token, session.scope, source)
     except ConnectorError as error:
@@ -552,6 +606,7 @@ async def citation_original(
     await _verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_general_session(session)
     return JSONResponse(
         {"source_kind": citation.source_kind, "locator": locator},
         headers={"Cache-Control": "private, no-store"},

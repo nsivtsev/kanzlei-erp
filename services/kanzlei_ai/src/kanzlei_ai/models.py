@@ -184,8 +184,14 @@ chat_conversations = Table(
     Column("id", String(36), primary_key=True),
     Column("connector_id", String(200), nullable=False),
     Column("subject", String(200), nullable=False),
-    Column("client_id", String(200), nullable=False),
+    Column("client_id", String(200)),
+    Column("scope_kind", String(16), nullable=False, server_default="client"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "(scope_kind = 'client' AND client_id IS NOT NULL) OR "
+        "(scope_kind = 'general' AND client_id IS NULL)",
+        name="ck_chat_conversations_scope",
+    ),
     Index(
         "ix_chat_conversations_owner_client",
         "connector_id",

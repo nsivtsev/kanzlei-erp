@@ -20,7 +20,9 @@ from kanzlei_ai.chat.context import (
     database_call,
 )
 from kanzlei_ai.connectors.base import ConnectorError
+from kanzlei_ai.connectors.contracts import Scope, SourceRef
 from kanzlei_ai.models import chat_conversations, chat_turns
+from kanzlei_ai.search import retrieve as search_retrieve
 
 HISTORY_LIMIT = 10
 CONVERSATION_LIMIT = 100
@@ -73,21 +75,24 @@ def _owner_filter(connector_id, subject):
     )
 
 
-def lookup(engine, connector_id, subject, conversation_id):
+def lookup(engine, connector_id, subject, conversation_id) -> Scope:
     with engine.begin() as connection:
         configure_query(connection)
         row = connection.execute(
-            select(chat_conversations.c.client_id).where(
+            select(chat_conversations.c.scope_kind, chat_conversations.c.client_id).where(
                 chat_conversations.c.id == conversation_id, *_owner_filter(connector_id, subject)
             )
         ).one_or_none()
     if row is None:
         raise ConnectorError("NOT_FOUND", 404)
-    return row.client_id
+    return Scope(kind=row.scope_kind, client_id=row.client_id)
 
 
 def _conversation_view(row):
-    return {"id": row.id, "client_id": row.client_id, "created_at": row.created_at.isoformat()}
+    view = {"id": row.id, "client_id": row.client_id, "created_at": row.created_at.isoformat()}
+    if row.scope_kind == "general":
+        view["scope"] = {"kind": "general"}
+    return view
 
 
 def create_conversation(engine, session: Session):
@@ -100,6 +105,7 @@ def create_conversation(engine, session: Session):
                 connector_id=session.connector_id,
                 subject=session.subject,
                 client_id=session.scope.client_id,
+                scope_kind=session.scope.kind,
             )
             .returning(chat_conversations)
         ).one()
@@ -113,6 +119,7 @@ def list_conversations(engine, session: Session):
             select(chat_conversations)
             .where(
                 *_owner_filter(session.connector_id, session.subject),
+                chat_conversations.c.scope_kind == session.scope.kind,
                 chat_conversations.c.client_id == session.scope.client_id,
             )
             .order_by(chat_conversations.c.created_at.desc(), chat_conversations.c.id.desc())
@@ -234,14 +241,33 @@ async def read_history(engine, session, conversation_id, cursor):
     page_rows = rows[:HISTORY_LIMIT]
     proofs = [_stored_proof(row) for row in page_rows]
     all_dependencies = list(dict.fromkeys(d for proof, _ in proofs for d in proof))
-    current = await checked_evidence(engine, session, all_dependencies)
+    current, labels = await checked_dependencies(engine, session, all_dependencies)
+    items = []
+    for row, (deps, citations) in zip(page_rows, proofs, strict=True):
+        available = all(dep in current for dep in deps)
+        item = _history_view(row, citations, available=available)
+        if available and citations and labels is not None:
+            cited = next(dep for dep in deps if dep.chunk_id == citations[0].chunk_id)
+            label_citation(item, current[cited].dependency.source, labels)
+        items.append(item)
     return {
-        "items": [
-            _history_view(row, citations, available=all(d in current for d in deps))
-            for row, (deps, citations) in zip(page_rows, proofs, strict=True)
-        ],
+        "items": items,
         "next_cursor": page_rows[-1].id if len(rows) > HISTORY_LIMIT else None,
     }
+
+
+async def checked_dependencies(engine, session, dependencies):
+    if session.scope.kind == "client" or not dependencies:
+        return await checked_evidence(engine, session, dependencies), None
+    labels = await search_retrieve.list_authorized_clients(session.connector, session.token)
+    current = await checked_evidence(
+        engine, session, [dep for dep in dependencies if dep.source.client_id in labels]
+    )
+    return current, labels
+
+
+def label_citation(item, source: SourceRef, labels: dict[str, str]):
+    item["citations"][0]["client"] = {"id": source.client_id, "label": labels[source.client_id]}
 
 
 def _citation_proof(engine, conversation_id, turn_id, citation_id):
@@ -263,7 +289,7 @@ def _citation_proof(engine, conversation_id, turn_id, citation_id):
 
 
 async def check_citation(engine, session, dependencies, citation) -> Evidence:
-    current = await checked_evidence(engine, session, dependencies)
+    current, _ = await checked_dependencies(engine, session, dependencies)
     if len(current) == len(dependencies):
         for dependency, evidence in current.items():
             if (
