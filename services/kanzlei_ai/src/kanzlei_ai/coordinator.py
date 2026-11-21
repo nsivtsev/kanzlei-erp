@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from kanzlei_ai import ops, outbox, sync
+from kanzlei_ai import ops, outbox, retention, sync
 from kanzlei_ai.connectors.frappe import FrappeConnector
 from kanzlei_ai.db import engine_from_settings, migrate
 from kanzlei_ai.models import connectors
@@ -127,6 +127,13 @@ def main():
         commands.add_parser(command)
     ops_parser = commands.add_parser("ops-status", help="Report connector operations aggregates")
     ops_parser.add_argument("--json", action="store_true", required=True)
+    retention_parser = commands.add_parser("retention", help="Maintain obsolete AI data")
+    retention_commands = retention_parser.add_subparsers(dest="retention_command", required=True)
+    retention_commands.add_parser("mark", help="Record candidate observations without deletion")
+    retention_commands.add_parser("plan", help="Show what can be removed")
+    apply_parser = retention_commands.add_parser("apply", help="Delete eligible data offline")
+    apply_parser.add_argument("--confirm-offline", action="store_true")
+    apply_parser.add_argument("--limit", type=int, default=100)
     reindex_parser = commands.add_parser("reindex", help="Queue indexing of saved artifacts")
     reindex_parser.add_argument("--connector")
     reindex_parser.add_argument("--cursor", type=int, default=0)
@@ -156,6 +163,23 @@ def main():
             )
     if args.command == "cutover-ocr" and not settings.mistral_enabled:
         parser.error("OCR cutover requires AI_MISTRAL_ENABLED")
+    if args.command == "retention":
+        try:
+            if args.retention_command == "mark":
+                result = retention.mark(settings)
+            elif args.retention_command == "plan":
+                result = retention.plan(settings)
+            else:
+                result = retention.apply(
+                    settings, confirm_offline=args.confirm_offline, limit=args.limit
+                )
+        except retention.RetentionError as error:
+            log.error("%s", error)
+            raise SystemExit(1) from None
+        print(json.dumps(result, sort_keys=True))
+        if result.get("failed", 0):
+            raise SystemExit(1)
+        return
     engine = engine_from_settings(settings)
     try:
         if args.command == "migrate":
@@ -176,6 +200,7 @@ def main():
                     settings.ingestion_connector_id,
                     index_profile=configured_index_profile(settings),
                 )
+            status["retention"] = retention.summary(engine)
             print(json.dumps(status, sort_keys=True))
         elif args.command == "reindex":
             result = reindex(

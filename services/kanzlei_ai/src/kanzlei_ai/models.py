@@ -180,6 +180,27 @@ index_publications = Table(
     Column("profile", String(100), nullable=False),
 )
 
+retention_candidates = Table(
+    "retention_candidates",
+    metadata,
+    Column("kind", String(16), primary_key=True),
+    Column("scope", String(64), primary_key=True),
+    Column("target", String(256), primary_key=True),
+    Column("identity", String(256), nullable=False),
+    Column("first_observed_at", DateTime(timezone=True), nullable=False),
+    Column("last_observed_at", DateTime(timezone=True), nullable=False),
+    Column("last_attempt_at", DateTime(timezone=True)),
+    Column("failure_code", String(32)),
+    Index("ix_retention_candidates_due", "first_observed_at", "kind"),
+)
+retention_mark = Table(
+    "retention_mark",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("marked_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("id = 1", name="ck_retention_mark_singleton"),
+)
+
 chat_conversations = Table(
     "chat_conversations",
     metadata,

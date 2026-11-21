@@ -31,6 +31,40 @@ class S3ArtifactStore:
         self.prefix = clean
         self.max_bytes = max_bytes
 
+    @classmethod
+    def from_settings(cls, settings):
+        from boto3 import client
+        from botocore.config import Config
+
+        if not all(
+            (
+                settings.artifact_s3_endpoint,
+                settings.artifact_s3_bucket,
+                settings.artifact_s3_access_key,
+                settings.artifact_s3_secret_key,
+            )
+        ):
+            raise RuntimeError("Private artifact storage is not configured")
+        return cls(
+            client(
+                "s3",
+                endpoint_url=str(settings.artifact_s3_endpoint),
+                aws_access_key_id=settings.artifact_s3_access_key.get_secret_value(),
+                aws_secret_access_key=settings.artifact_s3_secret_key.get_secret_value(),
+                region_name=settings.artifact_s3_region,
+                config=Config(
+                    signature_version="s3v4",
+                    s3={"addressing_style": "path"},
+                    connect_timeout=3,
+                    read_timeout=10,
+                    retries={"max_attempts": 2, "mode": "standard"},
+                ),
+            ),
+            bucket=settings.artifact_s3_bucket,
+            prefix=settings.artifact_s3_prefix,
+            max_bytes=settings.artifact_max_bytes,
+        )
+
     def put(self, namespace: str, content: bytes) -> str:
         if len(content) > self.max_bytes:
             raise LimitExceeded
