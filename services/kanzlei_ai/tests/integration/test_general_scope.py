@@ -46,11 +46,20 @@ def general_erp(chat, monkeypatch):
     _, erp, *_ = chat
     erp.general_allowed = True
     erp.clients = {"A": "Synthetic A", "B": "Synthetic B"}
+    authorize_sources = erp.authorize_sources
+
+    def require_scope(scope):
+        if scope.kind == "general" and not erp.general_allowed:
+            raise ConnectorError("FORBIDDEN", 403)
 
     async def check_scope(token, scope):
         assert token == _TOKEN
-        if scope.kind == "general" and not erp.general_allowed:
-            raise ConnectorError("FORBIDDEN", 403)
+        require_scope(scope)
+
+    async def authorize(token, scope, refs):
+        assert token == _TOKEN
+        require_scope(scope)
+        return await authorize_sources(token, scope, refs)
 
     async def list_clients(token, limit=50, cursor=None):
         assert token == _TOKEN and cursor is None and limit >= len(erp.clients)
@@ -60,6 +69,7 @@ def general_erp(chat, monkeypatch):
         )
 
     monkeypatch.setattr(erp, "check_scope", check_scope)
+    monkeypatch.setattr(erp, "authorize_sources", authorize)
     monkeypatch.setattr(erp, "list_clients", list_clients, raising=False)
     return erp
 
@@ -234,20 +244,124 @@ def test_history_cites_fresh_client_name_and_requires_every_dependency(
     assert erp.reads == 0
 
 
-def test_history_rechecks_general_role_after_dependency_verification(chat, general_erp, retrieved):
-    client, erp, _, _, _ = chat
-    general = _create_general(client)["id"]
-    assert run_turn(client, general)[-1][0] == "answer"
-    erp.on_authorize = lambda: setattr(erp, "general_allowed", False)
-    assert history(client, general).status_code == 403
-
-
-def test_general_turn_rechecks_role_before_emitting_saved_answer(
+def test_history_requires_general_role_in_final_source_authorization(
     chat, general_erp, retrieved, monkeypatch
 ):
     client, erp, _, _, _ = chat
     general = _create_general(client)["id"]
+    assert run_turn(client, general)[-1][0] == "answer"
+    check_scope = erp.check_scope
+    list_clients = erp.list_clients
+    checked_clients = False
+
+    async def list_and_mark(*args, **kwargs):
+        nonlocal checked_clients
+        result = await list_clients(*args, **kwargs)
+        checked_clients = True
+        return result
+
+    async def revoke_after_scope_check(*args):
+        await check_scope(*args)
+        if checked_clients:
+            erp.general_allowed = False
+
+    monkeypatch.setattr(erp, "list_clients", list_and_mark)
+    monkeypatch.setattr(erp, "check_scope", revoke_after_scope_check)
+    assert history(client, general).status_code == 403
+
+
+@pytest.mark.parametrize("disclosure", ["history", "answer", "pdf", "original"])
+def test_general_disclosure_catches_source_revoked_during_late_scope_check(
+    chat, general_erp, retrieved, monkeypatch, disclosure
+):
+    client, erp, runtime, _, _ = chat
+    general = _create_general(client)["id"]
+    question = _QUESTION
+    denied_source = "file:letter"
+    locator = None
+    if disclosure == "original":
+        question = "When does the seminar start?"
+        denied_source = "file:invoice"
+        locator = (
+            api._DRIVE_DOWNLOAD_PATH
+            + "?"
+            + urlencode(
+                {"customer": "B", "file_id": "letter", "revision": retrieved[2].source.revision}
+            )
+        )
+
+        class Provider:
+            async def generate(self, question, context):
+                return AnswerPacket(retrieved[2].chunk_id, context[-1].text)
+
+        runtime.provider = Provider()
+
+    event, answer = run_turn(client, general, question)[-1]
+    assert event == "answer" and answer["status"] == "answered"
+    disclosure_ready = disclosure == "history"
+    checked_clients = False
+    check_scope = erp.check_scope
+    list_clients = erp.list_clients
     store_turn = api.history.store_turn
+
+    def ready():
+        nonlocal disclosure_ready
+        disclosure_ready = True
+
+    async def list_and_mark(*args, **kwargs):
+        nonlocal checked_clients
+        result = await list_clients(*args, **kwargs)
+        checked_clients = disclosure_ready
+        return result
+
+    async def revoke_during_scope_check(*args):
+        await check_scope(*args)
+        if checked_clients:
+            erp.denied.add(denied_source)
+
+    def store_and_mark(*args):
+        item = store_turn(*args)
+        ready()
+        return item
+
+    async def resolve_and_mark(token, scope, ref):
+        assert (token, scope, ref) == (_TOKEN, _GENERAL, retrieved[2].source)
+        ready()
+        return locator
+
+    monkeypatch.setattr(erp, "list_clients", list_and_mark)
+    monkeypatch.setattr(erp, "check_scope", revoke_during_scope_check)
+    monkeypatch.setattr(api.history, "store_turn", store_and_mark)
+    monkeypatch.setattr(erp, "on_read", ready)
+    monkeypatch.setattr(erp, "resolve_source_locator", resolve_and_mark, raising=False)
+
+    if disclosure == "answer":
+        assert run_turn(client, general)[-1] == ("error", {"code": "STALE_SOURCE"})
+    elif disclosure == "history":
+        (item,) = history(client, general).json()["items"]
+        assert item == {
+            **answer,
+            "status": "unavailable",
+            "question": None,
+            "answer": None,
+            "citations": [],
+        }
+    else:
+        response = client.get(pdf_url(general, answer).removesuffix("/pdf") + f"/{disclosure}")
+        assert response.status_code == 404
+        assert response.json() == {"code": "NOT_FOUND"}
+    assert denied_source in erp.denied
+
+
+@pytest.mark.parametrize("has_evidence", [True, False])
+def test_general_turn_rechecks_role_before_emitting_saved_answer(
+    chat, general_erp, retrieved, monkeypatch, has_evidence
+):
+    client, erp, _, _, _ = chat
+    general = _create_general(client)["id"]
+    store_turn = api.history.store_turn
+    if not has_evidence:
+        retrieved.clear()
 
     def revoke_after_store(*args):
         item = store_turn(*args)

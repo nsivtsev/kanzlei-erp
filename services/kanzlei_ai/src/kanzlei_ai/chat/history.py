@@ -19,8 +19,8 @@ from kanzlei_ai.chat.context import (
     current_evidence,
     database_call,
 )
-from kanzlei_ai.connectors.base import ConnectorError
-from kanzlei_ai.connectors.contracts import Scope, SourceRef
+from kanzlei_ai.connectors.base import ConnectorError, ERPConnector
+from kanzlei_ai.connectors.contracts import Identity, Scope, SourceRef
 from kanzlei_ai.models import chat_conversations, chat_turns
 from kanzlei_ai.search import retrieve as search_retrieve
 
@@ -73,6 +73,20 @@ def _owner_filter(connector_id, subject):
         chat_conversations.c.connector_id == connector_id,
         chat_conversations.c.subject == subject,
     )
+
+
+async def current_identity(connector: ERPConnector, token: str) -> Identity:
+    identity = await connector.identity(token)
+    if not isinstance(identity, Identity):
+        raise ConnectorError()
+    return identity
+
+
+async def verify_session(session: Session) -> None:
+    identity = await current_identity(session.connector, session.token)
+    if (identity.connector_id, identity.subject) != (session.connector_id, session.subject):
+        raise ConnectorError("UNAUTHENTICATED", 401)
+    await session.connector.check_scope(session.token, session.scope)
 
 
 def lookup(engine, connector_id, subject, conversation_id) -> Scope:
@@ -257,12 +271,18 @@ async def read_history(engine, session, conversation_id, cursor):
 
 
 async def checked_dependencies(engine, session, dependencies):
-    if session.scope.kind == "client" or not dependencies:
+    if session.scope.kind == "client":
         return await checked_evidence(engine, session, dependencies), None
-    labels = await search_retrieve.list_authorized_clients(session.connector, session.token)
-    current = await checked_evidence(
-        engine, session, [dep for dep in dependencies if dep.source.client_id in labels]
+    labels = (
+        await search_retrieve.list_authorized_clients(session.connector, session.token)
+        if dependencies
+        else {}
     )
+    eligible = [dep for dep in dependencies if dep.source.client_id in labels]
+    # Scope is required even when no refs remain. For eligible refs the ERP
+    # confirms general scope and exact ACLs together, before the SQL fence.
+    await verify_session(session)
+    current = await checked_evidence(engine, session, eligible)
     return current, labels
 
 

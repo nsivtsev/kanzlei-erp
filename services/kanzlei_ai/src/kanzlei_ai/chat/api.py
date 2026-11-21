@@ -31,7 +31,7 @@ from kanzlei_ai.chat.context import (
     retrieve_context,
 )
 from kanzlei_ai.connectors.base import ConnectorError
-from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Identity, Scope, SourceRef
+from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Scope, SourceRef
 from kanzlei_ai.models import document_artifacts, index_publications, jobs, relations, sources
 from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
@@ -145,15 +145,8 @@ def _id(value, *, cursor=False):
     raise ConnectorError("INVALID_REQUEST", 422) if cursor else ConnectorError("NOT_FOUND", 404)
 
 
-async def _identity(adapter, access_token):
-    identity = await adapter.identity(access_token)
-    if not isinstance(identity, Identity):
-        raise ConnectorError()
-    return identity
-
-
 async def _session(adapter, access_token, service, *, scope=None, conversation_id=None):
-    identity = await _identity(adapter, access_token)
+    identity = await history.current_identity(adapter, access_token)
     if conversation_id is not None:
         scope = await database_call(
             history.lookup,
@@ -176,16 +169,9 @@ async def _session(adapter, access_token, service, *, scope=None, conversation_i
     return session
 
 
-async def _verify_session(session):
-    identity = await _identity(session.connector, session.token)
-    if (identity.connector_id, identity.subject) != (session.connector_id, session.subject):
-        raise ConnectorError("UNAUTHENTICATED", 401)
-    await session.connector.check_scope(session.token, session.scope)
-
-
 async def _verify_general_session(session):
     if session.scope == _GENERAL_SCOPE:
-        await _verify_session(session)
+        await history.verify_session(session)
 
 
 @router.post("", status_code=201)
@@ -230,14 +216,12 @@ async def conversation_history(
     cursor: HistoryCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    page = await history.read_history(
+    return await history.read_history(
         service.engine,
         session,
         conversation_id,
         _id(cursor, cursor=True) if cursor is not None else None,
     )
-    await _verify_general_session(session)
-    return page
 
 
 def _source_status(engine, session, entries):
@@ -369,16 +353,15 @@ def _sse(event, payload):
 
 
 async def _refresh_context(service, session, context, *, include_labels=False):
-    await _verify_session(session)
     deps = [item.dependency for item in context]
     labels = None
-    if include_labels:
+    if include_labels and session.scope == _GENERAL_SCOPE:
         current, labels = await history.checked_dependencies(service.engine, session, deps)
     else:
+        await history.verify_session(session)
         current = await checked_evidence(service.engine, session, deps)
     if any(current.get(item.dependency) != item for item in context):
         raise ConnectorError("STALE_SOURCE", 409)
-    await _verify_general_session(session)
     return labels
 
 
@@ -510,7 +493,6 @@ async def citation_pdf(
     )
     if citation.source_kind != "pdf":
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_general_session(session)
     try:
         content = await adapter.read_source(access_token, session.scope, evidence.dependency.source)
     except ConnectorError as error:
@@ -524,10 +506,10 @@ async def citation_pdf(
         or hashlib.sha256(content).hexdigest() != evidence.content_sha256
     ):
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_session(session)
+    if session.scope != _GENERAL_SCOPE:
+        await history.verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_general_session(session)
     return Response(
         content,
         media_type="application/pdf",
@@ -594,7 +576,6 @@ async def citation_original(
     source = evidence.dependency.source
     if citation.source_kind not in ("email", "docx"):
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_general_session(session)
     try:
         locator = await adapter.resolve_source_locator(access_token, session.scope, source)
     except ConnectorError as error:
@@ -603,10 +584,10 @@ async def citation_original(
         raise
     if not _valid_original_locator(citation.source_kind, source, locator, access_token):
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_session(session)
+    if session.scope != _GENERAL_SCOPE:
+        await history.verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
-    await _verify_general_session(session)
     return JSONResponse(
         {"source_kind": citation.source_kind, "locator": locator},
         headers={"Cache-Control": "private, no-store"},

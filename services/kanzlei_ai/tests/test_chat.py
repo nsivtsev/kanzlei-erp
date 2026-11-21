@@ -222,7 +222,7 @@ def test_email_original_links_require_the_expected_current_erp_locator(
     monkeypatch.setattr(api.history, "find_citation", find)
     monkeypatch.setattr(api.history, "check_citation", refresh)
     monkeypatch.setattr(api, "_session", AsyncMock(return_value=session))
-    monkeypatch.setattr(api, "_verify_session", verify)
+    monkeypatch.setattr(api.history, "verify_session", verify)
 
     async def resolve(*args):
         if locator is None:
