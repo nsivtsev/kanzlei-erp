@@ -30,7 +30,10 @@ type CitationRequest = { turn: string; citation: Citation; controller: AbortCont
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const narrow = matchMedia('(max-width: 760px)');
-const historyCheckDelay = 30_000;
+const revalidationDelay = 30_000;
+const conversationsPath = '/v1/chat/conversations';
+const maxPagedItems = 10_000;
+const maxPages = 1_000;
 const sourceStatus: Record<Processing, string> = {
   pending: 'Ausstehend',
   ready: 'Bereit',
@@ -48,7 +51,8 @@ let conversation = '', draft = '', status = '';
 let askController: AbortController | null = null;
 let activeQuestion = '';
 let historyCheck: object | null = null;
-let historyTimer = 0;
+let accessCheck: number | null = null;
+let revalidationTimer = 0;
 let historyReady = false;
 let citationRequest: CitationRequest | null = null;
 let viewer: Viewer | null = null;
@@ -83,7 +87,7 @@ function current(session: Lease, sequence?: number) {
 }
 
 function conversationPath(id = conversation) {
-  return `/v1/chat/conversations/${encodeURIComponent(id)}`;
+  return `${conversationsPath}/${encodeURIComponent(id)}`;
 }
 
 function setStatus(message: string) {
@@ -103,7 +107,6 @@ function clearViewer() {
 }
 
 function stopHistoryCheck() {
-  window.clearTimeout(historyTimer);
   historyReady = false;
   historyCheck = null;
 }
@@ -139,13 +142,21 @@ function resetScope() {
   conversations = [];
 }
 
-function invalidateScope() {
-  const previous = conversation;
-  resetCatalogue();
-  resetConversation();
-  conversation = previous;
+function invalidateScope(scopeDenied = false) {
+  if (scopeDenied && chatScope) {
+    const denied = chatScope;
+    if (denied.kind === 'general' && lease) lease.generalAccess = false;
+    if (denied.kind === 'client') clients = clients.filter(client => client.id !== denied.client_id);
+    resetScope();
+  } else {
+    const previous = conversation;
+    resetCatalogue();
+    resetConversation();
+    conversation = previous;
+  }
   status = 'Der Zugriff auf dieses Gespräch oder seine Quellen ist nicht mehr verfügbar.';
-  render();
+  render(scopeDenied ? 'scope' : undefined);
+  void refreshAccess();
 }
 
 function logout(localOnly = false) {
@@ -153,6 +164,7 @@ function logout(localOnly = false) {
   loginGeneration++;
   popupCleanup?.();
   window.clearTimeout(expiryTimer);
+  window.clearTimeout(revalidationTimer);
   lease = null;
   signedIn = false;
   previous?.controller.abort();
@@ -186,7 +198,14 @@ async function api(session: Lease, path: string, init: RequestInit = {}, sequenc
     throw Error('expired');
   }
   if (!response.ok) {
-    if (sequence !== undefined && [403, 404, 409, 410, 503].includes(response.status)) invalidateScope();
+    const pathname = path.split('?', 1)[0];
+    if (sequence !== undefined && pathname.startsWith(conversationsPath)
+        && [403, 404, 409, 410, 503].includes(response.status)) {
+      // Citation and catalogue denials can concern one source rather than the selected scope.
+      const scopeDenied = response.status === 403 && (pathname === conversationsPath
+        || pathname.endsWith('/history') || pathname.endsWith('/turns'));
+      invalidateScope(scopeDenied);
+    }
     throw Error('request failed');
   }
   return response;
@@ -199,15 +218,56 @@ async function pages<T>(session: Lease, path: string, sequence?: number, post = 
   do {
     const url = new URL(path, location.origin);
     if (cursor && !post) url.searchParams.set('cursor', cursor);
-    const request = post ? { method: 'POST', body: JSON.stringify({ limit: 100, cursor }) } : {};
+    const request: RequestInit = { cache: 'no-store' };
+    if (post) {
+      request.method = 'POST';
+      request.body = JSON.stringify({ limit: 100, cursor });
+    }
     const page = await (await api(session, url.pathname + url.search, request, sequence)).json() as Page<T>;
     if (!current(session, sequence)) throw Error('stale');
     items.push(...page.items);
     cursor = page.next_cursor;
-    if (cursor && (seen.has(cursor) || items.length > 10_000)) throw Error('invalid pagination');
+    if (items.length > maxPagedItems || (cursor && (seen.size + 1 >= maxPages || seen.has(cursor)))) {
+      throw Error('invalid pagination');
+    }
     if (cursor) seen.add(cursor);
   } while (cursor);
   return items;
+}
+
+function applyAccess(session: Lease, sequence: number, update: { clients: Client[] } | { generalAccess: boolean }) {
+  if (!current(session, sequence)) return;
+  const scope = chatScope;
+  if ('clients' in update) {
+    if (JSON.stringify(clients) === JSON.stringify(update.clients)) return;
+    clients = update.clients;
+  } else {
+    if (session.generalAccess === update.generalAccess) return;
+    session.generalAccess = update.generalAccess;
+  }
+  if ((scope?.kind === 'general' && !session.generalAccess)
+      || (scope?.kind === 'client' && !clients.some(client => client.id === scope.client_id))) {
+    invalidateScope(true);
+  } else {
+    render();
+  }
+}
+
+async function refreshAccess() {
+  const session = lease, sequence = generation;
+  if (!session || !signedIn || accessCheck === sequence) return;
+  accessCheck = sequence;
+  try {
+    await Promise.allSettled([
+      api(session, '/v1/auth/me', { cache: 'no-store' }, sequence)
+        .then(response => response.json())
+        .then(identity => applyAccess(session, sequence, { generalAccess: identity.general_access === true })),
+      pages<Client>(session, '/v1/connector/clients', sequence, true)
+        .then(list => applyAccess(session, sequence, { clients: list })),
+    ]);
+  } finally {
+    if (accessCheck === sequence) accessCheck = null;
+  }
 }
 
 async function login() {
@@ -263,6 +323,7 @@ async function login() {
       signedIn = true;
       status = '';
       render('scope');
+      scheduleRevalidation();
     } catch {
       if (attempt === loginGeneration) {
         logout(true);
@@ -315,7 +376,7 @@ async function selectScope(scope: ChatScope | null) {
   const sequence = generation;
   if (!scope || !session) return;
   try {
-    const list = await pages<Conversation>(session, `/v1/chat/conversations?${conversationQuery(scope)}`, sequence);
+    const list = await pages<Conversation>(session, `${conversationsPath}?${conversationQuery(scope)}`, sequence);
     if (!current(session, sequence)) return;
     conversations = list;
     render();
@@ -324,11 +385,18 @@ async function selectScope(scope: ChatScope | null) {
   }
 }
 
-function scheduleHistoryCheck() {
-  window.clearTimeout(historyTimer);
-  if (historyReady && !document.hidden && history.some(item => item.status === 'answered')) {
-    historyTimer = window.setTimeout(() => void refreshHistory(), historyCheckDelay);
+function scheduleRevalidation() {
+  window.clearTimeout(revalidationTimer);
+  if (signedIn && !document.hidden) {
+    revalidationTimer = window.setTimeout(revalidateView, revalidationDelay);
   }
+}
+
+function revalidateView() {
+  if (!signedIn || document.hidden) return;
+  void refreshHistory();
+  if (!historyCheck) void refreshAccess();
+  scheduleRevalidation();
 }
 
 async function refreshHistory(initial = false) {
@@ -364,15 +432,15 @@ async function refreshHistory(initial = false) {
     if (current(session, sequence) && historyCheck === request) {
       historyCheck = null;
       historyReady = true;
-      scheduleHistoryCheck();
+      void refreshAccess();
     }
   }
 }
 
-window.addEventListener('focus', () => void refreshHistory());
+window.addEventListener('focus', revalidateView);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) window.clearTimeout(historyTimer);
-  else void refreshHistory();
+  if (document.hidden) window.clearTimeout(revalidationTimer);
+  else revalidateView();
 });
 
 async function selectConversation(id: string) {
@@ -388,7 +456,7 @@ async function newConversation() {
   const session = lease, sequence = generation, scope = chatScope;
   if (!session || !scope) return;
   try {
-    const result = await (await api(session, '/v1/chat/conversations', {
+    const result = await (await api(session, conversationsPath, {
       method: 'POST', body: JSON.stringify(conversationCreateBody(scope)),
     }, sequence)).json() as Conversation;
     if (!current(session, sequence)) return;
@@ -441,7 +509,7 @@ function showCatalogue() {
 function showChat() {
   resetCatalogue();
   render('question');
-  void refreshHistory();
+  revalidateView();
 }
 
 async function ask(question: string) {
@@ -507,7 +575,6 @@ async function ask(question: string) {
       activeQuestion = '';
       render(document.activeElement instanceof HTMLElement && document.activeElement.dataset.focus === 'cancel-answer'
         ? 'question' : undefined);
-      scheduleHistoryCheck();
     }
   }
 }

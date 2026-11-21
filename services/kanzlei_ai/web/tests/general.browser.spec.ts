@@ -10,6 +10,7 @@ const paths = {
 
 async function login(page: Page, generalAccess?: unknown) {
   if (generalAccess !== undefined) {
+    await page.route('**/v1/auth/me', route => route.fulfill({ json: { general_access: generalAccess } }));
     await page.route('**/v1/auth/browser/exchange', async route => {
       const response = await route.fetch();
       const grant = await response.json();
@@ -220,8 +221,125 @@ test('general history revalidation and citation denial clear revoked content', a
 
   await ask(page, 'What does the Word document say about Berlin (drive)?');
   await page.route('**/drive/original', route => route.fulfill({ status: 403 }));
+  await page.route('**/v1/auth/me', route => route.fulfill({ json: { general_access: false } }));
   await page.getByRole('button', { name: docxLabel, exact: true }).click();
   await expect(page.getByRole('status')).toContainText('nicht mehr verfügbar');
+  await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(0);
   await expect(page.locator('.turn')).toHaveCount(0);
   await expect(page.locator('#pdf-canvas')).toHaveCount(0);
+});
+
+test('a visible idle page checks the general role without a reload', async ({ page }) => {
+  await page.clock.install();
+  await login(page, true);
+  await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(1);
+  await page.route('**/v1/auth/me', route => route.fulfill({ json: { general_access: false } }));
+  await page.clock.fastForward(31_000);
+  await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Mandant A', exact: true })).toHaveCount(1);
+});
+
+test('live role revocation removes general scope, open PDF, and a pending answer', async ({ page }) => {
+  await login(page, true);
+  await selectScope(page, generalLabel, { scope: 'general' });
+  const general = await createChat(page, { scope: { kind: 'general' } });
+  await ask(page, 'Testfrage im allgemeinen Suchbereich');
+  await page.getByRole('button', { name: pdfLabel, exact: true }).click();
+  await expect(page.locator('#pdf-canvas')).toBeVisible();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/${general.id}/turns`, async route => {
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response }).catch(() => {});
+  });
+  const pending = page.waitForRequest(`**/${general.id}/turns`);
+  await ask(page, 'Verspätete Frage vor dem Rollenentzug');
+  await pending;
+
+  await page.route('**/v1/auth/me', route => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    return route.fulfill({ json: { general_access: false } });
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  try {
+    await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(0);
+    await expect(page.getByLabel('Suchbereich')).toHaveValue('');
+    await expect(page.getByLabel('Ihre Frage')).toHaveCount(0);
+    await expect(page.locator('.conversation-list button')).toHaveCount(0);
+    await expect(page.locator('#pdf-canvas')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await page.unrouteAll({ behavior: 'wait' });
+  await expect(page.getByText('Verspätete Frage vor dem Rollenentzug')).toHaveCount(0);
+  await expect(page.getByText('Testantwort')).toHaveCount(0);
+});
+
+test('client denial clears the revoked selection and reloads current names through client pages', async ({ page }) => {
+  await login(page, true);
+  await selectScope(page, 'Mandant A', { client_id: 'a' });
+  const single = await createChat(page, { client_id: 'a' });
+  await ask(page, 'Testfrage für Mandant A');
+  await page.getByRole('button', { name: 'Testdokument · Seite 1', exact: true }).click();
+  await expect(page.locator('#pdf-canvas')).toBeVisible();
+
+  await page.route(`**/${single.id}/history`, route => route.fulfill({ status: 403 }));
+  const cursors: (string | null)[] = [];
+  await page.route('**/v1/connector/clients', route => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    const { cursor } = route.request().postDataJSON();
+    cursors.push(cursor);
+    return route.fulfill({ json: cursor === null
+      ? { items: [{ id: 'b', label: 'Mandant B aktuell' }], next_cursor: 'weiter' }
+      : { items: [{ id: 'c', label: 'Mandant C' }], next_cursor: null } });
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('option', { name: 'Mandant A', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Mandant B', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Mandant B aktuell', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('option', { name: 'Mandant C', exact: true })).toHaveCount(1);
+  expect(cursors).toContain('weiter');
+  await expect(page.getByLabel('Suchbereich')).toHaveValue('');
+  await expect(page.locator('.conversation-list button')).toHaveCount(0);
+  await expect(page.locator('#pdf-canvas')).toHaveCount(0);
+  await expect(page.getByText('Testantwort')).toHaveCount(0);
+  await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(1);
+});
+
+test('permission checks preserve a still-authorized client conversation and ignore stale checks from another selection', async ({ page }) => {
+  await login(page, true);
+  await selectScope(page, 'Mandant B', { client_id: 'b' });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/v1/auth/me', async route => {
+    await gate;
+    await route.fulfill({ status: 401 }).catch(() => {});
+  }, { times: 1 });
+  const pending = page.waitForRequest('**/v1/auth/me');
+  await createChat(page, { client_id: 'b' });
+  await pending;
+  const cancelled = page.waitForEvent('requestfailed', request => request.url().endsWith('/v1/auth/me'));
+  try {
+    await selectScope(page, 'Mandant A', { client_id: 'a' });
+    await cancelled;
+    await createChat(page, { client_id: 'a' });
+    await ask(page, 'Testfrage für Mandant A');
+    await page.getByRole('button', { name: 'Testdokument · Seite 1', exact: true }).click();
+    await expect(page.locator('#pdf-canvas')).toBeVisible();
+    await page.getByLabel('Ihre Frage').fill('Gültiger Entwurf');
+  } finally {
+    release();
+  }
+  await page.route('**/v1/auth/me', route => route.fulfill({ json: { general_access: false } }));
+  await page.route('**/v1/connector/clients', route => route.fulfill({
+    json: { items: [{ id: 'a', label: 'Mandant A aktuell' }], next_cursor: null },
+  }));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('option', { name: generalLabel })).toHaveCount(0);
+  await expect(page.getByLabel('Suchbereich').locator('option:checked')).toHaveText('Mandant A aktuell');
+  await expect(page.getByRole('option', { name: 'Mandant B' })).toHaveCount(0);
+  await expect(page.locator('#pdf-canvas')).toBeVisible();
+  await expect(page.getByText('Testantwort')).toBeVisible();
+  await expect(page.getByLabel('Ihre Frage')).toHaveValue('Gültiger Entwurf');
 });

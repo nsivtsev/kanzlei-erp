@@ -27,6 +27,7 @@ function pdf(){const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pag
 http.createServer((req,res)=>{const u=new URL(req.url,`http://127.0.0.1:${port}`);let body='';req.on('data',x=>body+=x);req.on('end',()=>{if(u.pathname==='/kanzlei-ai-connect'){res.writeHead(200,{'Content-Type':'text/html','Set-Cookie':'erp_fixture=active; Path=/; HttpOnly; SameSite=Lax'});res.end(`<script>opener.postMessage({type:'kanzlei-ai:ticket',state:new URL(location.href).searchParams.get('state'),ticket:'fixture'},'http://127.0.0.1:19992')</script>`);return;}
 if(u.pathname==='/v1/auth/browser/config')return json(res,{version:1,erp_origin:`http://127.0.0.1:${port}`});
 if(u.pathname==='/v1/auth/browser/exchange')return json(res,{access_token:randomUUID(),token_type:'bearer',identity:{expires_at:Math.floor(Date.now()/1000)+300}});
+if(u.pathname==='/v1/auth/me')return json(res,{expires_at:Math.floor(Date.now()/1000)+300,general_access:false});
 if(u.pathname==='/v1/auth/logout')return json(res,{});
 if(u.pathname==='/v1/connector/clients')return json(res,{items:[{id:'a',label:'Mandant A'},{id:'b',label:'Mandant B'}],next_cursor:null});
 const owner = req.headers.authorization;
