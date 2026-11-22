@@ -43,6 +43,7 @@ type ConversationManagement = {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const narrow = matchMedia('(max-width: 760px)');
 const revalidationDelay = 30_000;
+const apiBase = import.meta.env.BASE_URL.slice(0, -1);
 const conversationsPath = '/v1/chat/conversations';
 const maxPagedItems = 10_000;
 const maxPages = 1_000;
@@ -189,8 +190,8 @@ function logout(localOnly = false) {
   status = '';
   render();
   if (previous && !localOnly) {
-    void fetch('/v1/auth/logout', {
-      method: 'POST', headers: { Authorization: `Bearer ${previous.token}` },
+    void fetch(`${apiBase}/v1/auth/logout`, {
+      method: 'POST', credentials: 'omit', headers: { Authorization: `Bearer ${previous.token}` },
     }).catch(() => {});
   }
 }
@@ -207,7 +208,9 @@ async function api(session: Lease, path: string, init: RequestInit = {}, sequenc
   const signals = [session.controller.signal];
   if (sequence !== undefined) signals.push(scopeController.signal);
   if (init.signal) signals.push(init.signal);
-  const response = await fetch(path, { ...init, headers, signal: AbortSignal.any(signals) });
+  const response = await fetch(apiBase + path, {
+    ...init, credentials: 'omit', headers, signal: AbortSignal.any(signals),
+  });
   if (!current(session, sequence) || init.signal?.aborted) throw Error('stale');
   if (response.status === 401) {
     logout(true);
@@ -317,8 +320,8 @@ async function login() {
     const ticket = event.data.ticket;
     cleanup();
     try {
-      const response = await fetch('/v1/auth/browser/exchange', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(`${apiBase}/v1/auth/browser/exchange`, {
+        method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: 1, ticket, state, verifier }),
       });
       if (!response.ok) throw Error();
@@ -363,7 +366,7 @@ async function login() {
   }, 500);
   try {
     const [config, hash] = await Promise.all([
-      fetch('/v1/auth/browser/config').then(response => {
+      fetch(`${apiBase}/v1/auth/browser/config`, { credentials: 'omit' }).then(response => {
         if (!response.ok) throw Error();
         return response.json();
       }),

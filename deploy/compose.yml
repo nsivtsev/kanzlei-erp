@@ -154,11 +154,19 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      AI_ENABLED: ${AI_ENABLED:-0}
+      AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ${AI_CHAT_WEB_DIR:-/dev/null}
+        target: /srv/kanzlei-chat
+        read_only: true
+        bind:
+          create_host_path: false
       - caddy-data:/data
       - caddy-config:/config
     logging: *logging

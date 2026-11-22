@@ -1,6 +1,12 @@
 # Kanzlei AI web client
 
-Use Node 22.13+ (or a supported newer even-numbered release; Node 26 is also supported). Use a disposable loopback API endpoint: `KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:PORT npm run dev`. The same explicit loopback target is required for `npm run preview`, `npm run build`, and `npm test`; `/v1` is proxied by the servers. Install with `npm ci`, export `KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:PORT`, then run `npm test`, `npm run build`, and `npm run test:browser`. The browser contract suite starts its own synthetic stub and Vite on ports 19991 and 19992 and uses locally installed Chrome; it never calls a model.
+Use Node 22.13+ or a supported newer even-numbered release. Install with
+`npm ci` and set `KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:PORT` to a
+disposable loopback API endpoint before running `npm run dev`, `npm test`,
+`npm run build` or `npm run preview`. Vite serves local development at `/`
+and proxies `/v1/`. The production bundle and local preview use `/chat/`,
+with API requests under `/chat/v1/`. The `npm run test:browser` suite uses
+Chrome with its own synthetic stub and Vite servers on ports 19991 and 19992.
 
 The Farbschema control follows the browser preference until the user chooses
 Hell or Dunkel. Only that preference is saved in local storage. Citations open

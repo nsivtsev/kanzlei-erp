@@ -117,7 +117,9 @@ class AIConfigurationTests(unittest.TestCase):
         manager.reconcile_ai(self.root, commands=commands)
         migrate = next(i for i, call in enumerate(commands.calls) if 'migrate' in call)
         start = next(i for i, call in enumerate(commands.calls) if 'up' in call and 'ai-api' in call)
+        proxy = next(i for i, call in enumerate(commands.calls) if 'up' in call and 'caddy' in call)
         self.assertLess(migrate, start)
+        self.assertLess(start, proxy)
 
     def test_restore_preserves_ai_settings_when_backup_predates_ai(self):
         self.path.write_text(self.base)
@@ -143,7 +145,7 @@ class AIConfigurationTests(unittest.TestCase):
                         '\nAI_POSTGRES_PASSWORD=' + 'b' * 32 + '\nAI_ERP_SERVICE_KEY=' + 'c' * 257 + '\n')
 
     def test_stop_always_stops_existing_ai_even_when_disabled(self):
-        config = self.config('AI_ENABLED=0\n')
+        config = self.config('AI_ENABLED=0\nAI_CHAT_ENABLED=true\nAI_CHAT_WEB_DIR=/obsolete/chat\n')
         release = self.root / 'release'
         (release / 'deploy').mkdir(parents=True)
         (release / 'deploy/compose.yml').write_text('services:\n  ai-api:\n')
@@ -154,7 +156,9 @@ class AIConfigurationTests(unittest.TestCase):
                 self.calls.append(args)
                 return ''
         commands = Commands()
-        manager.Compose(self.root, release, 'image', commands, config).stop()
+        compose = manager.Compose(self.root, release, 'image', commands, config)
+        compose.stop()
+        self.assertEqual(compose.env['AI_CHAT_WEB_DIR'], '/dev/null')
         self.assertTrue(any('stop' in call and 'ai-api' in call for call in commands.calls))
 
     def test_restore_atomic_replace_failure_preserves_live_ai_settings(self):

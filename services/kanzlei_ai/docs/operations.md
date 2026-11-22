@@ -41,7 +41,7 @@ identity and `AI_ERP_SERVICE_KEY`. For ingestion, provision the independent
 | `AI_INGESTION_OCR_PROFILE` | Set `paddle` for the Mac archive pass and `native` for server fallback configuration. The saved connector override controls Mistral OCR after cutover. |
 | `AI_MISTRAL_ENABLED`, `AI_MODEL_PROFILE`, `AI_MISTRAL_ENDPOINT` | Enable Mistral only for the approved pilot and endpoint, using the explicit `mistral` profile. |
 | `AI_WORKER_MISTRAL_API_KEY`, `AI_API_MISTRAL_API_KEY` | Distinct provider keys for the worker and for chat. The API receives its key only when Mistral chat is enabled. The coordinator routes jobs without either key. |
-| `AI_SEARCH_INDEX_ENABLED`, `AI_CHAT_ENABLED`, `AI_CHAT_BROWSER_ERP_ORIGIN` | Enable search for reindexing and enable chat after index verification. Set the browser ERP origin to the exact public HTTPS ERP origin. |
+| `AI_SEARCH_INDEX_ENABLED`, `AI_CHAT_ENABLED`, `AI_CHAT_BROWSER_ERP_ORIGIN`, `AI_CHAT_WEB_DIR` | Enable search for reindexing and enable chat after index verification. Set the exact public HTTPS ERP origin and the absolute path to the built chat bundle on the deployment host. |
 
 Stage the pinned weights on an internet-connected build machine from the AI
 service directory. Copy the verified directory to the deployment host.
@@ -127,28 +127,28 @@ containers with the validated settings.
    `celery,ocr-mistral`. Check index coverage and failures before adding the
    API's independent key and enabling chat. Reconcile after changing chat settings.
 
-## Private browser UI
+## Browser UI on the ERP domain
 
-Choose an approved private HTTPS UI origin restricted to the pilot group.
-Build the web bundle from `services/kanzlei_ai/web` using `npm ci` and
-`KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:8180 npm run build`. Use an
-approved private web server on the API host to serve `dist/` and proxy
-`/v1/*` with its path intact to the AI API's loopback port. Keep streaming
-responses unbuffered and disable proxy caching for `/v1`. Use the private
-host name and TLS certificate for the UI. The existing public ERP proxy
-continues to serve ERP. Vite's proxy setting is for development and build
-validation, so configure the pilot reverse proxy separately.
+Open the production chat at `https://erp.stb-golke.de/chat`. Caddy serves
+the UI under `/chat/` and proxies its `/chat/v1/` requests to the AI API on
+the Compose network. The ERP login, handoff and original downloads use the
+existing ERP routes. The chat paths return `404` while AI or chat is disabled.
 
-For example, with UI `https://ai-pilot.example.com` and ERP
-`https://erp.example.com`, set
-`kanzlei_ai_connector.browser_chat_origin=https://ai-pilot.example.com` in
-the ERP site's private connector configuration and
-`AI_CHAT_BROWSER_ERP_ORIGIN=https://erp.example.com` in the private AI
-production environment. Use the exact schemes, hosts and ports. The
-API-to-ERP connector still uses the internal Compose ERP endpoint.
+From `services/kanzlei_ai/web`, run `npm ci` and
+`KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:8180 npm run build`. Copy `dist/`
+to a versioned directory on the deployment host and set `AI_CHAT_WEB_DIR`
+to the absolute path to that directory containing `index.html` and `assets/`.
+Use a directory dedicated to the bundle. Caddy mounts it read-only.
 
-Verify `/health/ready` from loopback and fetch `/v1/auth/browser/config` from
-the approved UI origin to check the ERP origin. With a synthetic pilot
+In the ERP site's private connector settings, set `allowed_users` to the
+pilot accounts and `browser_chat_origin` to `https://erp.stb-golke.de`.
+Set `AI_CHAT_BROWSER_ERP_ORIGIN=https://erp.stb-golke.de` in the private AI
+production environment. Both origin settings contain the scheme and host
+without `/chat`. Apply the configuration with `ai-reconcile`, which brings
+up the AI API before applying the Caddy service configuration.
+
+Verify `/health/ready` from loopback and fetch `/chat/v1/auth/browser/config`
+on the ERP domain to check the configured origin. With a synthetic pilot
 account, open the UI, sign in through the ERP popup, select an authorized
 Mandant and send a fictional question. Confirm that the stream and citation
 viewer work, that the cited original uses the ERP browser session, and that

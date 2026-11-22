@@ -107,6 +107,10 @@ def validate_ai_features(config):
 		worker_key = require_ai_setting(config, "AI_WORKER_MISTRAL_API_KEY")
 		if chat and require_ai_setting(config, "AI_API_MISTRAL_API_KEY") == worker_key:
 			raise ValueError("AI_API_MISTRAL_API_KEY must differ from AI_WORKER_MISTRAL_API_KEY")
+	if chat:
+		bundle = Path(require_ai_setting(config, "AI_CHAT_WEB_DIR"))
+		if not bundle.is_absolute() or not (bundle / "index.html").is_file() or not (bundle / "assets").is_dir():
+			raise ValueError("AI_CHAT_WEB_DIR must be an absolute path to a built chat bundle")
 
 
 def read_config(root, path=None):
@@ -206,6 +210,8 @@ class Compose:
 		self.config = config or read_config(self.root)
 		self.env = {key: value for key, value in os.environ.items() if not key.startswith("AI_")}
 		self.env.update(self.config, APP_IMAGE=image)
+		if self.config["AI_ENABLED"] != "1" or self.config.get("AI_CHAT_ENABLED") != "true":
+			self.env["AI_CHAT_WEB_DIR"] = "/dev/null"
 		api_cloud = self.config.get("AI_CHAT_ENABLED") == self.config.get("AI_MISTRAL_ENABLED") == "true"
 		self.env["AI_API_MODEL_PROFILE"] = "mistral" if api_cloud else "synthetic"
 		self.env["AI_API_MISTRAL_ENABLED"] = "true" if api_cloud else "false"
@@ -813,17 +819,20 @@ def reconcile_ai(root, *, commands=None):
 		if not compose.has_ai:
 			raise ValueError("Current release does not contain AI services; deploy an AI-capable ERP release first")
 		compose.stop_ai()
-		if compose.ai_enabled:
-			try:
+		try:
+			if compose.ai_enabled:
 				for ai_image in {config["AI_API_IMAGE"], config["AI_WORKER_IMAGE"]}:
 					commands.run(["docker", "pull", "--platform", config["PLATFORM"], ai_image], timeout=1800)
 				compose.ai_migrate()
 				compose.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
 				compose.running()
-			except BaseException:
+			if config["HTTPS_ENABLED"] == "1":
+				compose.call("up", "-d", "--wait", "--no-deps", "caddy")
+		except BaseException:
+			if compose.ai_enabled:
 				with contextlib.suppress(Exception):
 					compose.stop_ai()
-				raise
+			raise
 		print("AI configuration reconciled")
 
 

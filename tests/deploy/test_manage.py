@@ -458,6 +458,13 @@ class DeploymentTests(unittest.TestCase):
 			manager.read_config(self.root)
 		options["AI_API_MISTRAL_API_KEY"] = "synthetic-api"
 		self.write_ai_config(base, options)
+		with self.assertRaisesRegex(ValueError, "AI_CHAT_WEB_DIR"):
+			manager.read_config(self.root)
+		bundle = self.root / "chat"
+		(bundle / "assets").mkdir(parents=True)
+		(bundle / "index.html").write_text("<!doctype html>")
+		options["AI_CHAT_WEB_DIR"] = str(bundle)
+		self.write_ai_config(base, options)
 		config = manager.read_config(self.root)
 		chat = manager.Compose(self.root, self.release, self.new_image, FakeCommands(), config)
 		self.assertEqual(chat.env["AI_API_MODEL_PROFILE"], "mistral")
