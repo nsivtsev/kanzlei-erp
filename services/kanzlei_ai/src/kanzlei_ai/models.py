@@ -119,6 +119,12 @@ outbox = Table(
     Column("lease_until", DateTime(timezone=True)),
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("published_at", DateTime(timezone=True)),
+    Column("cancelled_at", DateTime(timezone=True)),
+    CheckConstraint(
+        "cancelled_at IS NULL OR (published_at IS NULL AND "
+        "lease_token IS NULL AND lease_until IS NULL)",
+        name="ck_outbox_cancelled_delivery",
+    ),
 )
 
 page_receipts = Table(

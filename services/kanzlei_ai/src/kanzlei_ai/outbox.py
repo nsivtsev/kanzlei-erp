@@ -12,6 +12,10 @@ from kanzlei_ai.models import jobs, outbox, sources
 log = logging.getLogger(__name__)
 
 
+def pending_delivery():
+    return and_(outbox.c.published_at.is_(None), outbox.c.cancelled_at.is_(None))
+
+
 def dispatch(
     engine, publish, limit=50, *, publish_index=None, publish_ocr=None, index_profile=None
 ):
@@ -38,7 +42,7 @@ def dispatch(
                     .join(jobs, outbox.c.job_id == jobs.c.id)
                     .where(
                         and_(
-                            outbox.c.published_at.is_(None),
+                            pending_delivery(),
                             eligible,
                             or_(outbox.c.lease_until.is_(None), outbox.c.lease_until < now),
                         )
@@ -87,7 +91,7 @@ def dispatch(
                     and_(
                         outbox.c.id == row["id"],
                         outbox.c.lease_token == token,
-                        outbox.c.published_at.is_(None),
+                        pending_delivery(),
                     )
                 )
                 .values(published_at=func.clock_timestamp(), lease_until=None, lease_token=None)
@@ -198,9 +202,7 @@ def recover(engine, limit=100, *, include_index=False, index_profile=None):
                 .values(status="queued", lease_token=None, lease_until=None, updated_at=now)
             )
             pending = conn.execute(
-                select(outbox.c.id)
-                .where(and_(outbox.c.job_id == job_id, outbox.c.published_at.is_(None)))
-                .limit(1)
+                select(outbox.c.id).where(outbox.c.job_id == job_id, pending_delivery()).limit(1)
             ).first()
             if pending is None:
                 conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))

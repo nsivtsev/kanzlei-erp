@@ -12,6 +12,7 @@ from kanzlei_ai.models import (
     outbox,
     sources,
 )
+from kanzlei_ai.outbox import pending_delivery
 
 _JOB_STATUSES = ("queued", "running", "completed", "failed", "superseded")
 _SOURCE_STATUSES = ("queued", "awaiting_extraction", "extracted", "ready", "failed")
@@ -144,7 +145,7 @@ def _outbox_status(conn, connector_id, now):
                 func.count().filter(outbox.c.attempts > 0).label("with_publish_failures"),
             )
             .select_from(outbox.join(jobs).join(sources))
-            .where(sources.c.connector_id == connector_id, outbox.c.published_at.is_(None))
+            .where(sources.c.connector_id == connector_id, pending_delivery())
         )
         .mappings()
         .one()

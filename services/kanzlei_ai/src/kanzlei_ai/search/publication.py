@@ -18,6 +18,7 @@ from kanzlei_ai.models import (
     relations,
     sources,
 )
+from kanzlei_ai.outbox import pending_delivery
 from kanzlei_ai.providers.mistral import MistralError
 from kanzlei_ai.providers.mistral_embeddings import (
     EMBEDDING_DIMENSIONS,
@@ -121,7 +122,7 @@ def queue_index(conn, source, artifact_id, *, profile=INDEX_PROFILE):
     ).scalars()
     for other_job_id in superseded:
         job_service.clear_index_batches(conn, other_job_id)
-    pending = select(outbox.c.id).where(outbox.c.job_id == job_id, outbox.c.published_at.is_(None))
+    pending = select(outbox.c.id).where(outbox.c.job_id == job_id, pending_delivery())
     if not conn.execute(select(pending.exists())).scalar_one():
         conn.execute(insert(outbox).values(id=str(uuid.uuid4()), job_id=job_id))
     return True

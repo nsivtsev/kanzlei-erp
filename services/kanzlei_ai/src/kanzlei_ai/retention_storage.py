@@ -55,8 +55,19 @@ class ArtifactInventory:
         try:
             obj = self.store.client.head_object(Bucket=self.store.bucket, Key=key)
         except ClientError as error:
-            if error.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+            code = error.response.get("Error", {}).get("Code")
+            if code in {"404", "NoSuchKey", "NotFound"}:
                 return None
+            status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if status == 403 or code in {"403", "AccessDenied", "Forbidden"}:
+                # Prefix-scoped listing may establish absence when HEAD is denied.
+                listing = self.store.client.list_objects_v2(
+                    Bucket=self.store.bucket, Prefix=key, MaxKeys=1
+                )
+                if listing.get("IsTruncated") is False and all(
+                    row["Key"] != key for row in listing.get("Contents", [])
+                ):
+                    return None
             raise
         namespace, digest = key.rsplit("/", 2)[1:]
         metadata = obj.get("Metadata", {})

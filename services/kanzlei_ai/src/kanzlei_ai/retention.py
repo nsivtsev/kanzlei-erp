@@ -29,6 +29,7 @@ from kanzlei_ai.models import (
     retention_mark,
     sources,
 )
+from kanzlei_ai.outbox import pending_delivery
 from kanzlei_ai.retention_storage import (
     ArtifactInventory,
     StorageError,
@@ -38,6 +39,7 @@ from kanzlei_ai.retention_storage import (
     scope_id,
 )
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE
+from kanzlei_ai.search.publication import configured_index_profile
 from kanzlei_ai.settings import Settings
 
 RETENTION_LOCK_ID = 513_619_681_753_094_339
@@ -147,7 +149,7 @@ def _unconfirmed_outbox():
         .where(
             outbox.c.job_id == jobs.c.id,
             or_(
-                outbox.c.published_at.is_(None),
+                pending_delivery(),
                 outbox.c.lease_token.is_not(None),
                 outbox.c.lease_until.is_not(None),
             ),
@@ -193,6 +195,27 @@ def _protected_publications():
     return select(index_publications.c.publication_id).where(_current(index_publications))
 
 
+def _has_ready_index():
+    pub, artifact, src = index_publications.c, document_artifacts.c, sources.c
+    return (
+        select(pub.source_id)
+        .join(document_artifacts, pub.artifact_id == artifact.id)
+        .join(sources, pub.source_id == src.id)
+        .where(
+            pub.source_id == jobs.c.source_id,
+            pub.revision == jobs.c.revision,
+            pub.generation == jobs.c.generation,
+            pub.profile == jobs.c.pipeline_version,
+            artifact.source_id == pub.source_id,
+            artifact.revision == pub.revision,
+            artifact.generation == pub.generation,
+            src.status == "ready",
+        )
+        .correlate(jobs)
+        .exists()
+    )
+
+
 def _sql_records(now):
     cutoff = now - RECORD_AGE
     terminal_job = (
@@ -204,7 +227,7 @@ def _sql_records(now):
     job_outbox = select(outbox.c.id).where(outbox.c.job_id == jobs.c.id).correlate(jobs).exists()
     phase, receipt = connectors.c, page_receipts.c
     outbox_ready = select(outbox.c.id).where(
-        outbox.c.published_at <= cutoff,
+        func.coalesce(outbox.c.published_at, outbox.c.cancelled_at) <= cutoff,
         outbox.c.lease_token.is_(None),
         outbox.c.lease_until.is_(None),
         terminal_job,
@@ -212,7 +235,13 @@ def _sql_records(now):
     jobs_ready = select(jobs.c.id).where(
         jobs.c.updated_at <= cutoff,
         _terminal(),
-        or_(jobs.c.stage != "extract", ~_current(jobs)),
+        or_(
+            ~_current(jobs),
+            and_(
+                jobs.c.stage == "index",
+                or_(jobs.c.status != "failed", _has_ready_index()),
+            ),
+        ),
         ~job_outbox,
     )
     receipts_ready = (
@@ -542,11 +571,15 @@ class Retention:
             raise RetentionError("Retention apply requires --confirm-offline")
         if type(limit) is not int or not 1 <= limit <= MAX_APPLY_LIMIT:
             raise RetentionError(f"Retention limit must be between 1 and {MAX_APPLY_LIMIT}")
-        counts = Counter(completed=0, failed=0, skipped=0, blocked=0)
+        counts = Counter(completed=0, failed=0, skipped=0, blocked=0, cancelled=0)
         with _exclusive(self.engine) as conn:
             with conn.begin():
                 _offline_guard(conn)
-                counts["completed"] = _apply_sql(conn, limit)
+                counts["cancelled"] = _cancel_retired_deliveries(
+                    conn, configured_index_profile(self.settings), limit
+                )
+                if counts["cancelled"] < limit:
+                    counts["completed"] = _apply_sql(conn, limit - counts["cancelled"])
                 due = (
                     _due_projects(_clock(conn), self._scopes)
                     .order_by(
@@ -558,7 +591,7 @@ class Retention:
                         _C.scope,
                         _C.target,
                     )
-                    .limit(limit - counts["completed"])
+                    .limit(limit - sum(counts.values()))
                 )
                 projects = conn.execute(due).all()
             for row in projects:
@@ -595,6 +628,35 @@ class Retention:
                         delete(retention_candidates).where(key.in_(obsolete_marks))
                     ).rowcount
                 return {**_plan(conn, self._scopes), **counts}
+
+
+def _cancel_retired_deliveries(conn, active_profile, limit):
+    """Confirm terminal deliveries that can no longer route, under the offline locks."""
+    now = _clock(conn)
+    candidates = (
+        select(outbox.c.id)
+        .join(jobs)
+        .where(
+            pending_delivery(),
+            jobs.c.stage == "index",
+            jobs.c.status == "superseded",
+            jobs.c.pipeline_version.in_((INDEX_PROFILE, MISTRAL_INDEX_PROFILE)),
+            jobs.c.pipeline_version != active_profile,
+            jobs.c.lease_token.is_(None),
+            jobs.c.lease_until.is_(None),
+            or_(
+                outbox.c.lease_until <= now,
+                and_(outbox.c.lease_until.is_(None), outbox.c.lease_token.is_(None)),
+            ),
+        )
+        .order_by(outbox.c.id)
+        .limit(limit)
+    )
+    return conn.execute(
+        update(outbox)
+        .where(outbox.c.id.in_(candidates))
+        .values(cancelled_at=now, lease_token=None, lease_until=None)
+    ).rowcount
 
 
 def _apply_sql(conn, limit):

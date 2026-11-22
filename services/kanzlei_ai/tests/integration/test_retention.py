@@ -36,6 +36,10 @@ class Objects:
         self.delete_attempts = []
         self.fail = False
         self.versioning = {}
+        self.missing_head_code = "404"
+        self.denied_heads = set()
+        self.denied_prefixes = set()
+        self.listed_prefixes = []
 
     def put_object(self, *, Key, Body, Metadata, **kwargs):
         self.objects[Key] = {
@@ -53,14 +57,27 @@ class Objects:
     def paginate(self, *, Prefix, **kwargs):
         yield {"Contents": [r for k, r in self.objects.items() if k.startswith(Prefix)]}
 
+    def list_objects_v2(self, *, Prefix, MaxKeys, **kwargs):
+        self.listed_prefixes.append(Prefix)
+        if Prefix in self.denied_prefixes:
+            from botocore.exceptions import ClientError
+
+            raise ClientError({"Error": {"Code": "AccessDenied"}}, "ListObjectsV2")
+        matches = [r for k, r in self.objects.items() if k.startswith(Prefix)]
+        return {"Contents": matches[:MaxKeys], "IsTruncated": len(matches) > MaxKeys}
+
     def get_bucket_versioning(self, **kwargs):
         return self.versioning
 
     def head_object(self, *, Key, **kwargs):
-        if Key not in self.objects:
+        if Key in self.denied_heads or Key not in self.objects:
             from botocore.exceptions import ClientError
 
-            raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
+            code = "403" if Key in self.denied_heads else self.missing_head_code
+            raise ClientError(
+                {"Error": {"Code": code}, "ResponseMetadata": {"HTTPStatusCode": int(code)}},
+                "HeadObject",
+            )
         return self.objects[Key]
 
     def delete_object(self, *, Key, **kwargs):
@@ -470,3 +487,189 @@ def test_inventory_skips_objects_without_private_provenance(database, maintenanc
     _age(database, 31)
     assert retention.apply(confirm_offline=True)["completed"] == 1
     assert set(store.client.objects) == {unknown, outside}
+
+
+def test_prefix_scoped_listing_can_confirm_absence_after_head_403(database, maintenance):
+    retention, _, store = maintenance
+    key = store.put("old", b"fixture")
+    store.client.missing_head_code = "403"
+    sibling = f"{key}-unrelated"
+    store.client.objects[sibling] = {**store.client.objects[key], "Key": sibling}
+    with database.begin() as conn:
+        _artifact(conn, 1, key)
+    retention.mark()
+    _age(database, 31)
+    store.client.denied_prefixes.add(key)
+    assert retention.apply(confirm_offline=True)["failed"] == 1
+    assert _ids(database, document_artifacts) == {1}
+    assert store.client.delete_attempts == [key]
+    store.client.denied_prefixes.clear()
+
+    # Mark and apply both need to resume when the earlier delete did happen.
+    assert retention.mark()["retry_pending"] == 1
+    assert retention.apply(confirm_offline=True)["completed"] == 1
+    assert _ids(database, document_artifacts) == set()
+    assert store.client.listed_prefixes[-1] == key
+    assert store.client.delete_attempts == [key]
+    assert sibling in store.client.objects
+
+
+def test_head_403_cannot_authorize_deleting_a_listed_object(database, maintenance):
+    retention, _, store = maintenance
+    key = store.put("old", b"fixture")
+    with database.begin() as conn:
+        _artifact(conn, 1, key)
+    retention.mark()
+    _age(database, 31)
+    store.client.denied_heads.add(key)
+    assert retention.apply(confirm_offline=True)["failed"] == 1
+    assert store.client.listed_prefixes[-1] == key
+    assert store.client.delete_attempts == []
+    assert _ids(database, document_artifacts) == {1}
+
+
+def test_retired_superseded_outbox_is_cancelled_and_pruned(database, maintenance):
+    from kanzlei_ai.ops import collect_status
+    from kanzlei_ai.outbox import dispatch
+    from kanzlei_ai.retention import Retention, RetentionError
+    from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE
+    from kanzlei_ai.search.publication import reindex
+
+    original, index, store = maintenance
+    retention = Retention(
+        original.settings.model_copy(update={"model_profile": "mistral"}),
+        database,
+        store=store,
+        qdrant=index.client,
+    )
+    stale_key = store.put("stale", b"fixture")
+    current_key = store.put("current", b"fixture")
+    with database.begin() as conn:
+        _artifact(conn, 1, stale_key)
+        _artifact(conn, 2, current_key, current=True)
+        for job, generation, status, profile in [
+            ("a-retired-stale", 1, "superseded", INDEX_PROFILE),
+            ("b-retired-current", 2, "superseded", INDEX_PROFILE),
+            ("c-retryable", 3, "queued", INDEX_PROFILE),
+            ("d-configured", 4, "superseded", MISTRAL_INDEX_PROFILE),
+        ]:
+            old = generation == 1
+            conn.execute(
+                insert(jobs).values(
+                    id=job,
+                    source_id=1,
+                    revision="old" if old else "current",
+                    generation=generation,
+                    stage="index",
+                    status=status,
+                    pipeline_version=profile,
+                    artifact_id=1 if old else 2,
+                    updated_at=OLD,
+                )
+            )
+            conn.execute(
+                insert(outbox).values(
+                    id=job,
+                    job_id=job,
+                    lease_token="expired" if old else None,
+                    lease_until=NOW + timedelta(hours=1) if old else None,
+                )
+            )
+
+    retention.mark()
+    with pytest.raises(RetentionError, match="live leases"):
+        retention.apply(confirm_offline=True)
+    with database.begin() as conn:
+        assert not conn.scalar(
+            select(outbox.c.cancelled_at).where(outbox.c.id == "a-retired-stale")
+        )
+        conn.execute(update(outbox).where(outbox.c.id == "a-retired-stale").values(lease_until=OLD))
+
+    assert retention.apply(confirm_offline=True, limit=1)["cancelled"] == 1
+    assert retention.apply(confirm_offline=True)["cancelled"] == 1
+    assert _ids(database, outbox, "published_at") == {None}
+    assert _ids(database, outbox, "lease_token") == {None}
+    with database.begin() as conn:
+        cancelled = select(outbox.c.id).where(outbox.c.cancelled_at.is_not(None))
+        assert set(conn.scalars(cancelled)) == {"a-retired-stale", "b-retired-current"}
+        status = collect_status(conn, "synthetic", index_profile=MISTRAL_INDEX_PROFILE)
+        assert status["outbox"]["pending"] == 2
+
+    retention.mark()
+    _age(database, 31)
+    retention.apply(confirm_offline=True)
+    assert _ids(database, document_artifacts) == {2}
+    assert stale_key not in store.client.objects
+    assert "a-retired-stale" in _ids(database, outbox)
+    with database.begin() as conn:
+        conn.execute(
+            update(outbox).where(outbox.c.id == "a-retired-stale").values(cancelled_at=OLD)
+        )
+    assert retention.apply(confirm_offline=True)["completed"] == 2
+    assert "a-retired-stale" not in _ids(database, jobs)
+    assert "a-retired-stale" not in _ids(database, outbox)
+
+    # Returning to a retired profile must enqueue a fresh delivery for a reused job.
+    assert reindex(database, "synthetic", profile=INDEX_PROFILE).queued == 1
+    published = []
+    dispatch(database, lambda _: None, publish_index=published.append, index_profile=INDEX_PROFILE)
+    assert published.count("b-retired-current") == 1
+
+
+def test_current_index_failure_remains_until_superseded(database, maintenance):
+    retention, _, _ = maintenance
+    with database.begin() as conn:
+        for name, revision, generation in (("old", "old", 1), ("current", "current", 2)):
+            conn.execute(
+                insert(jobs).values(
+                    id=name,
+                    source_id=1,
+                    revision=revision,
+                    generation=generation,
+                    stage="index",
+                    pipeline_version=INDEX_PROFILE,
+                    status="failed",
+                    error_code="INDEX_UNAVAILABLE",
+                    updated_at=OLD,
+                )
+            )
+    assert retention.apply(confirm_offline=True)["completed"] == 1
+    assert _ids(database, jobs) == {"current"}
+    assert _ids(database, jobs, "error_code") == {"INDEX_UNAVAILABLE"}
+    with database.begin() as conn:
+        conn.execute(update(sources).values(revision="replacement", generation=3))
+    assert retention.apply(confirm_offline=True)["completed"] == 1
+    assert _ids(database, jobs) == set()
+
+
+def test_current_failed_rebuild_can_expire_if_its_publication_remains_ready(database, maintenance):
+    retention, _, store = maintenance
+    key = store.put("current", b"fixture")
+    with database.begin() as conn:
+        _artifact(conn, 2, key, current=True)
+        conn.execute(
+            insert(jobs).values(
+                id="rebuild",
+                source_id=1,
+                revision="current",
+                generation=2,
+                stage="index",
+                pipeline_version=INDEX_PROFILE,
+                status="failed",
+                artifact_id=2,
+                updated_at=OLD,
+            )
+        )
+        conn.execute(
+            insert(index_publications).values(
+                source_id=1,
+                publication_id=str(uuid4()),
+                artifact_id=2,
+                revision="current",
+                generation=2,
+                profile=INDEX_PROFILE,
+            )
+        )
+    assert retention.apply(confirm_offline=True)["completed"] == 1
+    assert _ids(database, jobs) == set()
+    assert _ids(database, document_artifacts) == {2}
