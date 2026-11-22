@@ -174,6 +174,12 @@ async def _verify_general_session(session):
         await history.verify_session(session)
 
 
+async def _verify_conversation(service, session, conversation_id):
+    await database_call(
+        history.lookup, service.engine, session.connector_id, session.subject, conversation_id
+    )
+
+
 @router.post("", status_code=201)
 async def create(request: Request, adapter: Adapter, access_token: AccessToken, service: Runtime):
     body = (await _body(request, CreateBody)).root
@@ -248,12 +254,14 @@ async def conversation_history(
     cursor: HistoryCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    return await history.read_history(
+    page = await history.read_history(
         service.engine,
         session,
         conversation_id,
         _id(cursor, cursor=True) if cursor is not None else None,
     )
+    await _verify_conversation(service, session, conversation_id)
+    return page
 
 
 def _source_status(engine, session, entries):
@@ -446,13 +454,7 @@ async def _stream(service, session, question, conversation_id, commit: history.T
                 commit,
             )
             labels = await _refresh_context(service, session, context, include_labels=True)
-            await database_call(
-                history.lookup,
-                service.engine,
-                session.connector_id,
-                session.subject,
-                conversation_id,
-            )
+            await _verify_conversation(service, session, conversation_id)
             if answer is not None and labels is not None:
                 history.label_citation(item, answer.evidence.dependency.source, labels)
         yield _sse("answer", item)
@@ -549,6 +551,7 @@ async def citation_pdf(
         await history.verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_conversation(service, session, conversation_id)
     return Response(
         content,
         media_type="application/pdf",
@@ -627,6 +630,7 @@ async def citation_original(
         await history.verify_session(session)
     if await history.check_citation(service.engine, session, deps, citation) != evidence:
         raise ConnectorError("NOT_FOUND", 404)
+    await _verify_conversation(service, session, conversation_id)
     return JSONResponse(
         {"source_kind": citation.source_kind, "locator": locator},
         headers={"Cache-Control": "private, no-store"},

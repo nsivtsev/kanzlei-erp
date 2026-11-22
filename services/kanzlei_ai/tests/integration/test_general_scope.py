@@ -277,6 +277,43 @@ def test_deleting_chat_during_a_turn_prevents_late_disclosure(
         assert connection.scalars(select(chat_turns.c.conversation_id)).all() == []
 
 
+@pytest.mark.parametrize("surface", ["history", "pdf", "original"])
+def test_delete_fences_reads_already_waiting_for_erp(
+    chat, general_erp, retrieved, database, monkeypatch, surface
+):
+    client, erp, _, _, _ = chat
+    conversation_id = _create_general(client)["id"]
+
+    def remove():
+        api.history.delete_conversation(database, erp.connector_id, erp.subject, conversation_id)
+
+    question = "Когда начинается séminaire?" if surface == "original" else _QUESTION
+    event, answer = run_turn(client, conversation_id, question)[-1]
+    assert event == "answer" and answer["status"] == "answered"
+    url = pdf_url(conversation_id, answer)
+    if surface == "history":
+        erp.on_authorize = remove
+        url = f"{_PREFIX}/{conversation_id}/history"
+    elif surface == "pdf":
+        erp.on_read = remove
+    else:
+        assert answer["citations"][0]["source_kind"] == "docx"
+
+        async def resolve(token, scope, source):
+            remove()
+            return (
+                api._DRIVE_DOWNLOAD_PATH
+                + "?"
+                + urlencode({"customer": "B", "file_id": "letter", "revision": source.revision})
+            )
+
+        monkeypatch.setattr(erp, "resolve_source_locator", resolve, raising=False)
+        url = url.removesuffix("/pdf") + "/original"
+    response = client.get(url)
+    assert response.status_code == 404
+    assert response.json() == {"code": "NOT_FOUND"}
+
+
 def test_history_cites_fresh_client_name_and_requires_every_dependency(
     chat, general_erp, retrieved, database
 ):

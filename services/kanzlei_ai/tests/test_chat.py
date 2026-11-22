@@ -219,10 +219,12 @@ def test_email_original_links_require_the_expected_current_erp_locator(
     find = AsyncMock(return_value=(deps, citation, evidence))
     refresh = AsyncMock(return_value=evidence)
     verify = AsyncMock()
+    verify_conversation = AsyncMock()
     monkeypatch.setattr(api.history, "find_citation", find)
     monkeypatch.setattr(api.history, "check_citation", refresh)
     monkeypatch.setattr(api, "_session", AsyncMock(return_value=session))
     monkeypatch.setattr(api.history, "verify_session", verify)
+    monkeypatch.setattr(api, "_verify_conversation", verify_conversation)
 
     async def resolve(*args):
         if locator is None:
@@ -237,10 +239,12 @@ def test_email_original_links_require_the_expected_current_erp_locator(
         assert json.loads(result.body) == {"source_kind": "email", "locator": locator}
         verify.assert_awaited_once_with(session)
         refresh.assert_awaited_once_with("fixture-db", session, deps, citation)
+        verify_conversation.assert_awaited_once_with(service, session, ids[0])
     else:
         with pytest.raises(ConnectorError, match="NOT_FOUND"):
             asyncio.run(api.citation_original(*ids, adapter, "fixture-token", service))
         refresh.assert_not_called()
+        verify_conversation.assert_not_called()
     adapter.resolve_source_locator.assert_awaited_once_with("fixture-token", session.scope, source)
 
 
