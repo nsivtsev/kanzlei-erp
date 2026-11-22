@@ -1,0 +1,1 @@
+"""Versioned ERP adapter boundary."""

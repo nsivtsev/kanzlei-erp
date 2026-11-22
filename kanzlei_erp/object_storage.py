@@ -302,6 +302,7 @@ def replace_content(file, key, size, sha256):
 
 	require_storage_access(file, "write")
 	old = resolve_key(file)
+	aliases = frappe.get_all("S3 File Object", filters={"object_key": old}, pluck="file_url")
 	lock_object(old)
 	key = managed_key(key)
 	lock_object(key)
@@ -315,6 +316,27 @@ def replace_content(file, key, size, sha256):
 		_binding.reset(token)
 	invalidate()
 	mark_mutation()
+	from kanzlei_erp.ai_connector.events import record_ids
+
+	# Every accepted File URL spelling must match the canonical binding URL.
+	# Use current reads after the mutation epoch; a prior snapshot can miss an alias.
+	if frappe.db.has_column("File", "kanzlei_drive_customer"):
+		urls = set(aliases)
+		names = []
+		after = ""
+		while True:
+			rows = frappe.db.sql(
+				"SELECT name, file_url FROM `tabFile` WHERE kanzlei_drive_customer IS NOT NULL "
+				"AND kanzlei_drive_customer != '' AND name > %s ORDER BY name LIMIT 200 FOR UPDATE",
+				after, as_dict=True,
+			)
+			for row in rows:
+				if canonical_url(row.file_url) in urls:
+					names.append(row.name)
+			if len(rows) < 200:
+				break
+			after = rows[-1].name
+		record_ids(names)
 
 
 def protect_binding(doc, method=None):

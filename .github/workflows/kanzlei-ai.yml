@@ -1,0 +1,95 @@
+name: Kanzlei AI checks
+
+on:
+  pull_request:
+    paths:
+      - 'services/kanzlei_ai/**'
+      - '.github/workflows/kanzlei-ai.yml'
+      - 'deploy/compose.yml'
+      - 'deploy/manage.py'
+      - 'deploy/production.env.example'
+      - 'tests/deploy/test_manage.py'
+  push:
+    branches: [main]
+    paths:
+      - 'services/kanzlei_ai/**'
+      - '.github/workflows/kanzlei-ai.yml'
+      - 'deploy/compose.yml'
+      - 'deploy/manage.py'
+      - 'deploy/production.env.example'
+      - 'tests/deploy/test_manage.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: services/kanzlei_ai
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Build service checks image from the locked Linux CPU dependencies
+        run: |
+          model_dir="$RUNNER_TEMP/kanzlei-ai-models"
+          mkdir -p "$model_dir"
+          export CI_DOCLING_MODELS_DIR="$model_dir"
+          echo "CI_DOCLING_MODELS_DIR=$model_dir" >> "$GITHUB_ENV"
+          docker compose -f compose.ci.yml build checks
+      - name: Stage the pinned public Docling models before isolating tests
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HF_HOME=/tmp/hf -e HF_HUB_DISABLE_XET=1 \
+            -v "$PWD/scripts:/app/scripts:ro" -v "$CI_DOCLING_MODELS_DIR:/models" \
+            kanzlei-ai-ci:checks python scripts/provision_docling_models.py /models
+      - name: Start disposable PostgreSQL, Redis and Qdrant
+        run: |
+          docker compose -f compose.ci.yml up -d --wait --wait-timeout 120 postgres redis qdrant
+          for _ in {1..20}; do
+            if docker compose -f compose.ci.yml run --rm --no-deps checks python -c \
+              'import urllib.request; urllib.request.urlopen("http://qdrant:6333/readyz", timeout=2).close()'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Ruff, migrations, unit and service integration tests
+        run: |
+          docker compose -f compose.ci.yml run --rm --no-deps checks ruff check --no-cache src tests scripts
+          docker compose -f compose.ci.yml run --rm --no-deps checks ruff format --check --no-cache src tests scripts
+          docker compose -f compose.ci.yml run --rm --no-deps checks python -m kanzlei_ai.coordinator migrate
+          docker compose -f compose.ci.yml run --rm --no-deps checks pytest -q -p no:cacheprovider
+          docker compose -f compose.ci.yml run --rm --no-deps checks pytest -q -p no:cacheprovider -m integration
+      - name: Remove disposable stores
+        if: always() && env.CI_DOCLING_MODELS_DIR != ''
+        run: docker compose -f compose.ci.yml down -v --remove-orphans
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/kanzlei_ai/web
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Install Playwright's Chromium-based Chrome channel
+        run: npx --no-install playwright install --with-deps chrome
+      - name: Build and test with synthetic loopback fixtures
+        run: |
+          sudo unshare --net -- bash -euc '
+            ip link set lo up
+            exec runuser -u "$1" -- env PATH="$2" \
+              KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:19991 KANZLEI_AI_REAL_MILESTONE=0 \
+              bash -euc "npm run build && npm test && npx --no-install playwright test --workers=2"
+          ' -- "$USER" "$PATH"

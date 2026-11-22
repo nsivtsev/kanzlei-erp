@@ -332,3 +332,35 @@ recovery marker and maintenance state; rerun the explicit restore after diagnosi
 Do not use `docker compose down -v`, reinstall the site, regenerate encryption keys,
 or prune Docker volumes as a recovery shortcut. Switching an image tag alone is not
 a database rollback. Keep the old GHCR digests available for every retained snapshot.
+
+## Optional AI services
+
+Production AI services belong to the same Compose project as ERP but have their
+own PostgreSQL, Redis and Qdrant volumes. Set `AI_ENABLED=1` only after building
+and testing the API (`runtime`) and worker (`documents`) images separately,
+publishing them through your existing registry process, and recording immutable
+`AI_API_IMAGE` and `AI_WORKER_IMAGE` digests in the private production environment.
+Set an independent `AI_POSTGRES_PASSWORD` and configured ERP connector
+`AI_ERP_SERVICE_KEY`, each at least 32 characters. The API binds to loopback on
+`AI_API_PORT` (default 8180); data services have no host ports. Ingestion stays
+off unless `AI_INGESTION_ENABLED=true` and a different `AI_INGESTION_KEY` is
+configured along with the ERP ingestion identity and allowlist. The deployment
+manager runs the AI migration before starting its consumers. To enable, update
+images or disable AI on an already deployed release, update the private environment
+and run the current release's manager under the deployment lock:
+
+```bash
+python3 /opt/kanzlei-erp/current/deploy/manage.py ai-reconcile
+```
+
+This uses the currently deployed ERP release and refuses to run while a deployment
+or restore is pending. If the restored release predates AI support, deploy an
+AI-capable approved ERP release before using this command.
+
+ERP backups do **not** include AI PostgreSQL, Redis, Qdrant or its job and cursor
+history. Use the [AI pilot operations runbook](../services/kanzlei_ai/docs/operations.md)
+for the separate AI backup, retention and recovery procedures. ERP restore stops AI and
+retains the current AI settings and credentials, and sets `AI_ENABLED=0` in the restored configuration. Before re-enabling it, an
+operator must reconcile AI state with restored ERP data and initiate a full scan;
+Qdrant is a rebuildable projection, but AI PostgreSQL history is not included in
+the ERP backup.

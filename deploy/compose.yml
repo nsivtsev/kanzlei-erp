@@ -14,6 +14,40 @@ x-app: &app
       max-size: "10m"
       max-file: "3"
 
+x-ai-stores: &ai-stores
+  AI_DATABASE_URL: postgresql://kanzlei_ai@ai-postgres:5432/kanzlei_ai
+  AI_DATABASE_PASSWORD: ${AI_POSTGRES_PASSWORD:-}
+  AI_QDRANT_URL: http://ai-qdrant:6333
+  AI_REDIS_URL: redis://ai-redis:6379/0
+
+x-ai-erp: &ai-erp
+  AI_ERP_BASE_URL: http://frontend:8080
+  AI_ERP_SITE_NAME: ${SITE_NAME:-}
+  AI_ERP_ALLOW_INSECURE_HTTP: "true"
+
+x-ai-search: &ai-search
+  AI_SEARCH_INDEX_ENABLED: ${AI_SEARCH_INDEX_ENABLED:-false}
+  AI_SEARCH_COLLECTION: ${AI_SEARCH_COLLECTION:-kanzlei_pdf_synthetic_v1}
+  AI_MISTRAL_SEARCH_COLLECTION: ${AI_MISTRAL_SEARCH_COLLECTION:-kanzlei_pdf_mistral_embed_v1}
+
+x-ai-ingestion: &ai-ingestion
+  AI_INGESTION_ENABLED: ${AI_INGESTION_ENABLED:-false}
+  AI_INGESTION_DOCX_ENABLED: ${AI_INGESTION_DOCX_ENABLED:-false}
+  AI_INGESTION_KEY: ${AI_INGESTION_KEY:-}
+  AI_INGESTION_PIPELINE_VERSION: ${AI_INGESTION_PIPELINE_VERSION:-pdf-native-v1}
+
+x-ai-model: &ai-model
+  AI_MODEL_PROFILE: ${AI_MODEL_PROFILE:-synthetic}
+  AI_MISTRAL_ENABLED: ${AI_MISTRAL_ENABLED:-false}
+  AI_MISTRAL_ENDPOINT: ${AI_MISTRAL_ENDPOINT:-}
+
+x-ai-artifacts: &ai-artifacts
+  AI_ARTIFACT_S3_ENDPOINT: ${AI_ARTIFACT_S3_ENDPOINT:-}
+  AI_ARTIFACT_S3_BUCKET: ${AI_ARTIFACT_S3_BUCKET:-}
+  AI_ARTIFACT_S3_REGION: ${AI_ARTIFACT_S3_REGION:-us-east-1}
+  AI_ARTIFACT_S3_PREFIX: ${AI_ARTIFACT_S3_PREFIX:-kanzlei-ai}
+  AI_ARTIFACT_MAX_BYTES: ${AI_ARTIFACT_MAX_BYTES:-4194304}
+
 services:
   db:
     image: mariadb:11.8@sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15
@@ -120,14 +154,164 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      AI_ENABLED: ${AI_ENABLED:-0}
+      AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ${AI_CHAT_WEB_DIR:-/dev/null}
+        target: /srv/kanzlei-chat
+        read_only: true
+        bind:
+          create_host_path: false
       - caddy-data:/data
       - caddy-config:/config
     logging: *logging
+
+  ai-postgres:
+    image: postgres:18-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+    profiles: [ai]
+    restart: unless-stopped
+    networks: [ai-private]
+    environment:
+      POSTGRES_USER: kanzlei_ai
+      POSTGRES_DB: kanzlei_ai
+      POSTGRES_PASSWORD: ${AI_POSTGRES_PASSWORD:-}
+    volumes:
+      - ai-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *logging
+
+  ai-redis:
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    profiles: [ai]
+    restart: unless-stopped
+    networks: [ai-private]
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec]
+    volumes:
+      - ai-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *logging
+
+  ai-qdrant:
+    image: qdrant/qdrant:latest@sha256:d18c8e5061be3eaea2f53fbee1f0bf0382dc59cbb9b7112e41ffcc937ec14220
+    profiles: [ai]
+    restart: unless-stopped
+    networks: [ai-private]
+    volumes:
+      - ai-qdrant-data:/qdrant/storage
+    logging: *logging
+
+  ai-api:
+    image: ${AI_API_IMAGE:-kanzlei-ai-disabled:local}
+    platform: ${PLATFORM:-linux/amd64}
+    profiles: [ai]
+    restart: unless-stopped
+    init: true
+    networks: [default, ai-private]
+    environment:
+      <<: [*ai-stores, *ai-erp, *ai-search]
+      AI_ERP_SERVICE_KEY: ${AI_ERP_SERVICE_KEY:-}
+      AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
+      AI_CHAT_BROWSER_ERP_ORIGIN: ${AI_CHAT_BROWSER_ERP_ORIGIN:-}
+      AI_MODEL_PROFILE: ${AI_API_MODEL_PROFILE:-synthetic}
+      AI_MISTRAL_ENABLED: ${AI_API_MISTRAL_ENABLED:-false}
+      AI_MISTRAL_ENDPOINT: ${AI_MISTRAL_ENDPOINT:-}
+      AI_MISTRAL_API_KEY: ${AI_API_MISTRAL_API_KEY:-}
+    ports:
+      - "127.0.0.1:${AI_API_PORT:-8180}:8000"
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-redis:
+        condition: service_healthy
+      ai-qdrant:
+        condition: service_started
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=32).close()"]
+      interval: 10s
+      timeout: 35s
+      retries: 6
+      start_period: 10s
+    logging: *logging
+
+  ai-worker:
+    image: ${AI_WORKER_IMAGE:-kanzlei-ai-disabled:local}
+    platform: ${PLATFORM:-linux/amd64}
+    profiles: [ai]
+    restart: unless-stopped
+    init: true
+    networks: [default, ai-private]
+    environment:
+      <<: [*ai-stores, *ai-erp, *ai-search, *ai-ingestion, *ai-model, *ai-artifacts]
+      AI_MISTRAL_API_KEY: ${AI_WORKER_MISTRAL_API_KEY:-}
+      AI_ARTIFACT_S3_ACCESS_KEY: ${AI_ARTIFACT_S3_ACCESS_KEY:-}
+      AI_ARTIFACT_S3_SECRET_KEY: ${AI_ARTIFACT_S3_SECRET_KEY:-}
+      DOCLING_ARTIFACTS_PATH: /opt/docling-models
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - type: bind
+        source: ${AI_DOCLING_MODELS_DIR:-/dev/null}
+        target: /opt/docling-models
+        read_only: true
+        bind:
+          create_host_path: false
+    hostname: ai-worker
+    command: [celery, -A, "kanzlei_ai.worker:app", worker, "--hostname=worker@%h", "--loglevel=INFO", "--concurrency=1", "--queues=celery,ocr-mistral"]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-redis:
+        condition: service_healthy
+      ai-qdrant:
+        condition: service_started
+    logging: *logging
+
+  ai-coordinator:
+    image: ${AI_API_IMAGE:-kanzlei-ai-disabled:local}
+    platform: ${PLATFORM:-linux/amd64}
+    profiles: [ai]
+    restart: unless-stopped
+    init: true
+    networks: [default, ai-private]
+    environment:
+      <<: [*ai-stores, *ai-erp, *ai-search, *ai-ingestion, *ai-model]
+      AI_COORDINATOR_ONLY: "true"
+      AI_INGESTION_OCR_PROFILE: ${AI_INGESTION_OCR_PROFILE:-native}
+    command: [python, -m, kanzlei_ai.coordinator, run]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+      ai-redis:
+        condition: service_healthy
+    logging: *logging
+
+  ai-maintenance:
+    image: ${AI_WORKER_IMAGE:-kanzlei-ai-disabled:local}
+    platform: ${PLATFORM:-linux/amd64}
+    profiles: [ai-maintenance]
+    entrypoint: [python, -m, kanzlei_ai.coordinator]
+    command: [--help]
+    networks: [default, ai-private]
+    environment:
+      <<: [*ai-stores, *ai-search, *ai-artifacts]
+    logging: *logging
+
+networks:
+  ai-private:
+    internal: true
 
 volumes:
   db-data:
@@ -136,3 +320,6 @@ volumes:
   redis-queue-data:
   caddy-data:
   caddy-config:
+  ai-postgres-data:
+  ai-redis-data:
+  ai-qdrant-data:

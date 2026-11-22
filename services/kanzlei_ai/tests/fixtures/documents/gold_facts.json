@@ -1,0 +1,15 @@
+{
+  "document": "synthetic-german-invoice.pdf",
+  "facts": [
+    {"page": 1, "label": "rechnung", "value": "RE-2026-0042"},
+    {"page": 1, "label": "kunde", "value": "Muster GmbH"},
+    {"page": 2, "label": "betrag", "value": "1.249,50 EUR"}
+  ],
+  "empty_page": 3,
+  "repeated_heading": "Leistungsübersicht",
+  "table": {
+    "page": 2,
+    "headers": ["Leistung", "Menge", "Betrag"],
+    "row": ["Beratung", "5", "1.249,50 EUR"]
+  }
+}

@@ -3,6 +3,34 @@
 }
 
 {$DOMAIN} {
-	encode zstd gzip
-	reverse_proxy frontend:8080
+	@chat path /chat /chat/*
+	handle @chat {
+		@disabled expression `'{$AI_ENABLED:0}' != '1' || '{$AI_CHAT_ENABLED:false}' != 'true'`
+		@api path /chat/v1/auth/browser/config /chat/v1/auth/browser/exchange /chat/v1/auth/me /chat/v1/auth/logout /chat/v1/connector/clients /chat/v1/chat/conversations /chat/v1/chat/conversations/*
+		@web path /chat/ /chat/assets/* /chat/licenses/*
+		route {
+			respond @disabled 404
+			redir /chat /chat/ 308
+			handle @api {
+				uri strip_prefix /chat
+				reverse_proxy ai-api:8000 {
+					header_up -Cookie
+					header_down -Set-Cookie
+				}
+			}
+			handle @web {
+				uri strip_prefix /chat
+				root * /srv/kanzlei-chat
+				encode zstd gzip
+				header X-Content-Type-Options nosniff
+				header Cache-Control no-cache
+				file_server
+			}
+			respond 404
+		}
+	}
+	handle {
+		encode zstd gzip
+		reverse_proxy frontend:8080
+	}
 }

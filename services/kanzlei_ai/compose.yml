@@ -1,0 +1,7 @@
+name: kanzlei-erp
+include:
+  - path: ../../compose.yml
+    project_directory: ../..
+    env_file:
+      - ../../.env
+      - .env

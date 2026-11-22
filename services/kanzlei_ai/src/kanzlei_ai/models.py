@@ -1,0 +1,253 @@
+"""PostgreSQL tables for durable feed consumption and processing."""
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    false,
+    func,
+)
+
+metadata = MetaData()
+connectors = Table(
+    "connectors",
+    metadata,
+    Column("id", String(200), primary_key=True),
+    Column("epoch", Integer, nullable=False, default=0),
+    Column("phase", String(16), nullable=False),
+    Column("inventory_cursor", Text),
+    Column("watermark", Text),
+    Column("changes_cursor", Text),
+    Column("scan_completed_at", DateTime(timezone=True)),
+    Column("last_successful_poll_at", DateTime(timezone=True)),
+    Column("ocr_profile_override", String(16)),
+)
+sources = Table(
+    "sources",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("connector_id", ForeignKey("connectors.id"), nullable=False),
+    Column("source_id", String(200), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("manifest", JSON, nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("active", Boolean, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("error_code", String(64)),
+    UniqueConstraint("connector_id", "source_id"),
+)
+relations = Table(
+    "source_clients",
+    metadata,
+    Column("source_id", ForeignKey("sources.id"), primary_key=True),
+    Column("client_id", String(200), primary_key=True),
+    Column("seen_epoch", Integer, nullable=False),
+)
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("source_id", ForeignKey("sources.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("pipeline_version", String(100), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("stage", String(16), nullable=False, server_default="extract"),
+    Column("ocr_profile", String(16), nullable=False, server_default="native"),
+    Column("artifact_id", ForeignKey("document_artifacts.id")),
+    Column("index_build_id", String(36)),
+    Column("index_offset", Integer, nullable=False, server_default="0"),
+    Column("index_repair_started", Boolean, nullable=False, server_default=false()),
+    Column("status", String(32), nullable=False),
+    Column("error_code", String(64)),
+    Column("lease_token", String(36)),
+    Column("lease_until", DateTime(timezone=True)),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("retry_not_before", DateTime(timezone=True)),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint(
+        "source_id",
+        "revision",
+        "pipeline_version",
+        "generation",
+        "stage",
+        name="uq_jobs_source_revision_pipeline_generation_stage",
+    ),
+)
+extraction_plans = Table(
+    "extraction_plans",
+    metadata,
+    Column("job_id", ForeignKey("jobs.id"), primary_key=True),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("page_count", Integer, nullable=False),
+    Column("native_blocks", JSON, nullable=False),
+    Column("ocr_pages", JSON, nullable=False),
+)
+index_embedding_batches = Table(
+    "index_embedding_batches",
+    metadata,
+    Column("job_id", ForeignKey("jobs.id"), primary_key=True),
+    Column("offset", Integer, primary_key=True),
+    Column("vectors", LargeBinary, nullable=False),
+)
+ocr_page_checkpoints = Table(
+    "ocr_page_checkpoints",
+    metadata,
+    Column("job_id", ForeignKey("extraction_plans.job_id"), primary_key=True),
+    Column("page", Integer, primary_key=True),
+    Column("provider_profile", String(100), nullable=False),
+    Column("blocks", JSON, nullable=False),
+)
+outbox = Table(
+    "outbox",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("lease_token", String(36)),
+    Column("lease_until", DateTime(timezone=True)),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("published_at", DateTime(timezone=True)),
+    Column("cancelled_at", DateTime(timezone=True)),
+    CheckConstraint(
+        "cancelled_at IS NULL OR (published_at IS NULL AND "
+        "lease_token IS NULL AND lease_until IS NULL)",
+        name="ck_outbox_cancelled_delivery",
+    ),
+)
+
+page_receipts = Table(
+    "page_receipts",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("connector_id", ForeignKey("connectors.id"), nullable=False),
+    Column("epoch", Integer, nullable=False),
+    Column("phase", String(16), nullable=False),
+    Column("expected_cursor", Text),
+    Column("next_cursor", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+inbox_items = Table(
+    "inbox_items",
+    metadata,
+    Column("receipt_id", ForeignKey("page_receipts.id"), primary_key=True),
+    Column("ordinal", Integer, primary_key=True),
+    Column("payload", JSON, nullable=False),
+)
+
+document_artifacts = Table(
+    "document_artifacts",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("source_id", ForeignKey("sources.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("artifact_key", String(256), nullable=False),
+    Column("page_count", Integer, nullable=False),
+    UniqueConstraint("source_id", "revision", "generation", "parser_version"),
+)
+document_chunks = Table(
+    "document_chunks",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("artifact_id", ForeignKey("document_artifacts.id"), nullable=False),
+    Column("source_id", ForeignKey("sources.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("parser_version", String(100), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("page", Integer),
+    Column("kind", String(20), nullable=False),
+    Column("ordinal", Integer, nullable=False),
+    Column("text", Text, nullable=False),
+    UniqueConstraint("source_id", "revision", "generation", "parser_version", "ordinal"),
+)
+index_publications = Table(
+    "index_publications",
+    metadata,
+    Column("source_id", ForeignKey("sources.id"), primary_key=True),
+    Column("publication_id", String(36), nullable=False, unique=True),
+    Column("artifact_id", ForeignKey("document_artifacts.id"), nullable=False),
+    Column("revision", String(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("profile", String(100), nullable=False),
+)
+
+retention_candidates = Table(
+    "retention_candidates",
+    metadata,
+    Column("kind", String(16), primary_key=True),
+    Column("scope", String(64), primary_key=True),
+    Column("target", String(256), primary_key=True),
+    Column("identity", String(256), nullable=False),
+    Column("first_observed_at", DateTime(timezone=True), nullable=False),
+    Column("last_observed_at", DateTime(timezone=True), nullable=False),
+    Column("last_attempt_at", DateTime(timezone=True)),
+    Column("failure_code", String(32)),
+    Index("ix_retention_candidates_due", "first_observed_at", "kind"),
+)
+retention_mark = Table(
+    "retention_mark",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("marked_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("id = 1", name="ck_retention_mark_singleton"),
+)
+
+chat_conversations = Table(
+    "chat_conversations",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("connector_id", String(200), nullable=False),
+    Column("subject", String(200), nullable=False),
+    Column("client_id", String(200)),
+    Column("scope_kind", String(16), nullable=False, server_default="client"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "(scope_kind = 'client' AND client_id IS NOT NULL) OR "
+        "(scope_kind = 'general' AND client_id IS NULL)",
+        name="ck_chat_conversations_scope",
+    ),
+    Index(
+        "ix_chat_conversations_owner_client",
+        "connector_id",
+        "subject",
+        "client_id",
+        "created_at",
+        "id",
+    ),
+)
+chat_turns = Table(
+    "chat_turns",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column(
+        "conversation_id", ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False
+    ),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("status", String(16), nullable=False),
+    Column("question", Text, nullable=False),
+    Column("answer", Text),
+    # These immutable snapshots carry exact source versions without pinning old index rows.
+    Column("dependencies", JSON, nullable=False),
+    Column("citations", JSON, nullable=False),
+    CheckConstraint(
+        "(status = 'answered' AND answer IS NOT NULL) OR "
+        "(status = 'no_evidence' AND answer IS NULL)",
+        name="ck_chat_turns_completed",
+    ),
+    Index("ix_chat_turns_conversation_page", "conversation_id", "created_at", "id"),
+)

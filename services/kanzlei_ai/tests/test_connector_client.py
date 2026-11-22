@@ -1,0 +1,316 @@
+"""Exercise the HTTP boundary with complete synthetic wire responses."""
+
+import asyncio
+import hashlib
+import json
+
+import httpx
+import pytest
+from pydantic import SecretStr
+
+from kanzlei_ai.connectors import frappe
+
+
+def client(handler, **kwargs):
+    assert hasattr(frappe, "FrappeConnector"), "ERP HTTP connector not implemented"
+    return frappe.FrappeConnector(
+        "https://erp.example.invalid",
+        SecretStr("synthetic-service-key-" + "s" * 32),
+        transport=httpx.MockTransport(handler),
+        **kwargs,
+    )
+
+
+IDENTITY = {
+    "version": 1,
+    "subject": "staff@example.invalid",
+    "connector_id": "fixture-erp",
+    "expires_at": 9999999999,
+    "general_access": False,
+}
+
+
+def test_exchange_uses_fixed_endpoint_and_private_service_credential():
+    def handler(request):
+        assert request.url.path == "/api/method/kanzlei_erp.ai_connector.api.exchange_ticket"
+        assert request.headers["X-Kanzlei-AI-Service-Key"].startswith("synthetic-service-key-")
+        assert "cookie" not in request.headers
+        assert json.loads(request.content) == {"version": 1, "ticket": "t" * 43}
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "version": 1,
+                    "access_token": "g" * 43,
+                    "token_type": "bearer",
+                    "identity": IDENTITY,
+                }
+            },
+        )
+
+    result = asyncio.run(client(handler).exchange_ticket("t" * 43))
+    assert result.identity.subject == IDENTITY["subject"]
+    assert "g" * 43 not in repr(result)
+
+
+@pytest.mark.parametrize("status", [302, 401, 403, 409, 500])
+def test_error_responses_are_closed_and_do_not_disclose_erp_body(status):
+    adapter = client(lambda request: httpx.Response(status, text="private traceback and password"))
+    with pytest.raises(Exception) as result:
+        asyncio.run(adapter.identity("g" * 43))
+    assert type(result.value).__name__ == "ConnectorError"
+    assert "private" not in str(result.value)
+
+
+def test_incompatible_identity_response_is_rejected():
+    adapter = client(
+        lambda request: httpx.Response(200, json={"message": {**IDENTITY, "version": 2}})
+    )
+    with pytest.raises(Exception) as result:
+        asyncio.run(adapter.identity("g" * 43))
+    assert type(result.value).__name__ == "ConnectorError"
+
+
+@pytest.mark.parametrize("allowed", [True, False, 1])
+def test_scope_check_requires_an_explicit_erp_grant_without_listing_documents(allowed):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope
+
+    def handler(request):
+        assert request.url.path.endswith(".check_scope")
+        assert json.loads(request.content) == {
+            "version": 1,
+            "access_token": "g" * 43,
+            "scope": {"kind": "client", "client_id": "A"},
+        }
+        return httpx.Response(200, json={"message": {"version": 1, "allowed": allowed}})
+
+    adapter = client(handler)
+    scope = Scope(kind="client", client_id="A")
+    if allowed is True:
+        asyncio.run(adapter.check_scope("g" * 43, scope))
+    else:
+        with pytest.raises(ConnectorError):
+            asyncio.run(adapter.check_scope("g" * 43, scope))
+
+
+@pytest.mark.parametrize("fail_last", [False, True])
+def test_source_authorization_checks_complete_result_in_small_ordered_batches(fail_last):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    refs = [
+        SourceRef(source_id=f"file:{index}", revision="a" * 64, client_id="A")
+        for index in range(25)
+    ]
+    scope = Scope(kind="client", client_id="A")
+    seen = []
+
+    def handler(request):
+        batch = json.loads(request.content)["sources"]
+        if len(batch) > 4 or (fail_last and len(seen) + len(batch) == len(refs)):
+            return httpx.Response(503)
+        seen.extend(entry["source_id"] for entry in batch)
+        result = {"version": 1, "decisions": [{**ref, "allowed": True} for ref in batch]}
+        return httpx.Response(200, json={"message": result})
+
+    if fail_last:
+        with pytest.raises(ConnectorError):
+            asyncio.run(client(handler).authorize_sources("g" * 43, scope, refs))
+        assert seen == [ref.source_id for ref in refs[:-1]]
+    else:
+        result = asyncio.run(client(handler).authorize_sources("g" * 43, scope, refs))
+        actual_ids = [decision.source_id for decision in result.decisions]
+        assert actual_ids == [ref.source_id for ref in refs]
+        assert all(decision.allowed for decision in result.decisions)
+
+
+def test_binary_read_checks_revision_and_checksum():
+    from kanzlei_ai.connectors import contracts
+
+    assert hasattr(contracts, "SourceRef"), "SourceRef missing"
+    reference = contracts.SourceRef(source_id="file:abc", revision="a" * 64, client_id="A")
+    scope = contracts.Scope(kind="client", client_id="A")
+    content = b"synthetic private PDF"
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            content=content,
+            headers={
+                "X-AI-Revision": "a" * 64,
+                "X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+            },
+        )
+
+    assert asyncio.run(client(handler).read_source("g" * 43, scope, reference)) == content
+    bad = client(
+        lambda request: httpx.Response(
+            200,
+            content=content,
+            headers={
+                "X-AI-Revision": "b" * 64,
+                "X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+            },
+        )
+    )
+    with pytest.raises(Exception) as result:
+        asyncio.run(bad.read_source("g" * 43, scope, reference))
+    assert type(result.value).__name__ == "ConnectorError"
+
+
+def test_background_binary_read_has_no_browser_grant_and_keeps_revision_check():
+    from kanzlei_ai.connectors.contracts import SourceRef
+
+    reference = SourceRef(source_id="file:abc", revision="a" * 64, client_id="A")
+    content = b"synthetic ingestion PDF"
+
+    def handler(request):
+        assert request.url.path.endswith(".background_read_source")
+        assert json.loads(request.content) == {"version": 1, "source": reference.model_dump()}
+        assert b"access_token" not in request.content
+        return httpx.Response(
+            200,
+            content=content,
+            headers={
+                "X-AI-Revision": reference.revision,
+                "X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+            },
+        )
+
+    assert asyncio.run(client(handler).read_background_source(reference)) == content
+
+
+def test_json_responses_are_bounded():
+    adapter = client(lambda request: httpx.Response(200, content=b"x" * 2048), max_json_bytes=1024)
+    with pytest.raises(Exception) as result:
+        asyncio.run(adapter.identity("g" * 43))
+    assert type(result.value).__name__ == "ConnectorError"
+
+
+def test_plain_http_requires_explicit_local_development_setting():
+    assert hasattr(frappe, "FrappeConnector"), "ERP HTTP connector not implemented"
+    with pytest.raises(ValueError):
+        frappe.FrappeConnector("http://erp.example.invalid", SecretStr("s" * 43))
+
+
+def test_slow_erp_request_has_a_whole_operation_deadline():
+    async def handler(request):
+        await asyncio.sleep(10)
+        return httpx.Response(200, json={"message": IDENTITY})
+
+    adapter = client(handler, timeout_seconds=0.02)
+    with pytest.raises(Exception) as result:
+        asyncio.run(adapter.identity("g" * 43))
+    assert type(result.value).__name__ == "ConnectorError"
+
+
+def test_binary_response_size_is_bounded_even_with_a_valid_checksum():
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    content = b"oversized"
+    adapter = client(
+        lambda request: httpx.Response(
+            200,
+            content=content,
+            headers={
+                "X-AI-Revision": "a" * 64,
+                "X-AI-Content-SHA256": hashlib.sha256(content).hexdigest(),
+            },
+        ),
+        max_source_bytes=2,
+    )
+    with pytest.raises(Exception) as result:
+        asyncio.run(
+            adapter.read_source(
+                "g" * 43,
+                Scope(kind="client", client_id="A"),
+                SourceRef(source_id="file:abc", revision="a" * 64, client_id="A"),
+            )
+        )
+    assert type(result.value).__name__ == "ConnectorError"
+    assert result.value.status == 413
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        "/desk/communication/mail-%D0%90",
+        "/desk/communication/different-mail",
+        "/api/method/frappe.auth.get_logged_user",
+        "//outside.invalid",
+        "/%2foutside.invalid",
+        "/app/%2e%2e/login",
+        "/app/%0alogin",
+        "/app/communication/mail?access_token=private",
+        "https://outside.invalid",
+    ],
+)
+def test_locator_resolver_uses_fixed_rpc_and_bounds_relative_navigation(locator):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    source = SourceRef(source_id="email:mail-А", revision="a" * 64, client_id="A")
+    scope = Scope(kind="client", client_id="A")
+
+    def handler(request):
+        assert request.url.path.endswith(".resolve_source_locator")
+        assert request.url.host == "erp.example.invalid"
+        assert not request.url.query
+        assert json.loads(request.content) == {
+            "version": 1,
+            "access_token": "g" * 43,
+            "scope": scope.model_dump(exclude_none=True),
+            "source": source.model_dump(),
+        }
+        return httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+
+    adapter = client(handler)
+    if locator == "/desk/communication/mail-%D0%90":
+        assert asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source)) == locator
+    else:
+        with pytest.raises(ConnectorError):
+            asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source))
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        "/api/method/kanzlei_erp.mandant_documents.download_document"
+        "?customer=A&file_id=attachment&disposition=inline",
+        "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
+        "?customer=A&file_id=attachment&revision=" + "a" * 64,
+        "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
+        "?customer=A&file_id=attachment&revision=" + "a" * 64,
+    ],
+)
+def test_file_locator_resolver_preserves_fixed_erp_download_paths(locator):
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    scope = Scope(kind="client", client_id="A")
+    source = SourceRef(source_id="file:attachment", revision="a" * 64, client_id="A")
+    adapter = client(
+        lambda _: httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+    )
+    assert asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source)) == locator
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "customer=A&file_id=attachment",
+        "customer=A&file_id=attachment&revision=" + "b" * 64,
+    ],
+)
+def test_drive_docx_locator_requires_the_exact_revision(query):
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.connectors.contracts import Scope, SourceRef
+
+    scope = Scope(kind="client", client_id="A")
+    source = SourceRef(source_id="file:attachment", revision="a" * 64, client_id="A")
+    locator = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx?" + query
+    adapter = client(
+        lambda _: httpx.Response(200, json={"message": {"version": 1, "locator": locator}})
+    )
+    with pytest.raises(ConnectorError):
+        asyncio.run(adapter.resolve_source_locator("g" * 43, scope, source))

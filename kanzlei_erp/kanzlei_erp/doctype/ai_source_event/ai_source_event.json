@@ -1,0 +1,37 @@
+{
+ "doctype": "DocType",
+ "name": "AI Source Event",
+ "module": "Kanzlei ERP",
+ "custom": 0,
+ "engine": "InnoDB",
+ "autoname": "prompt",
+ "field_order": [
+  "sequence",
+  "source_id",
+  "client_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Long Int",
+   "label": "Sequence",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "source_id",
+   "fieldtype": "Data",
+   "label": "Source ID",
+   "reqd": 1,
+   "length": 200
+  },
+  {
+   "fieldname": "client_id",
+   "fieldtype": "Data",
+   "label": "Client ID",
+   "reqd": 1
+  }
+ ],
+ "permissions": [],
+ "track_changes": 0
+}

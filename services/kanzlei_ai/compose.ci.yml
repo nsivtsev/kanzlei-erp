@@ -1,0 +1,52 @@
+x-healthcheck: &healthcheck
+  interval: 2s
+  timeout: 3s
+  retries: 30
+
+services:
+  postgres:
+    image: postgres:18-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+    environment:
+      POSTGRES_USER: kanzlei_ai
+      POSTGRES_DB: kanzlei_ai
+      POSTGRES_PASSWORD: disposable-ci-only
+    healthcheck:
+      <<: *healthcheck
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+
+  redis:
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    healthcheck:
+      <<: *healthcheck
+      test: [CMD, redis-cli, ping]
+
+  qdrant:
+    image: qdrant/qdrant:latest@sha256:d18c8e5061be3eaea2f53fbee1f0bf0382dc59cbb9b7112e41ffcc937ec14220
+
+  checks:
+    image: kanzlei-ai-ci:checks
+    build:
+      context: .
+      target: checks
+    environment:
+      AI_DATABASE_URL: postgresql://kanzlei_ai@postgres:5432/kanzlei_ai
+      AI_DATABASE_PASSWORD: disposable-ci-only
+      AI_REDIS_URL: redis://redis:6379/0
+      AI_QDRANT_URL: http://qdrant:6333
+      TASK6_QDRANT_TEST_URL: http://qdrant:6333
+      DOCLING_ARTIFACTS_PATH: /models
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./scripts:/app/scripts:ro
+      - type: bind
+        source: ${CI_DOCLING_MODELS_DIR:?Provide a disposable public model cache}
+        target: /models
+        read_only: true
+        bind:
+          create_host_path: false
+
+networks:
+  default:
+    internal: true

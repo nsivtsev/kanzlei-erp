@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex, nofollow">
+	<title>ERP-Verbindung</title>
+	{% if handoff %}<script defer src="/assets/kanzlei_erp/js/ai_browser_handoff.js"></script>{% endif %}
+</head>
+<body>
+	<main>
+		<h1>ERP-Verbindung</h1>
+		{% if handoff %}
+		<p role="status" data-handoff data-origin="{{ handoff.origin | e }}" data-state="{{ handoff.state | e }}"
+			data-challenge="{{ handoff.challenge | e }}" data-csrf-token="{{ handoff.csrf_token | e }}">
+			Die Verbindung zum Kanzlei-Chat wird hergestellt.
+		</p>
+		<noscript><p>Aktivieren Sie JavaScript, um den Kanzlei-Chat zu verbinden.</p></noscript>
+		{% else %}
+		<p>Die Verbindung zum Kanzlei-Chat konnte nicht hergestellt werden.</p>
+		{% endif %}
+	</main>
+</body>
+</html>

@@ -1,0 +1,90 @@
+# Based on frappe/frappe_docker devcontainer-example/docker-compose.yml
+# upstream revision: 48a34e5f1620c2f71253d70af21da14c9c931ea8
+name: kanzlei-erp
+
+include:
+  - path: services/kanzlei_ai/compose.services.yml
+    project_directory: services/kanzlei_ai
+
+services:
+  mariadb:
+    image: docker.io/mariadb:11.8
+    platform: linux/arm64
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MYSQL_ROOT_PASSWORD: ${LOCAL_DB_ROOT_PASSWORD:?Create .env with scripts/setup-local.sh}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+
+  redis-cache:
+    image: docker.io/redis:alpine
+    platform: linux/arm64
+
+  redis-queue:
+    image: docker.io/redis:alpine
+    platform: linux/arm64
+
+  minio:
+    image: kanzlei-erp-minio:9e49d5e7a648
+    build:
+      context: ./.devcontainer
+      dockerfile: minio.Dockerfile
+    platform: linux/arm64
+    environment:
+      MINIO_ROOT_USER: ${LOCAL_MINIO_ROOT_USER:?Run scripts/setup-minio.sh --credentials-only}
+      MINIO_ROOT_PASSWORD: ${LOCAL_MINIO_ROOT_PASSWORD:?Run scripts/setup-minio.sh --credentials-only}
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:?Run scripts/setup-minio.sh --credentials-only}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:?Run scripts/setup-minio.sh --credentials-only}
+      LOCAL_MINIO_TEST_ACCESS_KEY: ${LOCAL_MINIO_TEST_ACCESS_KEY:?Run scripts/setup-minio.sh --credentials-only}
+      LOCAL_MINIO_TEST_SECRET_KEY: ${LOCAL_MINIO_TEST_SECRET_KEY:?Run scripts/setup-minio.sh --credentials-only}
+      MINIO_REGION_NAME: us-east-1
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    ports:
+      # Port 9000 is used by host PHP-FPM; preserve it for the existing service.
+      - "127.0.0.1:9002:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+
+  frappe:
+    image: kanzlei-erp-bench:local
+    build:
+      context: ./.devcontainer
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    command: >-
+      bash -lc 'until test -f /workspace/development/frappe-bench/.kanzlei-ready;
+      do sleep 2; done;
+      cd /workspace/development/frappe-bench && exec bench start'
+    environment:
+      SHELL: /bin/bash
+      FRAPPE_BIND_ADDR: 0.0.0.0
+      LOCAL_DB_ROOT_PASSWORD: ${LOCAL_DB_ROOT_PASSWORD:?Create .env with scripts/setup-local.sh}
+      LOCAL_ADMIN_PASSWORD: ${LOCAL_ADMIN_PASSWORD:?Create .env with scripts/setup-local.sh}
+    volumes:
+      - .:/workspace:cached
+    working_dir: /workspace/development
+    # Socket.IO rechecks sessions/permissions through the browser's site origin.
+    extra_hosts:
+      - "development.localhost:127.0.0.1"
+    ports:
+      - "127.0.0.1:8100:8000"
+      - "127.0.0.1:9100:9100"
+    depends_on:
+      - mariadb
+      - redis-cache
+      - redis-queue
+
+volumes:
+  mariadb-data:
+  minio-data:

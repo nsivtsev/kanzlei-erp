@@ -1,0 +1,74 @@
+{
+  "questions": [
+    {
+      "id": "identifier",
+      "question": "Wie lautet die Rechnungsnummer der Fiktiven Aktenwerk GmbH auf dem Deckblatt?",
+      "outcome": "answered",
+      "required": ["RE-2026-0714"],
+      "example_answer": "Die Rechnungsnummer lautet RE-2026-0714.",
+      "evidence": [{"document": "rechnung-misch.pdf", "page": 1}]
+    },
+    {
+      "id": "date",
+      "question": "Welches Datum steht auf der gescannten Zweitschrift zu RE-2026-0714?",
+      "outcome": "answered",
+      "required": ["31.03.2026"],
+      "example_answer": "Auf der Zweitschrift steht das Datum 31.03.2026.",
+      "evidence": [{"document": "korrektur-scan.pdf", "page": 1}]
+    },
+    {
+      "id": "total",
+      "question": "Wie hoch ist der Gesamtbetrag laut Leistungsübersicht zu RE-2026-0714?",
+      "outcome": "answered",
+      "required": ["1.249,50 EUR"],
+      "forbidden": ["1.429,50 EUR"],
+      "example_answer": "Laut Leistungsübersicht beträgt der Gesamtbetrag 1.249,50 EUR.",
+      "evidence": [{"document": "rechnung-misch.pdf", "page": 2}]
+    },
+    {
+      "id": "table",
+      "question": "Welche Menge und welcher Betrag stehen in der Zeile Buchführung in der Leistungsübersicht?",
+      "outcome": "answered",
+      "required": ["Buchführung", "3", "390,00 EUR"],
+      "forbidden": ["859,50 EUR"],
+      "example_answer": "Buchführung | 3 | 390,00 EUR",
+      "evidence": [{"document": "rechnung-misch.pdf", "page": 2}]
+    },
+    {
+      "id": "contradiction",
+      "question": "Stimmen die Gesamtbeträge für RE-2026-0714 laut Leistungsübersicht und Zweitschrift überein?",
+      "outcome": "contradiction",
+      "required": ["1.249,50 EUR", "1.429,50 EUR"],
+      "example_answer": "Die Beträge widersprechen sich: 1.249,50 EUR in der Leistungsübersicht und 1.429,50 EUR in der Zweitschrift.",
+      "evidence": [
+        {"document": "rechnung-misch.pdf", "page": 2},
+        {"document": "korrektur-scan.pdf", "page": 1}
+      ]
+    },
+    {
+      "id": "unanswerable",
+      "question": "An welchem Tag wurde RE-2026-0714 tatsächlich bezahlt?",
+      "outcome": "unanswerable",
+      "required": [],
+      "example_answer": "",
+      "evidence": []
+    }
+  ],
+  "ocr": [
+    {
+      "document": "rechnung-misch.pdf",
+      "page": 2,
+      "required": ["1.249,50 EUR"],
+      "headers": ["Leistung", "Menge", "Betrag"],
+      "rows": [
+        ["Buchführung", "3", "390,00 EUR"],
+        ["Beratung", "5", "859,50 EUR"]
+      ]
+    },
+    {
+      "document": "korrektur-scan.pdf",
+      "page": 1,
+      "required": ["RE-2026-0714", "31.03.2026", "1.429,50 EUR"]
+    }
+  ]
+}

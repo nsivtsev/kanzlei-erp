@@ -18,10 +18,12 @@ import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 APP_SERVICES = ["backend", "frontend", "websocket", "queue-short", "queue-long", "scheduler"]
 WEB_SERVICES = ["backend", "frontend", "websocket"]
 WORKERS = ["queue-short", "queue-long", "scheduler"]
+AI_SERVICES = ["ai-api", "ai-worker", "ai-coordinator"]
 IMAGE_RE = re.compile(r"ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}\Z")
 TAG_RE = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
@@ -56,6 +58,61 @@ def validate_release(image, revision, tag):
 		raise ValueError("Release tag must have the form vX.Y.Z")
 
 
+def require_ai_setting(config, key):
+	value = config.get(key, "")
+	if not value or value.startswith("REPLACE_"):
+		raise ValueError("Configure " + key + " in production.env")
+	return value
+
+
+def validate_ai_features(config):
+	for key in (
+		"AI_INGESTION_ENABLED", "AI_INGESTION_DOCX_ENABLED", "AI_SEARCH_INDEX_ENABLED",
+		"AI_CHAT_ENABLED", "AI_MISTRAL_ENABLED",
+	):
+		if config.setdefault(key, "false") not in ("true", "false"):
+			raise ValueError(key + " must be true or false")
+	ingestion = config["AI_INGESTION_ENABLED"] == "true"
+	search = config["AI_SEARCH_INDEX_ENABLED"] == "true"
+	chat = config["AI_CHAT_ENABLED"] == "true"
+	cloud = config["AI_MISTRAL_ENABLED"] == "true"
+	ocr = config.setdefault("AI_INGESTION_OCR_PROFILE", "native")
+	if ocr not in ("native", "paddle") or (cloud and ocr == "paddle"):
+		raise ValueError("AI_INGESTION_OCR_PROFILE must be native or use Paddle before Mistral cutover")
+	if config.setdefault("AI_MODEL_PROFILE", "synthetic") != ("mistral" if cloud else "synthetic"):
+		raise ValueError("AI_MODEL_PROFILE must match the explicit AI_MISTRAL_ENABLED opt-in")
+	if ingestion:
+		key = require_ai_setting(config, "AI_INGESTION_KEY")
+		if not 32 <= len(key) <= 256 or key == config["AI_ERP_SERVICE_KEY"]:
+			raise ValueError("AI_INGESTION_KEY must be independent and have 32 to 256 characters")
+		endpoint = urlsplit(require_ai_setting(config, "AI_ARTIFACT_S3_ENDPOINT"))
+		if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username is not None
+			or endpoint.path not in ("", "/") or endpoint.query or endpoint.fragment):
+			raise ValueError("AI_ARTIFACT_S3_ENDPOINT must be the private HTTPS origin")
+		for key in ("AI_ARTIFACT_S3_BUCKET", "AI_ARTIFACT_S3_ACCESS_KEY", "AI_ARTIFACT_S3_SECRET_KEY"):
+			require_ai_setting(config, key)
+		models = Path(require_ai_setting(config, "AI_DOCLING_MODELS_DIR"))
+		if not models.is_absolute() or not models.is_dir():
+			raise ValueError("AI_DOCLING_MODELS_DIR must be an existing absolute path")
+	if chat and (
+		not search or config.get("AI_CHAT_BROWSER_ERP_ORIGIN") != "https://" + config["DOMAIN"]
+		or config.get("HTTPS_ENABLED") != "1"
+	):
+		raise ValueError("AI chat requires search and AI_CHAT_BROWSER_ERP_ORIGIN equal to the public HTTPS ERP origin")
+	if cloud:
+		if not ingestion or not search:
+			raise ValueError("Mistral requires AI_INGESTION_ENABLED and AI_SEARCH_INDEX_ENABLED")
+		if config.get("AI_MISTRAL_ENDPOINT") not in ("https://api.eu.mistral.ai", "https://api.mistral.ai"):
+			raise ValueError("Configure the approved AI_MISTRAL_ENDPOINT")
+		worker_key = require_ai_setting(config, "AI_WORKER_MISTRAL_API_KEY")
+		if chat and require_ai_setting(config, "AI_API_MISTRAL_API_KEY") == worker_key:
+			raise ValueError("AI_API_MISTRAL_API_KEY must differ from AI_WORKER_MISTRAL_API_KEY")
+	if chat:
+		bundle = Path(require_ai_setting(config, "AI_CHAT_WEB_DIR"))
+		if not bundle.is_absolute() or not (bundle / "index.html").is_file() or not (bundle / "assets").is_dir():
+			raise ValueError("AI_CHAT_WEB_DIR must be an absolute path to a built chat bundle")
+
+
 def read_config(root, path=None):
 	path = path or root / "shared" / "production.env"
 	if path.stat().st_mode & 0o077:
@@ -86,6 +143,24 @@ def read_config(root, path=None):
 	config.setdefault("PLATFORM", "linux/amd64")
 	config.setdefault("FRONTEND_PORT", "8080")
 	config.setdefault("HTTPS_ENABLED", "1")
+	config.setdefault("AI_ENABLED", "0")
+	if config["AI_ENABLED"] not in ("0", "1"):
+		raise ValueError("AI_ENABLED must be 0 or 1")
+	if config["AI_ENABLED"] == "1":
+		for key in ("AI_API_IMAGE", "AI_WORKER_IMAGE"):
+			if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[a-f0-9]{64}", config.get(key, "")):
+				raise ValueError("Configure immutable digest for " + key)
+		for key in ("AI_POSTGRES_PASSWORD", "AI_ERP_SERVICE_KEY"):
+			if len(config.get(key, "")) < 32 or config[key].startswith("REPLACE_"):
+				raise ValueError("Configure " + key + " with at least 32 characters")
+		if len(config["AI_ERP_SERVICE_KEY"]) > 256:
+			raise ValueError("AI_ERP_SERVICE_KEY must not exceed 256 characters")
+		if config["AI_POSTGRES_PASSWORD"] == config["DB_PASSWORD"]:
+			raise ValueError("AI_POSTGRES_PASSWORD must differ from DB_PASSWORD")
+		config.setdefault("AI_API_PORT", "8180")
+		if not config["AI_API_PORT"].isdigit() or not 1024 <= int(config["AI_API_PORT"]) <= 65535:
+			raise ValueError("AI_API_PORT must be between 1024 and 65535")
+		validate_ai_features(config)
 	if not re.fullmatch(r"kanzlei-[a-z0-9-]+", config["PROJECT_NAME"]):
 		raise ValueError(
 			"PROJECT_NAME must start with kanzlei- and contain lowercase letters, digits or hyphens"
@@ -118,7 +193,7 @@ class Commands:
 		if result.returncode:
 			output = (result.stdout + result.stderr)[-8000:]
 			for key, value in (env or {}).items():
-				if any(word in key for word in ("PASSWORD", "TOKEN", "SECRET")) and value:
+				if any(word in key for word in ("PASSWORD", "TOKEN", "SECRET", "_KEY")) and value:
 					output = output.replace(value, "[REDACTED]")
 			raise RuntimeError(f"Command failed ({result.returncode}): {args[0]}\n{output}")
 		return result.stdout.strip()
@@ -133,7 +208,17 @@ class Compose:
 		self.root, self.release = Path(root), Path(release)
 		self.image, self.commands = image, commands
 		self.config = config or read_config(self.root)
-		self.env = {**os.environ, **self.config, "APP_IMAGE": image}
+		self.env = {key: value for key, value in os.environ.items() if not key.startswith("AI_")}
+		self.env.update(self.config, APP_IMAGE=image)
+		if self.config["AI_ENABLED"] != "1" or self.config.get("AI_CHAT_ENABLED") != "true":
+			self.env["AI_CHAT_WEB_DIR"] = "/dev/null"
+		api_cloud = self.config.get("AI_CHAT_ENABLED") == self.config.get("AI_MISTRAL_ENABLED") == "true"
+		self.env["AI_API_MODEL_PROFILE"] = "mistral" if api_cloud else "synthetic"
+		self.env["AI_API_MISTRAL_ENABLED"] = "true" if api_cloud else "false"
+		if not api_cloud:
+			self.env["AI_API_MISTRAL_API_KEY"] = ""
+		if self.config.get("AI_MISTRAL_ENABLED") != "true":
+			self.env["AI_WORKER_MISTRAL_API_KEY"] = ""
 		self.prefix = [
 			"docker",
 			"compose",
@@ -146,6 +231,11 @@ class Compose:
 		]
 		if self.config["HTTPS_ENABLED"] == "1":
 			self.prefix += ["--profile", "https"]
+		compose_file = self.release / "deploy" / "compose.yml"
+		self.has_ai = compose_file.is_file() and "  ai-api:" in compose_file.read_text()
+		self.ai_enabled = self.has_ai and self.config["AI_ENABLED"] == "1"
+		if self.ai_enabled:
+			self.prefix += ["--profile", "ai"]
 
 	def call(self, *args, timeout=1800):
 		args = list(args)
@@ -202,8 +292,18 @@ class Compose:
 	def mode(self, enabled):
 		self.bench("set-config", "maintenance_mode", "1" if enabled else "0")
 
+	def stop_ai(self):
+		if self.has_ai:
+			self.call("stop", "--timeout", "120", *AI_SERVICES)
+
 	def stop(self):
+		self.stop_ai()
 		self.call("stop", "--timeout", "120", *APP_SERVICES)
+
+	def ai_migrate(self):
+		if self.ai_enabled:
+			self.call("up", "-d", "--wait", "--wait-timeout", "180", "ai-postgres", "ai-redis", "ai-qdrant")
+			self.call("run", "--rm", "-T", "--no-deps", "ai-api", "python", "-m", "kanzlei_ai.coordinator", "migrate")
 
 	def web(self):
 		self.call("up", "-d", *WEB_SERVICES)
@@ -211,15 +311,17 @@ class Compose:
 			# Recreate to apply the release's Caddyfile bind mount.
 			self.call("up", "-d", "--force-recreate", "caddy")
 
-	def workers(self):
+	def workers(self, include_ai=True):
 		self.call("up", "-d", *WORKERS)
+		if include_ai and self.ai_enabled:
+			self.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
 		self.bench("enable-scheduler")
 
 	def running(self):
 		observations = []
 		for sample in range(2):
 			counts = {}
-			for service in APP_SERVICES:
+			for service in APP_SERVICES + (AI_SERVICES if self.ai_enabled else []):
 				ids = self.call("ps", "-q", service).splitlines()
 				if len(ids) != 1:
 					raise RuntimeError("Service is missing: " + service)
@@ -527,13 +629,17 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 			# Tag pushes and successful CI events can both enqueue this release.
 			# Check the already deployed stack without replaying database changes.
 			current = Compose(self.root, previous["release"], self.image, self.commands, self.config)
+			print("For AI configuration changes, run ai-reconcile", flush=True)
 			self.smoke(current)
 			current.running()
-			print("Already deployed and healthy: " + self.tag, flush=True)
+			print("Already deployed and healthy: " + self.tag + "; use ai-reconcile after AI configuration changes", flush=True)
 			return
 		print("Preparing " + self.tag + " (" + self.revision + ")", flush=True)
 		self.new.call("config", "--quiet")
 		self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], self.image], timeout=1800)
+		if self.new.ai_enabled:
+			for ai_image in {self.config["AI_API_IMAGE"], self.config["AI_WORKER_IMAGE"]}:
+				self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], ai_image], timeout=1800)
 		actual = self.commands.run(
 			[
 				"docker",
@@ -555,6 +661,7 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 		stopped = False
 		try:
 			if not pending:
+				self.new.stop_ai()
 				if old:
 					old.mode(True)
 					stopped = True
@@ -597,6 +704,7 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 				self.new.bench("execute", "kanzlei_erp.localization.configure_german_language", "--kwargs", '{"user":"Administrator"}')
 			print("Applying migrations", flush=True)
 			self.new.bench("migrate")
+			self.new.ai_migrate()
 			self.new.bench("clear-cache")
 			self.new.mode(False)
 			self.new.web()
@@ -631,7 +739,9 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 			elif old and stopped:
 				old.mode(False)
 				old.web()
-				old.workers()
+				old.workers(include_ai=False)
+				if old.has_ai:
+					print("ERP resumed; AI consumers remain stopped pending reconciliation", flush=True)
 			raise
 
 	def prune_backups(self):
@@ -694,6 +804,70 @@ fi
 	)
 
 
+def reconcile_ai(root, *, commands=None):
+	root = Path(root).resolve()
+	commands = commands or Commands()
+	with deployment_lock(root):
+		if (root / "shared" / "pending.json").exists():
+			raise RuntimeError("Finish deployment or restore recovery before reconciling AI")
+		config = read_config(root)
+		state = read_json(root / "shared" / "current.json")
+		validate_release(state["image"], state["revision"], state["tag"])
+		if state["site"] != config["SITE_NAME"] or state.get("project", config["PROJECT_NAME"]) != config["PROJECT_NAME"]:
+			raise ValueError("Current deployment does not match configured site or project")
+		compose = Compose(root, state["release"], state["image"], commands, config)
+		if not compose.has_ai:
+			raise ValueError("Current release does not contain AI services; deploy an AI-capable ERP release first")
+		compose.stop_ai()
+		try:
+			if compose.ai_enabled:
+				for ai_image in {config["AI_API_IMAGE"], config["AI_WORKER_IMAGE"]}:
+					commands.run(["docker", "pull", "--platform", config["PLATFORM"], ai_image], timeout=1800)
+				compose.ai_migrate()
+				compose.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
+				compose.running()
+			if config["HTTPS_ENABLED"] == "1":
+				compose.call("up", "-d", "--wait", "--no-deps", "caddy")
+		except BaseException:
+			if compose.ai_enabled:
+				with contextlib.suppress(Exception):
+					compose.stop_ai()
+			raise
+		print("AI configuration reconciled")
+
+
+def stop_ai_for_restore(root, commands, config):
+	seen = set()
+	for name in ("current.json", "pending.json"):
+		path = root / "shared" / name
+		if not path.exists():
+			continue
+		state = read_json(path)
+		release, image = state.get("release"), state.get("image")
+		if release and image and release not in seen:
+			Compose(root, release, image, commands, config).stop_ai()
+			seen.add(release)
+
+
+def disable_ai_after_restore(path, current_config, backup_path=None):
+	path = Path(path)
+	source = Path(backup_path) if backup_path else path
+	lines = [line for line in source.read_text().splitlines() if not line.lstrip().startswith("AI_")]
+	lines.extend(key + "=" + value for key, value in current_config.items() if key.startswith("AI_") and key != "AI_ENABLED")
+	lines.append("AI_ENABLED=0")
+	fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".restore-env-")
+	try:
+		with os.fdopen(fd, "w") as handle:
+			handle.write("\n".join(lines) + "\n")
+			os.fchmod(handle.fileno(), 0o600)
+			handle.flush()
+			os.fsync(handle.fileno())
+		os.replace(temporary, path)
+	finally:
+		if os.path.exists(temporary):
+			os.unlink(temporary)
+
+
 def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=None):
 	root, backup = Path(root).resolve(), Path(backup).resolve()
 	commands, smoke = commands or Commands(), smoke or smoke_check
@@ -725,6 +899,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 		recovery_release = root / "releases" / ("restore-" + uuid.uuid4().hex)
 		shutil.copytree(backup / "release", recovery_release)
 		compose = Compose(root, recovery_release, previous["image"], commands, config)
+		stop_ai_for_restore(root, commands, config)
 		commands.run(["docker", "pull", "--platform", config["PLATFORM"], previous["image"]], timeout=1800)
 		compose.clear_interrupted_tasks()
 		pending = {"operation": "restore", "backup": str(backup), "previous": previous}
@@ -732,7 +907,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 		try:
 			compose.mode(True)
 			compose.stop()
-			shutil.copy2(backup / "production.env", root / "shared" / "production.env")
+			disable_ai_after_restore(root / "shared" / "production.env", config, backup / "production.env")
 			config = read_config(root)
 			compose = Compose(root, recovery_release, previous["image"], commands, config)
 			compose.call("run", "--rm", "-T", "configurator")
@@ -770,6 +945,7 @@ def main():
 	deploy.add_argument(
 		"--resume", action="store_true", help="Explicitly retry the exact unfinished release after diagnosis"
 	)
+	sub.add_parser("ai-reconcile", help="Apply current AI configuration to the deployed release")
 	recovery = sub.add_parser("restore")
 	recovery.add_argument("--backup", type=Path, required=True)
 	recovery.add_argument("--confirm-site", required=True)
@@ -787,6 +963,8 @@ def main():
 			Deployer(
 				args.root, args.release, args.image, args.revision, args.tag, resume=args.resume
 			).deploy()
+		elif args.command == "ai-reconcile":
+			reconcile_ai(args.root)
 		else:
 			restore(args.root, args.backup, args.confirm_site, s3_target=args.s3_target)
 	except Exception as error:

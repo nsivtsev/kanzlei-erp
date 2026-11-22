@@ -46,17 +46,40 @@ class ERPAttachmentGuard:
 		with creation_flow():
 			return super().insert(*args, **kwargs)
 
-	def db_set(self, *args, **kwargs):
-		from kanzlei_erp.posteingang_files import validate_binding
-		validate_binding(self)
-		from kanzlei_erp.drive_storage import invalidate
+	def db_insert(self, *args, **kwargs):
+		result = super().db_insert(*args, **kwargs)
+		from kanzlei_erp.ai_connector.events import file_changed
+		from kanzlei_erp.object_storage import mark_mutation
+		mark_mutation()
+		file_changed(self)
+		return result
 
-		invalidate()
+	def db_set(self, fieldname, value=None, update_modified=True, notify=False, commit=False):
+		from kanzlei_erp.drive_storage import invalidate
+		from kanzlei_erp.posteingang_files import validate_binding
+
 		try:
-			result = super().db_set(*args, **kwargs)
-			from kanzlei_erp.object_storage import mark_mutation
-			mark_mutation()
+			validate_binding(self)
+			invalidate()
+			old_client = None
+			if self.name and frappe.db.has_column("File", "kanzlei_drive_customer"):
+				old_client = frappe.db.get_value("File", self.name, "kanzlei_drive_customer", for_update=True)
+			result = super().db_set(fieldname, value, update_modified, notify, False)
+			if self.name:
+				from kanzlei_erp.ai_connector.events import descendants, file_changed, record_ids
+				from kanzlei_erp.object_storage import mark_mutation
+
+				mark_mutation()
+				file_changed(self)
+				if old_client and old_client != self.get("kanzlei_drive_customer"):
+					record_ids(descendants(self.name) if self.get("is_folder") else [self.name], old_client)
+				if commit:
+					frappe.db.commit()
 			return result
+		except Exception:
+			if commit:
+				frappe.db.rollback()
+			raise
 		finally:
 			invalidate()
 
