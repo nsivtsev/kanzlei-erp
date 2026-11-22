@@ -166,22 +166,22 @@ connector and run a deliberate `coordinator scan` to reconcile the corpus.
 Keep logs private. Avoid dumping receipts, source data, keys or raw responses.
 
 Operator retention covers eligible stale artifacts, index projections and
-completed operational records. Check `last_mark_at`, `ready`, `pending` and
-`retry_pending` in the status output. Conversation history has no expiration
-and is outside operator retention. The signed-in owner can use
+completed operational records. A projection needs 30 days from its first
+confirmed stale observation. Terminal bookkeeping becomes eligible after 90
+days when recovery and reconciliation no longer need it. The pilot operator
+runs `retention mark` daily and reviews `last_mark_at`, `ready`, `pending`
+and `retry_pending`. Schedule a weekly maintenance window to apply eligible
+batches. Conversation history has no expiration and is outside operator
+retention. The signed-in owner can use
 **Gespräche verwalten** → **Löschen** → **Gespräch löschen** in the chat.
 
-Take a consistent AI backup before an apply. In the locked maintenance shell,
-stop the remote Paddle worker and any other external consumer first. Stop
-the local writers and confirm they are all stopped before marking, planning
-or applying. Leave the private stores up. If there are live leases, wait
-for them to expire and retry. Use the dedicated, prefix-scoped maintenance
-S3 principal and pass the keys from a restricted local secret file or prompt.
+Use the dedicated, prefix-scoped maintenance S3 principal and pass its keys
+from a restricted local secret file or prompt. The principal must be able
+to list the artifact namespace and an exact key under that prefix to verify
+absence when a missing object returns a denied HEAD. Mark and plan can run
+while the service is online.
 
 ```bash
-ai_compose stop --timeout 120 ai-coordinator ai-api ai-worker
-running_ai="$(ai_compose ps --status running -q ai-coordinator ai-api ai-worker)"
-test -z "$running_ai"
 read -rsp "Maintenance S3 access key: " AI_ARTIFACT_S3_ACCESS_KEY
 printf '\n'
 read -rsp "Maintenance S3 secret key: " AI_ARTIFACT_S3_SECRET_KEY
@@ -193,16 +193,30 @@ retention() {
 }
 retention mark
 retention plan
-# After reviewing the eligible counts and confirming the offline window
+```
+
+Before applying, stop the remote Paddle worker and any other external AI
+consumer. In the locked maintenance shell, stop the local writers and take
+a consistent AI backup with the stores still up. Wait for any live leases
+to expire, then review the plan in the offline window.
+
+```bash
+ai_compose stop --timeout 120 ai-coordinator ai-api ai-worker
+running_ai="$(ai_compose ps --status running -q ai-coordinator ai-api ai-worker)"
+test -z "$running_ai"
+# Take the paired backup described below.
+retention plan
 retention apply --confirm-offline
 unset AI_ARTIFACT_S3_ACCESS_KEY AI_ARTIFACT_S3_SECRET_KEY
 ```
 
 Use `retention apply --confirm-offline --limit 100` for explicit bounded
-batches. Review a fresh plan before resuming
-after a partial failure, and keep the pending cleanup state for retry. Keep
-all writers stopped throughout the maintenance window. Exit the shell before
-reconciling and restarting any authorized remote worker.
+batches. The `cancelled` count includes superseded deliveries for retired
+index profiles. A subsequent `mark` starts the 30-day window for any
+artifacts that become eligible after cancellation. Review a fresh plan before
+resuming after a partial failure, and keep the pending cleanup state for
+retry. Keep all writers stopped throughout the maintenance window. Exit the
+shell before reconciling and restarting any authorized remote worker.
 
 ## Back up and recover
 
@@ -213,7 +227,10 @@ reconciling and restarting any authorized remote worker.
   private restore metadata. Validate the dump with `pg_restore --list` and
   verify the copied objects against a private manifest. ERP backups are
   independent. AI PostgreSQL includes conversation history and should be
-  handled as private data.
+  handled as private data. Expire the encrypted pilot backup copies after 30
+  days. A conversation deleted by its owner can remain in a prior snapshot
+  until that snapshot expires. Review removed history before exposing any
+  restored database to users.
   Set `backup_dir` to an existing private backup directory.
 
   ```bash

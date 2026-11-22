@@ -242,10 +242,12 @@ Structured ERP answers for unresolved Questions, tasks and FiBu states are defer
 
 **Create:** `services/kanzlei_ai/docs/operations.md`, `docs/reviews/YYYY-MM-DD-ai-service-pilot.md`; update service `README.md` and root `README.md` with the boundary and local entry point.
 
-1. Record indexing lag, processing failures, job recovery and source coverage without logging document text, credentials or private paths. Define artifact/history retention and authorized deletion behavior; no indefinite retention by accident.
+1. Record indexing lag, processing failures, job recovery and source coverage without logging document text, credentials or private paths. Keep chat history until its owner explicitly deletes a conversation. Use operator-confirmed cleanup for obsolete derived artifacts after 30 days and eligible terminal service records after 90 days.
 2. Add service-specific CI checks and review isolation of secrets, volumes and ports. Release images and exact versions are pinned after compatibility checks. Broaden verification for changed authentication/storage/build boundaries with a stated concrete risk.
 3. Document startup, migration, rebuild/reconciliation, credential rotation, failure recovery and backup requirements. Keep the existing ERP release gate; no full local ERP image build or backup/restore acceptance by default.
 4. Report changed behavior, focused test/browser results and meaningful unverified areas. The task owner creates the PR and deploys. Live documents require the agreed processing configuration; synthetic model evaluation does not approve real-document processing.
+
+See the [Task 11 pilot acceptance](../reviews/2026-11-22-ai-service-pilot.md).
 
 ## First implementation action
 
