@@ -134,11 +134,10 @@ class OffsiteBackup:
 
 	def current(self):
 		previous = manage.read_json(self.root / "shared/current.json")
-		manage.validate_release(previous["image"], previous["revision"], previous["tag"])
-		config = manage.read_config(self.root)
+		compose = manage.compose_from_state(self.root, previous, manage.Commands())
+		config = compose.config
 		if previous["site"] != config["SITE_NAME"]:
 			raise ValueError("Current deployment and configured site differ")
-		compose = manage.Compose(self.root, previous["release"], previous["image"], manage.Commands(), config)
 		return previous, compose
 
 	def space_required(self):
@@ -159,6 +158,8 @@ class OffsiteBackup:
 		compose.web()
 		# Do not change a deliberately disabled scheduler's database setting.
 		compose.call("up", "-d", *manage.WORKERS)
+		if compose.ai_enabled:
+			compose.start_ai()
 		manage.smoke_check(compose)
 		compose.running()
 		self.pending.unlink()

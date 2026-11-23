@@ -150,6 +150,53 @@ class RegistryPromotionTests(unittest.TestCase):
 		self.assertEqual(registry.promote(image, "v1.0.0", "1" * 40), image)
 		self.assertEqual(writes, [index])
 
+	def test_release_index_pins_verified_roles_and_cannot_be_reassigned(self):
+		revision = "1" * 40
+		manifests = {}
+		configs = {}
+		writes = []
+
+		def digest(body):
+			return "sha256:" + hashlib.sha256(body).hexdigest()
+
+		images = {}
+		for role in ("erp", "runtime", "documents"):
+			config = json.dumps({"os": "linux", "architecture": "amd64", "config": {"Labels": {
+				"org.opencontainers.image.revision": revision, release.ROLE_LABEL: role,
+			}}}).encode()
+			configs[digest(config)] = config
+			body = json.dumps({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
+				"config": {"digest": digest(config)}, "layers": []}).encode()
+			manifests[digest(body)] = body
+			images[role] = release.IMAGE + "@" + digest(body)
+
+		def open_url(request, **_kwargs):
+			if "/token?" in request.full_url:
+				return Response(b'{"token":"bearer"}')
+			ref = request.full_url.rsplit("/", 1)[-1]
+			if "/blobs/" in request.full_url:
+				return Response(configs[ref])
+			if request.get_method() == "PUT":
+				writes.append(ref)
+				manifests[ref] = manifests[digest(request.data)] = request.data
+			if ref not in manifests:
+				raise urllib.error.HTTPError(request.full_url, 404, "absent", {}, None)
+			body = manifests[ref]
+			return Response(body, {"Docker-Content-Digest": digest(body)})
+
+		registry = release.Registry("actor", "token", open_url)
+		tag = "v1.0.0"
+		registry.publish_bundle(tag, revision, images)
+		self.assertEqual(registry.bundle(tag, revision), images)
+		registry.publish_bundle(tag, revision, images)
+		self.assertEqual(writes, ["release-" + tag])
+		with self.assertRaisesRegex(ValueError, "role"):
+			registry.publish_bundle(tag, revision, {**images, "runtime": images["documents"]})
+		manifests["release-" + tag] = b'{"another":"index"}'
+		with self.assertRaisesRegex(ValueError, "reassigned"):
+			registry.publish_bundle(tag, revision, images)
+		self.assertEqual(writes, ["release-" + tag])
+
 
 if __name__ == "__main__":
 	unittest.main()

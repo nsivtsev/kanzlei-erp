@@ -18,7 +18,7 @@ jobs:
   verify:
     needs: checks
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ inputs.profile == 'full' && 60 || 20 }}
+    timeout-minutes: ${{ inputs.profile == 'full' && 60 || inputs.publish && 45 || 20 }}
     env:
       CI_METRICS_DIR: /tmp/kanzlei-ci-metrics-${{ github.run_id }}-${{ github.run_attempt }}
       # Enable 2 only after a comparison on the GitHub runner shows lower total minutes.
@@ -89,13 +89,59 @@ jobs:
         env:
           VERIFY_PROFILE: ${{ inputs.profile }}
         run: python3 scripts/ci_scenarios.py kanzlei-ci:test --profile "$VERIFY_PROFILE"
-      - name: Publish the exact verified main image and receipt
+      - name: Resolve previously published AI images
+        if: inputs.publish
+        id: ai-candidates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ steps.source.outputs.revision }}
+        run: |
+          for role in runtime documents; do
+            candidate=$(python3 scripts/ci_release.py candidate "$REVISION" --role "$role" --print)
+            printf '%s=%s\n' "$role" "$candidate" >> "$GITHUB_OUTPUT"
+            if [[ -n $candidate ]]; then
+              docker pull --platform linux/amd64 "$candidate"
+              docker tag "$candidate" "kanzlei-ai-ci:$role"
+            fi
+          done
+      - name: Build AI runtime
+        if: inputs.publish && steps.ai-candidates.outputs.runtime == ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: services/kanzlei_ai
+          target: runtime
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: kanzlei-ai-ci:runtime
+          build-args: REVISION=${{ steps.source.outputs.revision }}
+          cache-from: type=gha,version=2,scope=kanzlei-ai-linux-amd64-v1
+      - name: Build AI documents
+        if: inputs.publish && steps.ai-candidates.outputs.documents == ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: services/kanzlei_ai
+          target: documents
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: kanzlei-ai-ci:documents
+          build-args: REVISION=${{ steps.source.outputs.revision }}
+          cache-from: type=gha,version=2,scope=kanzlei-ai-linux-amd64-v1
+          cache-to: type=gha,version=2,scope=kanzlei-ai-linux-amd64-v1,mode=min,ignore-error=true
+      - name: Verify AI migration and readiness on the exact images
+        if: inputs.publish
+        timeout-minutes: 10
+        run: python3 scripts/ci_ai_image.py kanzlei-ci:test kanzlei-ai-ci:runtime kanzlei-ai-ci:documents
+      - name: Publish the exact verified main images and receipt
         if: inputs.publish
         id: publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVISION: ${{ steps.source.outputs.revision }}
-        run: python3 scripts/ci_release.py publish kanzlei-ci:test "$REVISION" "$CI_METRICS_DIR"
+        run: |
+          python3 scripts/ci_release.py publish kanzlei-ci:test "$REVISION" "$CI_METRICS_DIR" \
+            --runtime kanzlei-ai-ci:runtime --documents kanzlei-ai-ci:documents
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: inputs.publish
         with:

@@ -10,6 +10,10 @@ SHA_RE = re.compile(r"[a-f0-9]{40}\Z")
 IMAGE_RE = re.compile(re.escape(IMAGE) + r"@sha256:[a-f0-9]{64}\Z")
 SUITES = ("deployment", "smoke")
 LEGACY_SUITES = ("deployment", "application", "upgrade")
+AI_ROLES = ("runtime", "documents")
+BUNDLE_SUITES = (*SUITES, "ai-smoke")
+ROLE_LABEL = "io.kanzlei.image.role"
+BUNDLE_MARKER = "deploy/release-images.version"
 
 
 def validate_receipt(receipt, run, revision):
@@ -20,26 +24,40 @@ def validate_receipt(receipt, run, revision):
             "push", "main", revision, "completed", "success", ".github/workflows/ci.yml", REPOSITORY):
         raise ValueError("Receipt must come from a successful CI push on this repository's main branch")
     version = receipt.get("schema_version")
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError("Unknown verification receipt version")
     if (receipt.get("revision"), receipt.get("platform"),
             receipt.get("run_id"), receipt.get("run_attempt")) != (
             revision, "linux/amd64", run["id"], run["run_attempt"]):
         raise ValueError("Verification receipt does not match the requested commit and CI attempt")
-    required = LEGACY_SUITES if version == 1 else SUITES
+    required = {1: LEGACY_SUITES, 2: SUITES, 3: BUNDLE_SUITES}[version]
     if receipt.get("suites") != {name: "passed" for name in required}:
         raise ValueError("All mandatory verification scenarios must pass")
     image = receipt.get("image", "")
     if not isinstance(image, str) or not IMAGE_RE.fullmatch(image):
         raise ValueError("Verification receipt must reference an immutable Kanzlei image digest")
+    if version == 3:
+        validate_ai_images(receipt.get("ai_images"), image)
     return image
 
 
-def make_receipt(revision, image, run_id, run_attempt, metrics):
+def validate_ai_images(images, erp_image):
+    if (not isinstance(images, dict) or set(images) != set(AI_ROLES)
+            or any(not isinstance(ref, str) or not IMAGE_RE.fullmatch(ref) for ref in images.values())
+            or len({erp_image, *images.values()}) != 3):
+        raise ValueError("Release bundle must contain distinct immutable ERP, runtime and documents digests")
+    return images
+
+
+def candidate_tag(role, revision):
+    return ("sha-" if role == "erp" else role + "-sha-") + revision
+
+
+def make_receipt(revision, image, run_id, run_attempt, metrics, *, bundled=False):
     if not SHA_RE.fullmatch(revision) or not IMAGE_RE.fullmatch(image):
         raise ValueError("Invalid revision or immutable image reference")
     results = {}
-    for name in ("smoke",):
+    for name in (("smoke", "ai-smoke") if bundled else ("smoke",)):
         path = Path(metrics) / (name + ".json")
         if not path.is_file():
             raise ValueError("Mandatory scenario result is missing: " + name)
@@ -48,7 +66,7 @@ def make_receipt(revision, image, run_id, run_attempt, metrics):
             raise ValueError("Scenario did not pass: " + name)
         results[name] = result
     return {
-        "schema_version": 2, "revision": revision, "image": image, "platform": "linux/amd64",
+        "schema_version": 3 if bundled else 2, "revision": revision, "image": image, "platform": "linux/amd64",
         "run_id": int(run_id), "run_attempt": int(run_attempt),
-        "suites": {name: "passed" for name in SUITES}, "metrics": results,
+        "suites": {name: "passed" for name in (BUNDLE_SUITES if bundled else SUITES)}, "metrics": results,
     }

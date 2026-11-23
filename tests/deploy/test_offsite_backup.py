@@ -158,6 +158,7 @@ class OffsiteTests(unittest.TestCase):
 		from unittest.mock import Mock
 
 		compose = Mock()
+		compose.ai_enabled = False
 		compose.call.return_value = '{"maintenance": false}'
 		compose.mode.side_effect = lambda enabled: self.events.append(("maintenance", enabled))
 		compose.stop.side_effect = lambda: self.events.append(("stop",))
@@ -178,6 +179,15 @@ class OffsiteTests(unittest.TestCase):
 		compose.running.assert_called()
 		with offsite.manage.deployment_lock(self.root):
 			self.assertTrue(runner.staging.exists())
+
+	def test_capture_restarts_enabled_ai_before_checking_health(self):
+		runner, compose, _ = self.prepare_capture()
+		compose.ai_enabled = True
+		compose.running.side_effect = lambda: self.events.append(("health",))
+		compose.start_ai.side_effect = lambda: self.events.append(("ai",))
+		runner.capture()
+		self.assertEqual(self.events[-2:], [("ai",), ("health",)])
+		compose.ai_migrate.assert_not_called()
 
 	def test_already_maintained_site_is_never_reopened(self):
 		runner, compose, deployer = self.prepare_capture()

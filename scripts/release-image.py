@@ -25,6 +25,8 @@ ACCEPT = ", ".join(
 TAG_RE = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 SHA_RE = re.compile(r"[a-f0-9]{40}\Z")
 DIGEST_RE = re.compile(r"sha256:[a-f0-9]{64}\Z")
+OCI_INDEX = "application/vnd.oci.image.index.v1+json"
+ROLE_LABEL = "io.kanzlei.image.role"
 
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
@@ -91,8 +93,9 @@ class Registry:
 			headers=headers, method=method, data=data)
 
 	def existing(self, tag):
-		if not (TAG_RE.fullmatch(tag) or re.fullmatch(r"sha-[a-f0-9]{40}", tag)):
-			raise ValueError("Image tag must be vX.Y.Z or sha-<full commit SHA>")
+		if not (TAG_RE.fullmatch(tag.removeprefix("release-"))
+			or re.fullmatch(r"(?:(?:runtime|documents)-)?sha-[a-f0-9]{40}", tag)):
+			raise ValueError("Invalid registry tag")
 		if not self.bearer():
 			return None
 		try:
@@ -120,7 +123,7 @@ class Registry:
 			raise ValueError("Registry content does not match its digest")
 		return body
 
-	def inspect(self, image, revision):
+	def inspect(self, image, revision, role=None):
 		if not image.startswith(IMAGE + "@") or not SHA_RE.fullmatch(revision):
 			raise ValueError("Invalid immutable image or revision")
 		body = self.content("manifests", image.split("@", 1)[1])
@@ -136,13 +139,33 @@ class Registry:
 		config = json.loads(self.content("blobs", selected["config"]["digest"]))
 		if (config.get("os"), config.get("architecture")) != ("linux", "amd64"):
 			raise ValueError("Image platform must be linux/amd64")
-		if config.get("config", {}).get("Labels", {}).get("org.opencontainers.image.revision") != revision:
+		labels = config.get("config", {}).get("Labels") or {}
+		if labels.get("org.opencontainers.image.revision") != revision:
 			raise ValueError("Image revision does not match the requested commit")
+		if role is not None and labels.get(ROLE_LABEL) != role:
+			raise ValueError("Image role does not match " + role)
 		if manifest.get("mediaType") not in ACCEPT.split(", "):
 			raise ValueError("Unsupported manifest media type")
 		return {"body": body, "media_type": manifest["mediaType"],
 			"config_digest": selected["config"]["digest"],
 			"compressed_bytes": sum(layer["size"] for layer in selected["layers"])}
+
+	def write_manifest(self, tag, body, media_type):
+		image = IMAGE + "@sha256:" + hashlib.sha256(body).hexdigest()
+		existing = self.existing(tag)
+		if existing and existing != image:
+			raise ValueError("An existing release tag cannot be reassigned to another digest")
+		if not existing:
+			try:
+				with self.open_url(self.request("manifests/" + tag, method="PUT",
+					data=body, content_type=media_type), timeout=30):
+					pass
+			except urllib.error.HTTPError as error:
+				error.close()
+				raise RuntimeError("Cannot promote verified manifest: HTTP " + str(error.code)) from None
+		if self.existing(tag) != image:
+			raise ValueError("Promoted release digest differs from the verified image")
+		return image
 
 	def promote(self, image, tag, revision):
 		if not TAG_RE.fullmatch(tag):
@@ -151,17 +174,38 @@ class Registry:
 		if existing and existing != image:
 			raise ValueError("An existing release tag cannot be reassigned to another image")
 		content = self.inspect(image, revision)
-		if not existing:
-			try:
-				with self.open_url(self.request("manifests/" + tag, method="PUT",
-					data=content["body"], content_type=content["media_type"]), timeout=30):
-					pass
-			except urllib.error.HTTPError as error:
-				error.close()
-				raise RuntimeError("Cannot promote verified manifest: HTTP " + str(error.code)) from None
-		if self.existing(tag) != image:
-			raise ValueError("Promoted release digest differs from the verified image")
-		return image
+		return self.write_manifest(tag, content["body"], content["media_type"])
+
+	def bundle(self, tag, revision):
+		reference = self.existing("release-" + tag)
+		if not reference:
+			return None
+		index = json.loads(self.content("manifests", reference.split("@", 1)[1]))
+		if (index.get("schemaVersion"), index.get("mediaType"), index.get("annotations")) != (
+			2, OCI_INDEX, {"org.opencontainers.image.version": tag, "org.opencontainers.image.revision": revision}
+		):
+			raise ValueError("Invalid release bundle identity")
+		images = {}
+		for item in index["manifests"]:
+			role = item["annotations"][ROLE_LABEL]
+			if (role in images or not DIGEST_RE.fullmatch(item["digest"])
+				or item["mediaType"] not in ACCEPT.split(", ") or type(item["size"]) is not int or item["size"] <= 0):
+				raise ValueError("Invalid release bundle descriptor")
+			images[role] = IMAGE + "@" + item["digest"]
+		if set(images) != {"erp", "runtime", "documents"}:
+			raise ValueError("Release bundle must contain ERP, runtime and documents")
+		return images
+
+	def publish_bundle(self, tag, revision, images):
+		descriptors = []
+		for role in ("erp", "runtime", "documents"):
+			image = images[role]
+			content = self.inspect(image, revision, role)
+			descriptors.append({"mediaType": content["media_type"], "size": len(content["body"]),
+				"digest": image.split("@", 1)[1], "annotations": {ROLE_LABEL: role}})
+		index = {"schemaVersion": 2, "mediaType": OCI_INDEX, "manifests": descriptors,
+			"annotations": {"org.opencontainers.image.version": tag, "org.opencontainers.image.revision": revision}}
+		return self.write_manifest("release-" + tag, json.dumps(index, sort_keys=True).encode(), OCI_INDEX)
 
 
 def existing_image(tag, actor, token, open_url=safe_urlopen):

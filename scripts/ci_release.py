@@ -16,7 +16,10 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from ci_verification import IMAGE, REPOSITORY, SHA_RE, make_receipt, validate_receipt
+from ci_verification import (
+    AI_ROLES, BUNDLE_MARKER, IMAGE, REPOSITORY, ROLE_LABEL, SHA_RE, candidate_tag, make_receipt,
+    validate_ai_images, validate_receipt,
+)
 
 spec = importlib.util.spec_from_file_location("release_image", Path(__file__).with_name("release-image.py"))
 registry_module = importlib.util.module_from_spec(spec)
@@ -117,11 +120,35 @@ class GitHub:
         self.api("actions/workflows/deploy.yml/dispatches", {"ref": "main", "inputs": {"tag": tag}})
 
 
-def resolve_release(github, registry, tag, revision):
+def uses_bundle(revision):
+    tracked = subprocess.check_output(["git", "ls-tree", "--name-only", revision, "--", BUNDLE_MARKER], text=True)
+    return tracked.strip() == BUNDLE_MARKER
+
+
+def validate_bundle(registry, images, revision, *, candidates=False):
+    for role, image in images.items():
+        if candidates and registry.existing(candidate_tag(role, revision)) != image:
+            raise ValueError("Candidate digest does not match the successful CI receipt for " + role)
+        registry.inspect(image, revision, role)
+
+
+def resolve_release(github, registry, tag, revision, *, bundled=False):
     if not TAG_RE.fullmatch(tag) or not SHA_RE.fullmatch(revision):
         raise ValueError("Invalid release tag or commit SHA")
     result = {"tag": tag, "revision": revision, "ready": False, "existing": False, "image": ""}
     existing = registry.existing(tag)
+    if bundled:
+        bundle = registry.bundle(tag, revision)
+        if bundle:
+            image = bundle["erp"]
+            ai_images = {role: bundle[role] for role in AI_ROLES}
+            validate_ai_images(ai_images, image)
+            if existing and existing != image:
+                raise ValueError("ERP tag digest differs from the release bundle")
+            validate_bundle(registry, bundle, revision)
+            return {**result, "ready": True, "existing": bool(existing), "image": image, **ai_images}
+        if existing:
+            raise ValueError("Existing ERP tag is missing its release bundle")
     if existing:
         registry.inspect(existing, revision)
         return {**result, "ready": True, "existing": True, "image": existing}
@@ -134,13 +161,19 @@ def resolve_release(github, registry, tag, revision):
     run = successful[0]
     receipt = github.receipt(run, revision)
     image = validate_receipt(receipt, run, revision)
+    if bundled:
+        if receipt["schema_version"] != 3:
+            raise ValueError("Release bundle requires a verification receipt for all three images")
+        ai_images = receipt["ai_images"]
+        validate_bundle(registry, {"erp": image, **ai_images}, revision, candidates=True)
+        return {**result, "ready": True, "image": image, **ai_images, "run_id": run["id"]}
     if registry.existing("sha-" + revision) != image:
         raise ValueError("Candidate digest does not match the successful CI receipt")
     registry.inspect(image, revision)
     return {**result, "ready": True, "image": image, "run_id": run["id"]}
 
 
-def coordinate(event, github, tags):
+def coordinate(event, github, tags, *, bundled=False):
     event_run = event["workflow_run"]
     run = github.run(event_run["id"])
     revision = run["head_sha"]
@@ -154,7 +187,10 @@ def coordinate(event, github, tags):
     releases = sorted((tag for tag in tags if TAG_RE.fullmatch(tag)),
                       key=lambda tag: tuple(map(int, tag[1:].split("."))))
     if releases:
-        validate_receipt(github.receipt(run, revision), run, revision)
+        receipt = github.receipt(run, revision)
+        validate_receipt(receipt, run, revision)
+        if bundled and receipt["schema_version"] != 3:
+            raise ValueError("Release bundle requires a verification receipt for all three images")
     for tag in releases:
         github.dispatch(tag)
         print("Queued release " + tag + " after CI " + str(run["id"]), flush=True)
@@ -182,18 +218,14 @@ def summary(text):
     print(text, flush=True)
 
 
-def publish_receipt(registry, local_image, revision, metrics):
-    if (os.environ.get("GITHUB_EVENT_NAME"), os.environ.get("GITHUB_REF"),
-            os.environ.get("GITHUB_REPOSITORY")) != ("push", "refs/heads/main", REPOSITORY):
-        raise ValueError("Only a main push may publish verified candidate images")
-    # Require scenario results before touching the registry.
-    receipt = make_receipt(revision, IMAGE + "@sha256:" + "0" * 64,
-                           os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"], metrics)
+def publish_candidate(registry, local_image, revision, role=None):
     local = json.loads(subprocess.check_output(["docker", "image", "inspect", local_image], text=True))[0]
     if (local["Os"], local["Architecture"], local["Config"]["Labels"].get("org.opencontainers.image.revision")) != (
             "linux", "amd64", revision):
         raise ValueError("Local verified image has an unexpected revision or platform")
-    tag = "sha-" + revision
+    if role and local["Config"]["Labels"].get(ROLE_LABEL) != role:
+        raise ValueError("Local verified image role does not match " + role)
+    tag = candidate_tag(role or "erp", revision)
     image = registry.existing(tag)
     started = time.monotonic()
     if not image:
@@ -202,7 +234,7 @@ def publish_receipt(registry, local_image, revision, metrics):
         image = registry.existing(tag)
     if not image:
         raise ValueError("Published candidate cannot be resolved")
-    info = registry.inspect(image, revision)
+    info = registry.inspect(image, revision, role) if role else registry.inspect(image, revision)
     # Engine 28's containerd store identifies an image by its root descriptor;
     # the classic store identifies it by the selected platform's config digest.
     descriptor = local.get("Descriptor") or {}
@@ -210,20 +242,38 @@ def publish_receipt(registry, local_image, revision, metrics):
         info["config_digest"] == local["Id"])
     if not exact_image:
         raise ValueError("Published candidate is not the exact locally verified image")
-    receipt["image"] = image
-    receipt["metrics"]["image"] = {"docker_reported_bytes": local["Size"],
+    return image, {"docker_reported_bytes": local["Size"],
         "compressed_bytes": info["compressed_bytes"], "publish_seconds": round(time.monotonic() - started, 3)}
+
+
+def publish_receipt(registry, local_image, revision, metrics, *, ai_images=None):
+    if (os.environ.get("GITHUB_EVENT_NAME"), os.environ.get("GITHUB_REF"),
+            os.environ.get("GITHUB_REPOSITORY")) != ("push", "refs/heads/main", REPOSITORY):
+        raise ValueError("Only a main push may publish verified candidate images")
+    # Require scenario results before touching the registry.
+    receipt = make_receipt(revision, IMAGE + "@sha256:" + "0" * 64,
+                           os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"], metrics,
+                           bundled=ai_images is not None)
+    image, image_metrics = publish_candidate(registry, local_image, revision, "erp" if ai_images else None)
+    receipt["image"] = image
+    receipt["metrics"]["image"] = image_metrics
+    if ai_images:
+        published = {}
+        for role in AI_ROLES:
+            published[role], receipt["metrics"][role] = publish_candidate(registry, ai_images[role], revision, role)
+        receipt["ai_images"] = validate_ai_images(published, image)
     destination = Path(metrics) / "verified-image.json"
     destination.write_text(json.dumps(receipt, indent=2) + "\n")
     output({"image": image, "receipt": str(destination)})
-    summary(f"Verified main image: `{image}`\n\nCommit: `{revision}`\n\nCI: "
+    ai_summary = "".join(f"\n\nAI {role}: `{ref}`" for role, ref in receipt.get("ai_images", {}).items())
+    summary(f"Verified main image: `{image}`{ai_summary}\n\nCommit: `{revision}`\n\nCI: "
             f"https://github.com/{REPOSITORY}/actions/runs/{receipt['run_id']}\n\n"
-            f"Compressed layers: {info['compressed_bytes'] / 1024**2:.0f} MiB")
+            f"Compressed ERP layers: {image_metrics['compressed_bytes'] / 1024**2:.0f} MiB")
 
 
 def report(local_image, metrics):
     rows = []
-    for name in ("smoke", "application", "upgrade"):
+    for name in ("smoke", "ai-smoke", "application", "upgrade"):
         path = Path(metrics) / (name + ".json")
         if path.exists():
             data = json.loads(path.read_text())
@@ -243,16 +293,23 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     candidate = sub.add_parser("candidate")
     candidate.add_argument("revision")
+    candidate.add_argument("--role", choices=("erp", *AI_ROLES), default="erp")
+    candidate.add_argument("--print", action="store_true", dest="print_ref")
     resolve = sub.add_parser("resolve")
     resolve.add_argument("tag")
     promote = sub.add_parser("promote")
     promote.add_argument("tag")
     promote.add_argument("revision")
     promote.add_argument("image")
+    promote.add_argument("--runtime", default="")
+    promote.add_argument("--documents", default="")
+    promote.add_argument("--metadata", type=Path)
     publish = sub.add_parser("publish")
     publish.add_argument("local_image")
     publish.add_argument("revision")
     publish.add_argument("metrics", type=Path)
+    publish.add_argument("--runtime")
+    publish.add_argument("--documents")
     sub.add_parser("coordinate")
     reporting = sub.add_parser("report")
     reporting.add_argument("local_image")
@@ -267,41 +324,58 @@ def main():
     if args.command == "candidate":
         if not SHA_RE.fullmatch(args.revision):
             raise ValueError("Invalid candidate revision")
-        image = registry.existing("sha-" + args.revision)
+        image = registry.existing(candidate_tag(args.role, args.revision))
         if image:
-            registry.inspect(image, args.revision)
-        output({"image": image or ""})
+            registry.inspect(image, args.revision, args.role)
+        if args.print_ref:
+            print(image or "")
+        else:
+            output({"image": image or ""})
     elif args.command == "resolve":
         if not TAG_RE.fullmatch(args.tag):
             raise ValueError("Release tag must be vX.Y.Z")
         revision = subprocess.check_output(["git", "rev-parse", "refs/tags/" + args.tag + "^{commit}"], text=True).strip()
         subprocess.run(["git", "merge-base", "--is-ancestor", revision, "origin/main"], check=True)
-        result = resolve_release(github, registry, args.tag, revision)
+        result = resolve_release(github, registry, args.tag, revision, bundled=uses_bundle(revision))
         output(result)
         if not result["ready"]:
             summary(f"Release `{args.tag}` is waiting for CI main at `{revision}`. "
                     "The coordinator will continue automatically after CI succeeds.\n\n"
                     f"https://github.com/{REPOSITORY}/actions?query=workflow%3ACI+branch%3Amain")
     elif args.command == "promote":
+        ai_images = {"runtime": args.runtime, "documents": args.documents}
+        if uses_bundle(args.revision):
+            validate_ai_images(ai_images, args.image)
+            if not args.metadata:
+                raise ValueError("Release bundle requires a deployment metadata path")
+            registry.publish_bundle(args.tag, args.revision, {"erp": args.image, **ai_images})
+            args.metadata.write_text(json.dumps({"schema_version": 1, "tag": args.tag, "revision": args.revision,
+                "image": args.image, "ai_images": ai_images}, indent=2) + "\n")
+        elif any(ai_images.values()):
+            raise ValueError("Unexpected AI images for legacy release")
         image = registry.promote(args.image, args.tag, args.revision)
         output({"image": image})
-        summary(f"### Verified release\n\nTag: `{args.tag}`\n\nCommit: `{args.revision}`\n\nImage: `{image}`")
+        ai_summary = "".join(f"\n\nAI {role}: `{ref}`" for role, ref in ai_images.items() if ref)
+        summary(f"### Verified release\n\nTag: `{args.tag}`\n\nCommit: `{args.revision}`\n\nImage: `{image}`{ai_summary}")
     elif args.command == "publish":
-        publish_receipt(registry, args.local_image, args.revision, args.metrics)
+        if bool(args.runtime) != bool(args.documents):
+            raise ValueError("Both AI image targets are required")
+        ai_images = {"runtime": args.runtime, "documents": args.documents} if args.runtime else None
+        publish_receipt(registry, args.local_image, args.revision, args.metrics, ai_images=ai_images)
     elif args.command == "coordinate":
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         revision = event["workflow_run"]["head_sha"]
         if not SHA_RE.fullmatch(revision):
             raise ValueError("Invalid CI commit SHA")
         tags = subprocess.check_output(["git", "tag", "--points-at", revision], text=True).splitlines()
-        releases = coordinate(event, github, tags)
+        releases = coordinate(event, github, tags, bundled=uses_bundle(revision))
         summary("Ready releases: " + (", ".join(releases) or "none"))
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError,
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError, subprocess.SubprocessError,
             zipfile.BadZipFile) as error:
         # Never expose signed URLs, authorization headers or HTTP response bodies.
         sys.exit("CI release failed: " + (str(error) if isinstance(error, (ValueError, RuntimeError))

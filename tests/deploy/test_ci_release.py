@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 REVISION = "1" * 40
 IMAGE = "ghcr.io/nsivtsev/kanzlei-erp@sha256:" + "a" * 64
+AI_IMAGES = {"runtime": IMAGE[:-64] + "b" * 64, "documents": IMAGE[:-64] + "c" * 64}
 
 
 def run_fixture(**changes):
@@ -48,15 +49,19 @@ class GitHubFixture:
 
 
 class RegistryFixture:
-    def __init__(self, images=None):
+    def __init__(self, images=None, bundle=None):
         self.images = {"sha-" + REVISION: IMAGE} if images is None else images
+        self.release_bundle = bundle
         self.inspected = []
+
+    def bundle(self, tag, revision):
+        return self.release_bundle
 
     def existing(self, tag):
         return self.images.get(tag)
 
-    def inspect(self, image, revision):
-        self.inspected.append((image, revision))
+    def inspect(self, image, revision, *role):
+        self.inspected.append((image, revision, *role))
         return {"compressed_bytes": 100}
 
 
@@ -99,6 +104,43 @@ class ReleaseCoordinationTests(unittest.TestCase):
         self.assertTrue(result["ready"])
         self.assertTrue(result["existing"])
         self.assertEqual(registry.inspected, [(IMAGE, REVISION)])
+
+    def test_bundle_commit_cannot_fall_back_to_an_erp_only_tag(self):
+        with self.assertRaisesRegex(ValueError, "bundle"):
+            self.module().resolve_release(GitHubFixture([]), RegistryFixture({"v1.0.0": IMAGE}),
+                                          "v1.0.0", REVISION, bundled=True)
+
+    def test_verified_bundle_requires_all_three_candidates_and_ai_smoke(self):
+        module = self.module()
+        candidates = {"sha-" + REVISION: IMAGE,
+                      **{role + "-sha-" + REVISION: ref for role, ref in AI_IMAGES.items()}}
+        suites = {"deployment": "passed", "smoke": "passed", "ai-smoke": "passed"}
+        receipt = receipt_fixture(schema_version=3, ai_images=AI_IMAGES, suites=suites)
+        github = GitHubFixture(receipt=receipt)
+        registry = RegistryFixture(candidates)
+        result = module.resolve_release(github, registry, "v1.0.0", REVISION, bundled=True)
+        self.assertEqual({role: result[role] for role in AI_IMAGES}, AI_IMAGES)
+        self.assertEqual(registry.inspected, [(IMAGE, REVISION, "erp"),
+            (AI_IMAGES["runtime"], REVISION, "runtime"), (AI_IMAGES["documents"], REVISION, "documents")])
+        for invalid in (None, IMAGE):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "digest"):
+                candidates["documents-sha-" + REVISION] = invalid
+                module.resolve_release(github, registry, "v1.0.0", REVISION, bundled=True)
+        github.record = {**receipt, "suites": {**suites, "ai-smoke": "failed"}}
+        with self.assertRaisesRegex(ValueError, "scenarios"):
+            module.resolve_release(github, registry, "v1.0.0", REVISION, bundled=True)
+
+    def test_retry_retains_bundle_after_ci_receipt_expires_or_erp_promotion_is_interrupted(self):
+        module = self.module()
+        for tags in ({}, {"v1.0.0": IMAGE}):
+            registry = RegistryFixture(tags, bundle={"erp": IMAGE, **AI_IMAGES})
+            result = module.resolve_release(GitHubFixture([]), registry, "v1.0.0", REVISION, bundled=True)
+            self.assertTrue(result["ready"])
+            self.assertEqual(result["existing"], bool(tags))
+            self.assertEqual({role: result[role] for role in AI_IMAGES}, AI_IMAGES)
+        registry.images["v1.0.0"] = AI_IMAGES["runtime"]
+        with self.assertRaisesRegex(ValueError, "digest"):
+            module.resolve_release(GitHubFixture([]), registry, "v1.0.0", REVISION, bundled=True)
 
     def test_coordinator_dispatches_only_release_tags_after_trusted_main_success(self):
         github = GitHubFixture()

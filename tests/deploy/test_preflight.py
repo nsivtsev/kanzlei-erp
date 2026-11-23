@@ -30,6 +30,8 @@ class PreflightTests(unittest.TestCase):
             self.assertTrue(module.check_current(root, state["image"], state["revision"], state["tag"],
                 health=lambda saved: observed.append(saved)))
             self.assertEqual(observed, [state])
+            self.assertFalse(module.check_current(root, state["image"], state["revision"], state["tag"],
+                health=lambda saved: self.fail("AI digest mismatch"), ai_images={"runtime": "new"}))
             self.assertEqual(json.loads(current.read_text()), state)
             (root / "shared/pending.json").write_text("{}")
             self.assertFalse(module.check_current(root, state["image"], state["revision"], state["tag"],

@@ -31,6 +31,8 @@ jobs:
     outputs:
       ready: ${{ steps.resolve.outputs.ready }}
       image: ${{ steps.promote.outputs.image }}
+      runtime: ${{ steps.resolve.outputs.runtime }}
+      documents: ${{ steps.resolve.outputs.documents }}
       revision: ${{ steps.resolve.outputs.revision }}
       tag: ${{ steps.resolve.outputs.tag }}
     steps:
@@ -40,26 +42,37 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: main
-      - name: Resolve the image verified by CI main
+      - name: Resolve the images verified by CI main
         id: resolve
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/ci_release.py resolve "$RELEASE_TAG"
-      - name: Promote the verified manifest without transferring image layers
+      - name: Promote verified manifests without transferring image layers
         if: steps.resolve.outputs.ready == 'true'
         id: promote
         env:
           RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
           REVISION: ${{ steps.resolve.outputs.revision }}
           VERIFIED_IMAGE: ${{ steps.resolve.outputs.image }}
+          VERIFIED_RUNTIME: ${{ steps.resolve.outputs.runtime }}
+          VERIFIED_DOCUMENTS: ${{ steps.resolve.outputs.documents }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/ci_release.py promote "$RELEASE_TAG" "$REVISION" "$VERIFIED_IMAGE"
+        run: |
+          python3 scripts/ci_release.py promote "$RELEASE_TAG" "$REVISION" "$VERIFIED_IMAGE" \
+            --runtime "$VERIFIED_RUNTIME" --documents "$VERIFIED_DOCUMENTS" --metadata release-images.json
       - name: Package matching deployment configuration
         if: steps.resolve.outputs.ready == 'true'
         env:
           REVISION: ${{ steps.resolve.outputs.revision }}
-        run: git archive --format=tar "$REVISION" deploy | gzip > release.tar.gz
+        run: |
+          bundle_dir=$(mktemp -d)
+          trap 'rm -rf "$bundle_dir"' EXIT
+          git archive --format=tar "$REVISION" deploy | tar -xf - -C "$bundle_dir"
+          if [[ -f $bundle_dir/deploy/release-images.version ]]; then
+            cp release-images.json "$bundle_dir/deploy/"
+          fi
+          tar -czf release.tar.gz -C "$bundle_dir" deploy
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: steps.resolve.outputs.ready == 'true'
         with:
@@ -85,7 +98,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: deployment-release
-      - name: Deploy verified image over SSH
+      - name: Deploy verified images over SSH
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
@@ -94,6 +107,8 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           RELEASE_IMAGE: ${{ needs.release.outputs.image }}
+          RELEASE_RUNTIME: ${{ needs.release.outputs.runtime }}
+          RELEASE_DOCUMENTS: ${{ needs.release.outputs.documents }}
           RELEASE_REVISION: ${{ needs.release.outputs.revision }}
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
         run: bash scripts/deploy-ssh.sh
@@ -104,7 +119,14 @@ jobs:
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
           RELEASE_REVISION: ${{ needs.release.outputs.revision }}
           RELEASE_IMAGE: ${{ needs.release.outputs.image }}
+          RELEASE_RUNTIME: ${{ needs.release.outputs.runtime }}
+          RELEASE_DOCUMENTS: ${{ needs.release.outputs.documents }}
         run: |
           # Markdown backticks are literal.
           # shellcheck disable=SC2016
-          printf '### Production deployment\n\nResult: `%s`\n\nTag: `%s`\n\nCommit: `%s`\n\nImage: `%s`\n\nBackup path and recovery state are printed in the deployment log.\n' "$DEPLOY_STATUS" "$RELEASE_TAG" "$RELEASE_REVISION" "$RELEASE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          printf '### Production deployment\n\nResult: `%s`\n\nTag: `%s`\n\nCommit: `%s`\n\nERP: `%s`\n\n' "$DEPLOY_STATUS" "$RELEASE_TAG" "$RELEASE_REVISION" "$RELEASE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n $RELEASE_RUNTIME ]]; then
+            # shellcheck disable=SC2016
+            printf 'AI runtime: `%s`\n\nAI documents: `%s`\n\n' "$RELEASE_RUNTIME" "$RELEASE_DOCUMENTS" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          printf '%s\n' 'Backup path and recovery state are printed in the deployment log.' >> "$GITHUB_STEP_SUMMARY"

@@ -24,6 +24,9 @@ APP_SERVICES = ["backend", "frontend", "websocket", "queue-short", "queue-long",
 WEB_SERVICES = ["backend", "frontend", "websocket"]
 WORKERS = ["queue-short", "queue-long", "scheduler"]
 AI_SERVICES = ["ai-api", "ai-worker", "ai-coordinator"]
+AI_IMAGE_ROLES = {"ai-api": "runtime", "ai-coordinator": "runtime", "ai-worker": "documents"}
+AI_IMAGE_ENV = {"runtime": "AI_API_IMAGE", "documents": "AI_WORKER_IMAGE"}
+ROLE_LABEL = "io.kanzlei.image.role"
 IMAGE_RE = re.compile(r"ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}\Z")
 TAG_RE = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
@@ -56,6 +59,38 @@ def validate_release(image, revision, tag):
 		raise ValueError("Revision must be a full Git commit SHA")
 	if not TAG_RE.fullmatch(tag):
 		raise ValueError("Release tag must have the form vX.Y.Z")
+
+
+def read_release_images(release, image, revision, tag):
+	deploy_dir = Path(release) / "deploy"
+	if not (deploy_dir / "release-images.version").exists():
+		return None
+	path = deploy_dir / "release-images.json"
+	if not path.is_file():
+		raise ValueError("Release is missing deploy/release-images.json")
+	metadata = read_json(path)
+	if not isinstance(metadata, dict) or (
+		metadata.get("schema_version"), metadata.get("image"), metadata.get("revision"), metadata.get("tag")
+	) != (
+		1, image, revision, tag,
+	):
+		raise ValueError("Deployment image metadata does not match the release")
+	images = metadata.get("ai_images")
+	if (not isinstance(images, dict) or images.keys() != AI_IMAGE_ENV.keys()
+		or any(not isinstance(ref, str) or not IMAGE_RE.fullmatch(ref) for ref in images.values())
+		or len({image, *images.values()}) != 3):
+		raise ValueError("Release requires distinct immutable ERP, runtime and documents digests")
+	return images
+
+
+def compose_from_state(root, state, commands, config=None):
+	release = Path(state["release"])
+	image, revision, tag = state["image"], state["revision"], state["tag"]
+	validate_release(image, revision, tag)
+	images = read_release_images(release, image, revision, tag)
+	if images != state.get("ai_images"):
+		raise ValueError("Saved AI digests do not match deployment image metadata")
+	return Compose(root, release, image, commands, config, ai_images=images)
 
 
 def require_ai_setting(config, key):
@@ -113,7 +148,7 @@ def validate_ai_features(config):
 			raise ValueError("AI_CHAT_WEB_DIR must be an absolute path to a built chat bundle")
 
 
-def read_config(root, path=None):
+def read_config(root, path=None, *, require_ai_images=True):
 	path = path or root / "shared" / "production.env"
 	if path.stat().st_mode & 0o077:
 		raise ValueError("production.env must have permissions 600")
@@ -147,9 +182,10 @@ def read_config(root, path=None):
 	if config["AI_ENABLED"] not in ("0", "1"):
 		raise ValueError("AI_ENABLED must be 0 or 1")
 	if config["AI_ENABLED"] == "1":
-		for key in ("AI_API_IMAGE", "AI_WORKER_IMAGE"):
-			if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[a-f0-9]{64}", config.get(key, "")):
-				raise ValueError("Configure immutable digest for " + key)
+		if require_ai_images:
+			for key in AI_IMAGE_ENV.values():
+				if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[a-f0-9]{64}", config.get(key, "")):
+					raise ValueError("Configure immutable digest for " + key)
 		for key in ("AI_POSTGRES_PASSWORD", "AI_ERP_SERVICE_KEY"):
 			if len(config.get(key, "")) < 32 or config[key].startswith("REPLACE_"):
 				raise ValueError("Configure " + key + " with at least 32 characters")
@@ -204,10 +240,13 @@ class UnsafeContainerError(RuntimeError):
 
 
 class Compose:
-	def __init__(self, root, release, image, commands, config=None):
+	def __init__(self, root, release, image, commands, config=None, *, ai_images=None):
 		self.root, self.release = Path(root), Path(release)
 		self.image, self.commands = image, commands
-		self.config = config or read_config(self.root)
+		self.ai_images = ai_images
+		self.config = dict(config or read_config(self.root, require_ai_images=ai_images is None))
+		if ai_images:
+			self.config.update({key: ai_images[role] for role, key in AI_IMAGE_ENV.items()})
 		self.env = {key: value for key, value in os.environ.items() if not key.startswith("AI_")}
 		self.env.update(self.config, APP_IMAGE=image)
 		if self.config["AI_ENABLED"] != "1" or self.config.get("AI_CHAT_ENABLED") != "true":
@@ -303,7 +342,10 @@ class Compose:
 	def ai_migrate(self):
 		if self.ai_enabled:
 			self.call("up", "-d", "--wait", "--wait-timeout", "180", "ai-postgres", "ai-redis", "ai-qdrant")
-			self.call("run", "--rm", "-T", "--no-deps", "ai-api", "python", "-m", "kanzlei_ai.coordinator", "migrate")
+			if self.ai_images:
+				self.call("run", "--rm", "-T", "--no-deps", "ai-maintenance", "migrate")
+			else:
+				self.call("run", "--rm", "-T", "--no-deps", "ai-api", "python", "-m", "kanzlei_ai.coordinator", "migrate")
 
 	def web(self):
 		self.call("up", "-d", *WEB_SERVICES)
@@ -314,8 +356,41 @@ class Compose:
 	def workers(self, include_ai=True):
 		self.call("up", "-d", *WORKERS)
 		if include_ai and self.ai_enabled:
-			self.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
+			self.start_ai()
 		self.bench("enable-scheduler")
+
+	def start_ai(self):
+		self.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
+
+	def verify_running_images(self, service_images):
+		image_ids = {
+			ref: self.commands.run(["docker", "image", "inspect", "--format", "{{.Id}}", ref]).strip()
+			for ref in set(service_images.values())
+		}
+		for service, ref in service_images.items():
+			container = self.call("ps", "-q", service).strip()
+			if not container or "\n" in container:
+				raise RuntimeError("Expected one running container for " + service)
+			actual = self.commands.run(["docker", "inspect", "--format",
+				"{{.Image}} {{.Config.Image}}{{if .State.Health}} {{.State.Health.Status}}{{end}}", container]).split()
+			if not image_ids[ref] or actual[:2] != [image_ids[ref], ref]:
+				raise RuntimeError("Running container uses a different image for " + service)
+			if service == "ai-api" and actual[2:] != ["healthy"]:
+				raise RuntimeError("AI API is not ready")
+
+	def pull_ai_images(self, revision):
+		for role, key in AI_IMAGE_ENV.items():
+			image = self.config[key]
+			self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], image], timeout=1800)
+			if self.ai_images:
+				self.verify_image(image, revision, role)
+
+	def verify_image(self, image, revision, role):
+		info = json.loads(self.commands.run(["docker", "image", "inspect", "--format", "{{json .}}", image]))
+		labels = info["Config"].get("Labels") or {}
+		if (image not in info.get("RepoDigests", []) or (info["Os"], info["Architecture"]) != ("linux", "amd64")
+			or (labels.get("org.opencontainers.image.revision"), labels.get(ROLE_LABEL)) != (revision, role)):
+			raise ValueError("Pulled image digest, platform, revision or role mismatch for " + role)
 
 	def running(self):
 		observations = []
@@ -337,6 +412,11 @@ class Compose:
 				time.sleep(3)
 		if observations[0] != observations[1]:
 			raise RuntimeError("Application services are restarting")
+		if self.ai_images:
+			images = dict.fromkeys(APP_SERVICES, self.image)
+			if self.ai_enabled:
+				images.update({service: self.ai_images[role] for service, role in AI_IMAGE_ROLES.items()})
+			self.verify_running_images(images)
 
 
 def smoke_check(compose):
@@ -457,14 +537,17 @@ class Deployer:
 		self.commands, self.smoke = commands or Commands(), smoke or smoke_check
 		self.resume = resume
 		self.pending_path = self.root / "shared" / "pending.json"
-		self.config = read_config(self.root)
-		self.new = Compose(self.root, self.release, image, self.commands, self.config)
+		self.ai_images = read_release_images(self.release, image, revision, tag)
+		self.config = read_config(self.root, require_ai_images=self.ai_images is None)
+		if self.ai_images and self.config["PLATFORM"] != "linux/amd64":
+			raise ValueError("Verified release images require linux/amd64")
+		self.new = Compose(self.root, self.release, image, self.commands, self.config, ai_images=self.ai_images)
 
 	def backup(self, previous, *, destination=None):
 		identifier = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex[:8]
 		backup = Path(destination) if destination is not None else self.root / "backups" / identifier
 		backup.mkdir(parents=True, mode=0o700)
-		compose = Compose(self.root, previous["release"], previous["image"], self.commands, self.config)
+		compose = compose_from_state(self.root, previous, self.commands, self.config)
 		snapshot = (
 			"/home/frappe/frappe-bench/sites/"
 			+ self.config["SITE_NAME"]
@@ -604,6 +687,8 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 			self.tag,
 		):
 			raise RuntimeError("Resume must use the unfinished release's exact image, revision and tag")
+		if pending and pending.get("ai_images") != self.ai_images:
+			raise RuntimeError("Resume must use the unfinished release's exact AI digests")
 		if self.resume and not pending:
 			raise RuntimeError("No unfinished deployment to resume")
 		if previous:
@@ -616,9 +701,10 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 				map(int, TAG_RE.fullmatch(previous["tag"]).groups())
 			):
 				raise ValueError("Cannot deploy an older release; use an explicit backup restore")
-			if self.tag == previous["tag"] and (self.image, self.revision) != (
+			if self.tag == previous["tag"] and (self.image, self.revision, self.ai_images) != (
 				previous["image"],
 				previous["revision"],
+				previous.get("ai_images"),
 			):
 				raise ValueError("An existing release tag cannot be reassigned to another image or commit")
 		if pending:
@@ -628,7 +714,7 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 		):
 			# Tag pushes and successful CI events can both enqueue this release.
 			# Check the already deployed stack without replaying database changes.
-			current = Compose(self.root, previous["release"], self.image, self.commands, self.config)
+			current = compose_from_state(self.root, previous, self.commands, self.config)
 			print("For AI configuration changes, run ai-reconcile", flush=True)
 			self.smoke(current)
 			current.running()
@@ -638,9 +724,10 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 		self.new.call("config", "--quiet")
 		self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], self.image], timeout=1800)
 		if self.new.ai_enabled:
-			for ai_image in {self.config["AI_API_IMAGE"], self.config["AI_WORKER_IMAGE"]}:
-				self.commands.run(["docker", "pull", "--platform", self.config["PLATFORM"], ai_image], timeout=1800)
-		actual = self.commands.run(
+			self.new.pull_ai_images(self.revision)
+		if self.ai_images:
+			self.new.verify_image(self.image, self.revision, "erp")
+		elif self.commands.run(
 			[
 				"docker",
 				"image",
@@ -649,12 +736,11 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 				'{{index .Config.Labels "org.opencontainers.image.revision"}}',
 				self.image,
 			]
-		)
-		if actual != self.revision:
+		) != self.revision:
 			raise ValueError("Image revision label does not match the requested commit")
 		self.new.clear_interrupted_tasks()
 		old = (
-			Compose(self.root, previous["release"], previous["image"], self.commands, self.config)
+			compose_from_state(self.root, previous, self.commands, self.config)
 			if previous
 			else None
 		)
@@ -678,6 +764,8 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 					"backup": backup,
 					"operation": "deploy",
 				}
+				if self.ai_images:
+					pending["ai_images"] = self.ai_images
 				atomic_json(self.pending_path, pending)
 			elif pending.get("backup"):
 				verify_backup(Path(pending["backup"]).resolve())
@@ -719,6 +807,8 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 				"site": self.config["SITE_NAME"],
 				"project": self.config["PROJECT_NAME"],
 			}
+			if self.ai_images:
+				state["ai_images"] = self.ai_images
 			publish_state(self.root, state)
 			self.pending_path.unlink()
 			# Retention errors must never roll application code back after committed migrations.
@@ -810,21 +900,20 @@ def reconcile_ai(root, *, commands=None):
 	with deployment_lock(root):
 		if (root / "shared" / "pending.json").exists():
 			raise RuntimeError("Finish deployment or restore recovery before reconciling AI")
-		config = read_config(root)
 		state = read_json(root / "shared" / "current.json")
-		validate_release(state["image"], state["revision"], state["tag"])
+		compose = compose_from_state(root, state, commands)
+		config = compose.config
 		if state["site"] != config["SITE_NAME"] or state.get("project", config["PROJECT_NAME"]) != config["PROJECT_NAME"]:
 			raise ValueError("Current deployment does not match configured site or project")
-		compose = Compose(root, state["release"], state["image"], commands, config)
 		if not compose.has_ai:
 			raise ValueError("Current release does not contain AI services; deploy an AI-capable ERP release first")
+		if compose.ai_enabled:
+			compose.pull_ai_images(state["revision"])
 		compose.stop_ai()
 		try:
 			if compose.ai_enabled:
-				for ai_image in {config["AI_API_IMAGE"], config["AI_WORKER_IMAGE"]}:
-					commands.run(["docker", "pull", "--platform", config["PLATFORM"], ai_image], timeout=1800)
 				compose.ai_migrate()
-				compose.call("up", "-d", "--wait", "--wait-timeout", "180", *AI_SERVICES, timeout=240)
+				compose.start_ai()
 				compose.running()
 			if config["HTTPS_ENABLED"] == "1":
 				compose.call("up", "-d", "--wait", "--no-deps", "caddy")
@@ -876,7 +965,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 			raise ValueError("Backup must be inside this deployment root")
 		manifest = verify_backup(backup)
 		previous = manifest["previous"]
-		config = read_config(root)
+		config = read_config(root, require_ai_images=False)
 		if confirm_site != config["SITE_NAME"] or previous["site"] != confirm_site:
 			raise ValueError("Explicit site confirmation must match the backup and current site")
 		if manifest.get("s3") and read_json(backup / "s3/manifest.json").get("enabled"):
@@ -888,7 +977,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 				raise ValueError("S3 target must be a private JSON file with permissions 600")
 			if not isinstance(read_json(s3_target), dict):
 				raise ValueError("S3 target must contain a JSON object")
-		saved_config = read_config(root, backup / "production.env")
+		saved_config = read_config(root, backup / "production.env", require_ai_images=not previous.get("ai_images"))
 		for key in ("SITE_NAME", "PROJECT_NAME", "PLATFORM", "DB_PASSWORD"):
 			if saved_config[key] != config[key]:
 				raise ValueError(
@@ -898,7 +987,8 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 		# Use the saved configuration bundle even if the old releases directory was removed.
 		recovery_release = root / "releases" / ("restore-" + uuid.uuid4().hex)
 		shutil.copytree(backup / "release", recovery_release)
-		compose = Compose(root, recovery_release, previous["image"], commands, config)
+		recovered = {**previous, "release": str(recovery_release)}
+		compose = compose_from_state(root, recovered, commands, config)
 		stop_ai_for_restore(root, commands, config)
 		commands.run(["docker", "pull", "--platform", config["PLATFORM"], previous["image"]], timeout=1800)
 		compose.clear_interrupted_tasks()
@@ -907,9 +997,10 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 		try:
 			compose.mode(True)
 			compose.stop()
+			if not previous.get("ai_images"):
+				config.update({key: saved_config[key] for key in AI_IMAGE_ENV.values() if key in saved_config})
 			disable_ai_after_restore(root / "shared" / "production.env", config, backup / "production.env")
-			config = read_config(root)
-			compose = Compose(root, recovery_release, previous["image"], commands, config)
+			compose = compose_from_state(root, recovered, commands)
 			compose.call("run", "--rm", "-T", "configurator")
 			restore_snapshot(compose, backup, s3_target=s3_target)
 			# Do not execute Redis jobs that reference the discarded database state.
@@ -922,7 +1013,7 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 			smoke(compose)
 			compose.workers()
 			compose.running()
-			publish_state(root, {**previous, "release": str(recovery_release)})
+			publish_state(root, recovered)
 			(root / "shared" / "pending.json").unlink()
 			print("Restore complete: " + previous["tag"], flush=True)
 		except BaseException:
@@ -942,6 +1033,8 @@ def main():
 	deploy.add_argument("--image", required=True)
 	deploy.add_argument("--revision", required=True)
 	deploy.add_argument("--tag", required=True)
+	deploy.add_argument("--ai-runtime")
+	deploy.add_argument("--ai-documents")
 	deploy.add_argument(
 		"--resume", action="store_true", help="Explicitly retry the exact unfinished release after diagnosis"
 	)
@@ -960,9 +1053,13 @@ def main():
 		signal.signal(signum, interrupted)
 	try:
 		if args.command == "deploy":
-			Deployer(
+			manager = Deployer(
 				args.root, args.release, args.image, args.revision, args.tag, resume=args.resume
-			).deploy()
+			)
+			if args.ai_runtime is not None or args.ai_documents is not None:
+				if manager.ai_images != {"runtime": args.ai_runtime, "documents": args.ai_documents}:
+					raise ValueError("Received deployment metadata does not match the AI release digests")
+			manager.deploy()
 		elif args.command == "ai-reconcile":
 			reconcile_ai(args.root)
 		else:

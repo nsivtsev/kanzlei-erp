@@ -31,4 +31,5 @@ RUN ln -sfn /home/frappe/frappe-bench/assets sites/assets \
 # Changing provenance must not invalidate dependency or application layers.
 ARG REVISION
 LABEL org.opencontainers.image.source="https://github.com/nsivtsev/kanzlei-erp" \
-      org.opencontainers.image.revision="${REVISION}"
+      org.opencontainers.image.revision="${REVISION}" \
+      io.kanzlei.image.role="erp"
