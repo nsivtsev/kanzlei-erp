@@ -152,6 +152,11 @@ def main():
     )
     requeue_parser.add_argument("source_id")
     requeue_parser.add_argument("--connector")
+    retry_parser = commands.add_parser(
+        "retry-table-publication", help="Retry a failed PDF using its completed Paddle OCR pages"
+    )
+    retry_parser.add_argument("job_id")
+    retry_parser.add_argument("--connector")
     args = parser.parse_args()
     settings = Settings()
     if args.command == "reindex":
@@ -163,6 +168,17 @@ def main():
             )
     if args.command == "cutover-ocr" and not settings.mistral_enabled:
         parser.error("OCR cutover requires AI_MISTRAL_ENABLED")
+    if args.command == "retry-table-publication" and (
+        not settings.ingestion_enabled
+        or settings.mistral_enabled
+        or settings.chat_enabled
+        or settings.search_index_enabled
+        or settings.model_profile != "synthetic"
+    ):
+        retry_parser.error(
+            "Table recovery requires ingestion and the synthetic profile with "
+            "Mistral, search and chat disabled"
+        )
     if args.command == "retention":
         try:
             if args.retention_command == "mark":
@@ -224,6 +240,21 @@ def main():
                 ocr_profile=getattr(settings, "ingestion_ocr_profile", "native"),
             )
             print(json.dumps({"job_id": job_id}))
+        elif args.command == "retry-table-publication":
+            result = sync.retry_table_publication(
+                engine,
+                args.connector or settings.ingestion_connector_id,
+                args.job_id,
+                settings.ingestion_pipeline_version,
+                ocr_profile=settings.ingestion_ocr_profile,
+            )
+            print(
+                json.dumps(
+                    {"status": "queued"}
+                    if result == "queued"
+                    else {"status": "skipped", "reason": result}
+                )
+            )
         else:
             while True:
                 try:

@@ -363,3 +363,119 @@ def test_locale_recognizes_unambiguous_short_questions_and_falls_back_for_names(
     from kanzlei_ai.chat.language import question_language
 
     assert question_language(question) == expected
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_invoice_amount_matches_a_unique_row_and_its_amount_column(duplicate):
+    from dataclasses import replace
+
+    from kanzlei_ai.chat.citations import validate_answer
+    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+
+    _, table, _ = fixture_context()
+    table = replace(
+        table,
+        text=(
+            "| Rechnung | Netto | Betrag |\n"
+            "| --- | ---: | ---: |\n"
+            "| RE-2026-00421 | 20,00 EUR | 45,00 EUR |\n"
+            "| RE-2026-0042 | 65,00 EUR | 76,25 EUR |"
+        ),
+    )
+    other = replace(
+        table,
+        text=(
+            "Rechnung | Netto | Betrag\n"
+            f"{'RE-2026-0042' if duplicate else 'RE-2026-0041'} | 78,00 EUR | 84,00 EUR"
+        ),
+        page=1,
+        dependency=replace(table.dependency, chunk_id="4" * 64),
+    )
+    context = (other, table)
+    question = "Wie hoch ist der Betrag der Rechnung RE-2026-0042?"
+    packet = asyncio.run(ExtractiveChatProvider().generate(question, context))
+    if duplicate:
+        assert packet is None
+    else:
+        answer = validate_answer(question, context, packet)
+        assert answer is not None and answer.amount == "76,25 EUR"
+        assert answer.evidence == table and answer.evidence.page == 2
+
+
+def test_single_row_fragment_cannot_supply_amount_for_a_separate_invoice_heading():
+    from dataclasses import replace
+
+    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+
+    heading, table, _ = fixture_context()
+    fragment = replace(table, table_fragment=True)
+    packet = asyncio.run(
+        ExtractiveChatProvider().generate(
+            "Wie hoch ist der Betrag RE-2026-0042?", (heading, fragment)
+        )
+    )
+    assert packet is None
+
+
+def test_order_identifier_does_not_prove_an_invoice_amount():
+    from dataclasses import replace
+
+    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+
+    _, table, _ = fixture_context()
+    table = replace(table, text="Auftrag | Betrag\nRE-2026-0042 | 76,25 EUR")
+    assert (
+        asyncio.run(
+            ExtractiveChatProvider().generate("Wie hoch ist der Betrag für RE-2026-0042?", (table,))
+        )
+        is None
+    )
+
+
+def test_mistral_receives_split_table_as_row_evidence():
+    from dataclasses import replace
+
+    import httpx
+
+    from kanzlei_ai.providers.mistral_chat import MistralChatProvider
+
+    table = replace(
+        fixture_context()[1],
+        table_fragment=True,
+        text="Rechnung | Netto | Betrag\nRE-2026-0042 | 20,00 EUR | 45,00 EUR",
+    )
+
+    def complete(request):
+        system, user = json.loads(request.content)["messages"]
+        assert "same row" in system["content"]
+        assert json.loads(user["content"])["evidence"][0]["table_fragment"] is True
+        packet = json.dumps({"evidence_id": "1", "quote": "45,00 EUR"})
+        return httpx.Response(
+            200, json={"choices": [{"finish_reason": "stop", "message": {"content": packet}}]}
+        )
+
+    provider = MistralChatProvider(
+        endpoint="https://mistral.invalid",
+        api_key="synthetic-secret",
+        transport=httpx.MockTransport(complete),
+    )
+    packet = asyncio.run(provider.generate("Wie hoch ist der Betrag für RE-2026-0042?", (table,)))
+    assert packet is not None and packet.quote == "45,00 EUR"
+
+
+def test_two_invoice_identifier_columns_are_ambiguous():
+    from dataclasses import replace
+
+    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+
+    _, table, _ = fixture_context()
+    table = replace(
+        table,
+        text="Rechnung | Invoice No | Betrag\nRE-2026-0042 | RE-2026-0043 | 76,25 EUR",
+    )
+    assert (
+        asyncio.run(
+            ExtractiveChatProvider().generate("Wie hoch ist der Betrag für RE-2026-0042?", (table,))
+        )
+        is None
+    )

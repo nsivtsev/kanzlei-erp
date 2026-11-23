@@ -524,3 +524,107 @@ def test_dense_lookup_with_real_adapter_has_no_exact_or_lexical_match(search_db)
         assert not branches["exact"] and not branches["sparse"]
         hits = run(index, DelegatedConnector(), query="Zahlung", limit=1)
         assert [hit.chunk_id for hit in hits] == [current.chunk_id]
+
+
+def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, monkeypatch):
+    from base64 import b64decode
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from qdrant_client import QdrantClient
+    from starlette.testclient import TestClient
+    from test_history_permissions import _HEADERS, _PREFIX, Delegation, pdf_url, run_turn
+
+    from kanzlei_ai import jobs, sync, worker
+    from kanzlei_ai.app import create_app
+    from kanzlei_ai.chat.api import ChatRuntime, router
+    from kanzlei_ai.models import chat_turns
+    from kanzlei_ai.models import jobs as jobs_table
+    from kanzlei_ai.search import publication
+    from kanzlei_ai.search.index import SearchIndex
+
+    engine, _ = search_db
+    fixture = Path(__file__).parents[1] / "fixtures/documents/synthetic-long-table.pdf.b64"
+    pdf = b64decode(fixture.read_bytes())
+    description = " ".join(["Synthetic service description"] * 7)
+    header = "Rechnung | Beschreibung | Netto | Betrag"
+    expected = [f"RE-2026-{i:04} | {description} | {i},25 EUR | {i},75 EUR" for i in range(1, 126)]
+    assert len("\n".join([header, *expected])) > 24_000
+
+    erp = Delegation(pdf)
+    erp.connector_id = "origin"
+    manifest = asyncio.run(erp.list_documents("", "A")).items[0].model_dump()
+    epoch = sync.start_scan(engine, "origin")
+    assert sync.apply_inventory(
+        engine,
+        "origin",
+        epoch,
+        None,
+        {"items": [manifest], "next_cursor": None, "changes_cursor": "done"},
+    )
+
+    class DocumentConnector:
+        async def read_background_source(self, source):
+            assert source.source_id == manifest["source_id"]
+            return pdf
+
+    monkeypatch.setattr(worker, "_background_connector", lambda _: DocumentConnector())
+    monkeypatch.setattr(
+        worker, "_artifact_store", lambda _: SimpleNamespace(put=lambda *_: "synthetic/artifact")
+    )
+    with engine.connect() as conn:
+        job_id = conn.execute(select(jobs_table.c.id)).scalar_one()
+    settings = SimpleNamespace(
+        ingestion_enabled=True, search_index_enabled=True, model_profile="synthetic"
+    )
+    assert worker._extract_or_stage(engine, job_id, jobs.claim(engine, job_id), settings)
+
+    with engine.connect() as conn:
+        chunks = (
+            conn.execute(
+                select(document_chunks)
+                .where(document_chunks.c.kind == "table")
+                .order_by(document_chunks.c.ordinal)
+            )
+            .mappings()
+            .all()
+        )
+        index_job = conn.execute(
+            select(jobs_table.c.id).where(jobs_table.c.stage == "index")
+        ).scalar_one()
+    reconstructed = []
+    for chunk in chunks:
+        assert chunk["page"] == 2 and len(chunk["text"]) <= 1800
+        assert chunk["table_fragment"]
+        lines = chunk["text"].split("\n")
+        assert lines[0] == header
+        reconstructed.extend(lines[1:])
+    assert reconstructed == expected
+    assert len(chunks) > 10
+    target = chunks[-1]
+    assert "RE-2026-0125" in target["text"]
+
+    url = os.environ.get("TASK6_QDRANT_TEST_URL")
+    collection = "pdf_long_" + uuid.uuid4().hex
+    with closing(QdrantClient(url=url, timeout=5) if url else QdrantClient(":memory:")) as client:
+        index = SearchIndex(client=client, collection=collection)
+        try:
+            token = jobs.claim(engine, index_job, stage="index")
+            assert publication.process(engine, index_job, token, index)
+            app = create_app(probes={}, connector=erp)
+            app.state.chat_runtime = ChatRuntime(engine, index)
+            app.include_router(router)
+            question = "Wie hoch ist der Betrag für Rechnung RE-2026-0125?"
+            with TestClient(app, headers=_HEADERS) as browser:
+                conversation = browser.post(_PREFIX, json={"client_id": "A"}).json()["id"]
+                event, answer = run_turn(browser, conversation, question)[-1]
+                assert event == "answer" and answer["status"] == "answered"
+                assert "125,75 EUR" in answer["answer"]
+                assert answer["citations"][0]["page"] == 2
+                response = browser.get(pdf_url(conversation, answer))
+                assert response.status_code == 200 and response.content == pdf
+            with engine.connect() as conn:
+                (citation,) = conn.execute(select(chat_turns.c.citations)).scalar_one()
+            assert citation["chunk_id"] == target["id"]
+        finally:
+            client.delete_collection(collection)

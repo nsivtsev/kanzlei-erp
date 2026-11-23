@@ -272,6 +272,7 @@ def _publish_extraction_once(engine, job_id, token, publication, enqueue_index, 
                     kind=chunk["kind"],
                     ordinal=chunk["ordinal"],
                     text=chunk["text"],
+                    table_fragment=chunk.get("table_fragment", False),
                 )
             )
         conn.execute(

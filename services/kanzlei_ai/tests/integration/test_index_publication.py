@@ -516,3 +516,59 @@ def test_real_worker_rebuilds_deleted_collection_via_reindex_cli(database, monke
         for key in redis.scan_iter(match=unique + "*"):
             redis.delete(key)
         redis.close()
+
+
+def test_table_fragment_migration_keeps_existing_chunks(database):
+    config = Config()
+    config.set_main_option(
+        "script_location", str(Path(__file__).parents[2] / "src/kanzlei_ai/migrations")
+    )
+    previous = "0012_outbox_cancellation"
+    with database.begin() as conn:
+        config.attributes["connection"] = conn
+        command.upgrade(config, previous)
+        assert "table_fragment" not in {
+            c["name"] for c in inspect(conn).get_columns("document_chunks")
+        }
+        conn.execute(text("INSERT INTO connectors (id, epoch, phase) VALUES ('test', 0, 'idle')"))
+        conn.execute(
+            sources.insert().values(
+                id=1,
+                connector_id="test",
+                source_id="file:legacy",
+                revision="a" * 64,
+                manifest=_manifest(),
+                generation=1,
+                active=True,
+                status="extracted",
+            )
+        )
+        legacy = dict(
+            source_id=1,
+            revision="a" * 64,
+            generation=1,
+            parser_version="legacy",
+            content_sha256="b" * 64,
+        )
+        artifact_id = conn.execute(
+            document_artifacts.insert()
+            .values(**legacy, artifact_key="legacy", page_count=1)
+            .returning(document_artifacts.c.id)
+        ).scalar_one()
+        conn.execute(
+            document_chunks.insert().values(
+                **legacy,
+                id="legacy",
+                artifact_id=artifact_id,
+                ordinal=0,
+                page=1,
+                kind="table",
+                text="Item | Amount\nTest | 1,23 EUR",
+            )
+        )
+        command.upgrade(config, "head")
+        assert conn.execute(
+            select(document_chunks.c.id, document_chunks.c.table_fragment, document_chunks.c.page)
+        ).one() == ("legacy", False, 1)
+        command.downgrade(config, previous)
+        assert conn.execute(select(document_chunks.c.id)).scalar_one() == "legacy"

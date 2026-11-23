@@ -8,16 +8,20 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from kanzlei_ai.connectors.contracts import SourceManifest
 from kanzlei_ai.db import migrate
 from kanzlei_ai.documents.docx import DOCX_MIME_TYPE
+from kanzlei_ai.documents.parse import PARSER_VERSION
 from kanzlei_ai.jobs import clear_index_batches
 from kanzlei_ai.models import (
     connectors,
+    extraction_plans,
     inbox_items,
     jobs,
+    ocr_page_checkpoints,
     outbox,
     page_receipts,
     relations,
     sources,
 )
+from kanzlei_ai.providers.paddle_ocr import PADDLE_OCR_PROFILE
 
 PIPELINE_VERSION = "pdf-native-v1"
 ARCHIVE_OCR_PROFILES = ("native", "paddle")
@@ -176,6 +180,92 @@ def requeue_extract(
             .values(generation=generation + 1, status="queued", error_code=None)
         )
         return _enqueue(conn, pk, revision, generation + 1, pipeline_version, profile)
+
+
+def retry_table_publication(
+    engine, connector_id, job_id, pipeline_version=PIPELINE_VERSION, *, ocr_profile="native"
+):
+    """Queue a publication retry for one failed PDF with a complete Paddle plan."""
+    with engine.begin() as conn:
+        connector = (
+            conn.execute(
+                select(connectors).where(connectors.c.id == connector_id).with_for_update()
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if connector is None:
+            return "stale_job"
+        source = (
+            conn.execute(
+                select(sources)
+                .join(jobs)
+                .where(jobs.c.id == job_id, sources.c.connector_id == connector_id)
+                .with_for_update(of=sources)
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if source is None or not source["active"]:
+            return "stale_job"
+        job = (
+            conn.execute(select(jobs).where(jobs.c.id == job_id).with_for_update())
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            job is None
+            or job["revision"] != source["revision"]
+            or job["generation"] != source["generation"]
+        ):
+            return "stale_job"
+        if (
+            source["manifest"]["mime_type"] != "application/pdf"
+            or source["status"] != "failed"
+            or source["error_code"] != "TABLE_LIMIT_EXCEEDED"
+            or job["stage"] != "extract"
+            or job["status"] != "failed"
+            or job["error_code"] != "TABLE_LIMIT_EXCEEDED"
+            or job["pipeline_version"] != pipeline_version
+            or job["ocr_profile"] != "paddle"
+            or _effective_ocr_profile(connector, ocr_profile) != "paddle"
+        ):
+            return "incompatible_job"
+        plan = (
+            conn.execute(select(extraction_plans).where(extraction_plans.c.job_id == job_id))
+            .mappings()
+            .one_or_none()
+        )
+        if plan is None or not plan["ocr_pages"]:
+            return "incomplete_checkpoints"
+        checkpoints = (
+            conn.execute(
+                select(ocr_page_checkpoints).where(ocr_page_checkpoints.c.job_id == job_id)
+            )
+            .mappings()
+            .all()
+        )
+        if sorted(plan["ocr_pages"]) != sorted(page["page"] for page in checkpoints):
+            return "incomplete_checkpoints"
+        if plan["parser_version"] != PARSER_VERSION or any(
+            page["provider_profile"] != PADDLE_OCR_PROFILE for page in checkpoints
+        ):
+            return "incompatible_checkpoints"
+
+        generation = source["generation"] + 1
+        conn.execute(
+            update(sources)
+            .where(sources.c.id == source["id"])
+            .values(generation=generation, status="queued", error_code=None)
+        )
+        new_job = _enqueue(
+            conn, source["id"], source["revision"], generation, pipeline_version, "paddle"
+        )
+        conn.execute(insert(extraction_plans).values({**plan, "job_id": new_job}))
+        conn.execute(
+            insert(ocr_page_checkpoints), [{**page, "job_id": new_job} for page in checkpoints]
+        )
+        return "queued"
 
 
 def _receipt(conn, connector_id, epoch, phase, expected_cursor, page):
