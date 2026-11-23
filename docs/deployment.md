@@ -88,10 +88,12 @@ repository administrators can choose environment reviewers separately.
 
 Merge the deployment branch and reviewed application changes into `main`. PRs run
 quick deployment safety tests, shell checks and workflow validation (five-minute
-job limit). A push to `main` repeats those checks, builds the exact release image,
-and runs a minimal smoke on a disposable site: install ERPNext, Suite and Kanzlei,
-migrate once, start services and verify HTTP and compiled assets. The image job
-has a twenty-minute limit; its smoke step has a ten-minute limit.
+job limit). A push to `main` repeats those checks and builds the ERP, AI `runtime`
+and AI `documents` images for the same commit on Linux amd64. The ERP smoke
+installs ERPNext, Suite and Kanzlei on a disposable site and verifies HTTP and
+compiled assets with AI disabled. The AI smoke migrates disposable stores, waits
+for API readiness and checks both image roles and the worker with ingestion,
+search, chat and Mistral disabled. Each smoke step has a ten-minute limit.
 
 The **Full acceptance (manual)** workflow retains the full app/JavaScript suites,
 Suite upgrade, interrupted installation and database/public/private-files
@@ -114,21 +116,20 @@ Tags must be `vX.Y.Z` without prerelease suffixes and must point to a commit rea
 from `main`. Never move an existing release tag. A normal deployment rejects older
 versions and reassignment of the current version to another image or commit.
 
-CI on `main` publishes the exact tested image as `sha-<full commit SHA>` and uploads
-`verified-image-<SHA>`, containing its immutable digest, platform, successful smoke
-result and CI run/attempt. Version 2 receipts name only `deployment` and `smoke`;
-they do not claim full acceptance. Existing version 1 receipts remain valid only
-with all their original mandatory suites. PRs do not build or publish images and
-do not receive package write access.
-A CI rerun pulls the existing SHA image and verifies it again; it never overwrites
-that tag with a different image. Verification receipts are retained for 90 days.
+CI on `main` publishes the three tested images under `sha-<SHA>`,
+`runtime-sha-<SHA>` and `documents-sha-<SHA>` in the existing ERP GHCR package.
+It uploads `verified-image-<SHA>` with all three immutable references, the
+platform, passing checks and the CI run and attempt. A rerun pulls and verifies
+any existing candidate for that commit and preserves its digest. Receipts are
+retained for 90 days. PRs run quick checks with read-only permissions.
 
 The release workflow validates the tag's ancestry, looks up a successful **main push**
-CI for that exact commit, and verifies its receipt against the registry's SHA tag,
-digest, platform and revision label. It copies only the original manifest to the
-release tag inside GHCR; it neither rebuilds nor transfers image layers through an
-Actions runner. The deployment archive is taken from the release commit, while the
-release controller and SSH preflight run from `main`.
+CI for that exact commit, and checks each registry candidate against the receipt,
+including its digest, platform, revision and role. It records the three original
+manifests in GHCR under the metadata tag `release-vX.Y.Z` and promotes the ERP
+manifest to `vX.Y.Z`. The deployment archive comes from the release commit and
+includes `deploy/release-images.json`. The release controller and SSH preflight run
+from `main`. Deployment uses the digest references from the release.
 
 A tag may be pushed while CI is still queued or running. Its first release run prints
 “waiting for CI” and skips deployment. **Continue ready releases** reacts to successful
@@ -138,14 +139,15 @@ successful CI rerun continues waiting releases. If a completed CI has no valid r
 (or the receipt expired), rerun that commit's CI before deploying. New releases from
 commits predating this CI scheme need a commit verified by the new workflow.
 
-Already published `vX.Y.Z` images retain their retry path, including older releases:
-the controller validates their platform and commit label and reuses the original
-digest. Authentication/network failures stop publication rather than being treated
-as a missing image. Existing release tags cannot be reassigned.
+Once the metadata tag is published, retries use its original digests even after
+the receipt expires. Keep the metadata tags and referenced manifests for every
+retained release. Published ERP-only tags from before the bundle transition retain
+their legacy retry path. Missing images, registry errors and conflicting digests
+fail the release.
 
 Workflow concurrency queues main CI and production releases without canceling a
 running migration. The server also enforces an exclusive deployment/restore lock.
-The SSH preflight checks an already installed `tag + revision + digest` and its live
+The SSH preflight checks an already installed tag, revision, image references and live
 health before skipping duplicate deployment, including legacy bundles. A pending
 migration always reaches the existing recovery guard. Before a new image pull, the
 preflight reports free bytes and inodes for the deployment, Docker and containerd
@@ -290,9 +292,10 @@ to bypass recovery checks.
 
 ### Resume the same migration
 
-After diagnosing the failure, use the **exact** release, image, commit and tag from
-`pending.json`. This uses the existing pre-update snapshot instead of backing up a
-partially migrated database:
+After diagnosing the failure, use the release directory, ERP digest, commit and
+tag from `pending.json`. For a bundled release, the manager reads the AI digests
+from that directory's `deploy/release-images.json` and requires them to match the
+pending record. Resume uses the existing pre-update snapshot.
 
 ```bash
 python3 /opt/kanzlei-erp/releases/RELEASE_DIR/deploy/manage.py \
@@ -335,19 +338,19 @@ a database rollback. Keep the old GHCR digests available for every retained snap
 
 ## Optional AI services
 
-Production AI services belong to the same Compose project as ERP but have their
-own PostgreSQL, Redis and Qdrant volumes. Set `AI_ENABLED=1` only after building
-and testing the API (`runtime`) and worker (`documents`) images separately,
-publishing them through your existing registry process, and recording immutable
-`AI_API_IMAGE` and `AI_WORKER_IMAGE` digests in the private production environment.
-Set an independent `AI_POSTGRES_PASSWORD` and configured ERP connector
+Production AI services belong to the ERP Compose project and have dedicated
+PostgreSQL, Redis and Qdrant volumes. Bundled releases supply the `runtime` digest
+for API and coordinator and the `documents` digest for worker and maintenance.
+Existing `AI_API_IMAGE` and `AI_WORKER_IMAGE` pins still apply to legacy releases.
+For a bundled release, set `AI_ENABLED=1`, an independent `AI_POSTGRES_PASSWORD`
+and the configured ERP connector
 `AI_ERP_SERVICE_KEY`, each at least 32 characters. The API binds to loopback on
 `AI_API_PORT` (default 8180); data services have no host ports. Ingestion stays
 off unless `AI_INGESTION_ENABLED=true` and a different `AI_INGESTION_KEY` is
 configured along with the ERP ingestion identity and allowlist. The deployment
-manager runs the AI migration before starting its consumers. To enable, update
-images or disable AI on an already deployed release, update the private environment
-and run the current release's manager under the deployment lock:
+manager runs the AI migration before starting its consumers. To enable or disable
+AI on the installed release, update the private environment and run its deployment
+manager:
 
 ```bash
 python3 /opt/kanzlei-erp/current/deploy/manage.py ai-reconcile
@@ -356,6 +359,12 @@ python3 /opt/kanzlei-erp/current/deploy/manage.py ai-reconcile
 This uses the currently deployed ERP release and refuses to run while a deployment
 or restore is pending. If the restored release predates AI support, deploy an
 AI-capable approved ERP release before using this command.
+
+If the host runs the daily offsite backup, refresh its installed tooling from the
+reviewed release before the first bundled deployment. Follow the existing
+[installation instructions](offsite-backups.md#installation-and-credentials).
+The refreshed tool uses the installed release digest when reopening AI after a
+snapshot.
 
 ERP backups do **not** include AI PostgreSQL, Redis, Qdrant or its job and cursor
 history. Use the [AI pilot operations runbook](../services/kanzlei_ai/docs/operations.md)

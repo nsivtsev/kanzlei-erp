@@ -1,9 +1,7 @@
 # Kanzlei AI pilot operations
 
-Production starts with `AI_ENABLED=0`. The existing ERP release pipeline
-continues to publish the ERP image. Test the separate AI `runtime` and
-`documents` targets for the deployment platform and publish their digests
-through the approved registry process. AI Compose services share the ERP
+Production starts with `AI_ENABLED=0`. The ERP release pipeline publishes
+the tested AI `runtime` and `documents` digests with the ERP image. AI Compose services share the ERP
 project. PostgreSQL, Redis and Qdrant use dedicated volumes and an internal
 network with no host ports. The AI API binds to host loopback on
 `AI_API_PORT` (default 8180). Keep the artifact bucket and its endpoint private
@@ -26,7 +24,7 @@ service-level permissions, publication and recovery checks.
 
 Use the deployment account and the private, mode-600
 `/opt/kanzlei-erp/shared/production.env`. Start with `deploy/production.env.example`.
-Set `AI_API_IMAGE` and `AI_WORKER_IMAGE` to tested immutable digests.
+The installed release supplies the image digests.
 Use a separate `AI_POSTGRES_PASSWORD` and configure the ERP delegation
 identity and `AI_ERP_SERVICE_KEY`. For ingestion, provision the independent
 `AI_INGESTION_KEY` and approved Mandant allowlist described in the
@@ -78,19 +76,21 @@ set -e
 root=/opt/kanzlei-erp
 test ! -e "$root/shared/pending.json"
 cd "$root/current"
-APP_IMAGE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$root/shared/current.json")"
-export APP_IMAGE
+read -r APP_IMAGE AI_API_IMAGE AI_WORKER_IMAGE < <(
+  python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s["image"], s["ai_images"]["runtime"], s["ai_images"]["documents"])' "$root/shared/current.json"
+)
+export APP_IMAGE AI_API_IMAGE AI_WORKER_IMAGE
 ai_compose() {
   docker compose --env-file "$root/shared/production.env" -f "$root/current/deploy/compose.yml" --profile ai "$@"
 }
 coordinator() {
-  ai_compose run --rm --no-deps -T ai-coordinator python -m kanzlei_ai.coordinator "$@"
+  ai_compose run --rm --no-deps -T ai-maintenance "$@"
 }
 ```
 
-Use only the deployment's project and environment. Do not export other
-`AI_*` variables into this shell. Use `ai-reconcile` to recreate application
-containers with the validated settings.
+Use only the deployment's project and environment. Keep the image variables from
+`current.json` for the duration of the lock. Use `ai-reconcile` to recreate
+application containers with the validated settings.
 
 ## Paddle archive and Mistral cutover
 

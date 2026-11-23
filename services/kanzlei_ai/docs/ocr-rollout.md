@@ -18,6 +18,13 @@ The worker expects the respective `local_dir` names `docling-project--docling-la
 and `docling-project--docling-models` inside the Docling asset directory.
 Set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` for the Mac worker.
 
+Before the Mac consumes archive jobs, stop any existing `ocr-paddle` worker.
+Read the release revision from the server's `shared/current.json` after the
+deployment and AI migration succeed. Check out that exact commit on the Mac,
+confirm it with `git rev-parse HEAD`, and run `uv sync --locked --extra paddle`
+from `services/kanzlei_ai`. Start the worker below against that release's stores.
+Repeat this sequence for every server release used by the archive worker.
+
 ## Primary archive pass
 
 1. Run `uv run --locked python -m kanzlei_ai.coordinator migrate` against the

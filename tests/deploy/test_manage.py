@@ -42,6 +42,34 @@ class FakeCommands:
 		return ""
 
 
+class BundledCommands(FakeCommands):
+	def __init__(self, images, *, invalid_role=None, fail_on=None):
+		super().__init__(fail_on)
+		self.images = images
+		self.invalid_role = invalid_role
+		self.compose_images = {}
+
+	def run(self, args, *, env=None, timeout=None):
+		if args[:2] == ["docker", "compose"] and env.get("PROJECT_NAME"):
+			self.compose_images.update({key: env.get(key) for key in manager.AI_IMAGE_ENV.values()})
+		result = super().run(args, env=env, timeout=timeout)
+		if args[:3] == ["docker", "image", "inspect"]:
+			ref = args[-1]
+			if "{{.Id}}" in args:
+				return ref.split("@")[1]
+			role = next(role for role, image in self.images.items() if image == ref)
+			return json.dumps({"RepoDigests": [ref], "Os": "linux", "Architecture": "amd64",
+				"Config": {"Labels": {"org.opencontainers.image.revision": "2" * 40,
+					manager.ROLE_LABEL: "wrong" if role == self.invalid_role else role}}})
+		if args[:2] == ["docker", "inspect"] and ".Config.Image" in args[3]:
+			role = manager.AI_IMAGE_ROLES.get(args[-1], "erp")
+			ref = self.images[role]
+			return ref.split("@")[1] + " " + ref + (" healthy" if args[-1] == "ai-api" else "")
+		if "ps" in args and args[-2] == "-q":
+			return args[-1]
+		return result
+
+
 class DeploymentTests(unittest.TestCase):
 	def setUp(self):
 		self.assertIsNotNone(manager, "Deployment manager has not been implemented")
@@ -86,6 +114,71 @@ class DeploymentTests(unittest.TestCase):
 			smoke=smoke or (lambda _compose: None),
 			**kwargs,
 		)
+
+	def test_bundle_release_requires_image_metadata_before_docker_commands(self):
+		(self.release / "deploy/release-images.version").write_text("1\n")
+		commands = FakeCommands()
+		with self.assertRaisesRegex(ValueError, "release-images.json"):
+			self.deployer(commands).deploy()
+		self.assertEqual(commands.calls, [])
+
+	def prepare_bundle(self, enabled):
+		ai_images = {"runtime": self.new_image[:-64] + "c" * 64, "documents": self.new_image[:-64] + "d" * 64}
+		(self.release / "deploy/release-images.version").write_text("1\n")
+		(self.release / "deploy/compose.yml").write_text("services:\n  ai-api:\n    image: fixture\n")
+		manager.atomic_json(self.release / "deploy/release-images.json", {
+			"schema_version": 1, "image": self.new_image, "revision": "2" * 40, "tag": "v1.1.0",
+			"ai_images": ai_images,
+		})
+		with self.config.open("a") as config:
+			config.write(f"AI_ENABLED={int(enabled)}\nAI_POSTGRES_PASSWORD={'e' * 32}\nAI_ERP_SERVICE_KEY={'f' * 32}\n")
+		return ai_images
+
+	def test_verified_bundle_deploys_with_optional_ai_and_saves_release_metadata(self):
+		for enabled in (True, False):
+			with self.subTest(enabled=enabled):
+				ai_images = self.prepare_bundle(enabled)
+				commands = BundledCommands({"erp": self.new_image, **ai_images})
+				self.deployer(commands).deploy()
+				state = manager.read_json(self.root / "shared/current.json")
+				self.assertEqual(state["ai_images"], ai_images)
+				self.assertEqual(commands.compose_images, {
+					"AI_API_IMAGE": ai_images["runtime"], "AI_WORKER_IMAGE": ai_images["documents"],
+				})
+				maintenance = [i for i, call in enumerate(commands.calls) if "ai-maintenance" in call and "migrate" in call]
+				starts = [i for i, call in enumerate(commands.calls) if "up" in call and "ai-coordinator" in call]
+				if enabled:
+					self.assertLess(maintenance[0], starts[0])
+				else:
+					self.assertFalse(maintenance or starts)
+					self.assertFalse(any("pull" in call and call[-1] in ai_images.values() for call in commands.calls))
+				manager.atomic_json(self.root / "shared/current.json", self.state)
+				self.config.write_text(self.config.read_text().split("AI_ENABLED=", 1)[0])
+
+	def test_wrong_ai_role_never_stops_production(self):
+		ai_images = self.prepare_bundle(True)
+		commands = BundledCommands({"erp": self.new_image, **ai_images}, invalid_role="documents")
+		with self.assertRaisesRegex(ValueError, "mismatch for documents"):
+			self.deployer(commands).deploy()
+		self.assertFalse(any("stop" in call for call in commands.calls))
+		self.assertFalse((self.root / "shared/pending.json").exists())
+
+	def test_failed_ai_migration_records_original_digests_and_rejects_changed_resume(self):
+		ai_images = self.prepare_bundle(True)
+		commands = BundledCommands({"erp": self.new_image, **ai_images}, fail_on="ai-maintenance")
+		with self.assertRaisesRegex(RuntimeError, "ai-maintenance"):
+			self.deployer(commands).deploy()
+		pending_path = self.root / "shared/pending.json"
+		self.assertEqual(manager.read_json(pending_path)["ai_images"], ai_images)
+		self.assertEqual(manager.read_json(self.root / "shared/current.json"), self.state)
+		path = self.release / "deploy/release-images.json"
+		metadata = manager.read_json(path)
+		metadata["ai_images"]["documents"] = self.new_image[:-64] + "e" * 64
+		manager.atomic_json(path, metadata)
+		resume = FakeCommands()
+		with self.assertRaisesRegex(RuntimeError, "exact AI digests"):
+			self.deployer(resume, resume=True).deploy()
+		self.assertEqual(resume.calls, [])
 
 	def test_backup_failure_never_runs_migration_or_advances_current(self):
 		commands = FakeCommands("backup")

@@ -14,6 +14,12 @@ done
 [[ $DEPLOY_SSH_PORT =~ ^[0-9]+$ ]] && (( DEPLOY_SSH_PORT > 0 && DEPLOY_SSH_PORT < 65536 ))
 [[ $DEPLOY_PATH =~ ^/[a-zA-Z0-9_./-]+$ && $DEPLOY_PATH != / && $DEPLOY_PATH != *..* ]]
 [[ $RELEASE_IMAGE =~ ^ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}$ ]]
+RELEASE_RUNTIME=${RELEASE_RUNTIME:-}
+RELEASE_DOCUMENTS=${RELEASE_DOCUMENTS:-}
+if [[ -n $RELEASE_RUNTIME || -n $RELEASE_DOCUMENTS ]]; then
+  [[ $RELEASE_RUNTIME =~ ^ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}$ ]]
+  [[ $RELEASE_DOCUMENTS =~ ^ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}$ ]]
+fi
 [[ $RELEASE_REVISION =~ ^[a-f0-9]{40}$ ]]
 [[ $RELEASE_TAG =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 test -f release.tar.gz
@@ -26,8 +32,8 @@ chmod 0600 "$ssh_dir/key" "$ssh_dir/known_hosts"
 ssh-keygen -y -f "$ssh_dir/key" >/dev/null
 ssh_options=(-i "$ssh_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 destination="$DEPLOY_SSH_USER@$DEPLOY_HOST"
-printf -v preflight_command 'exec python3 - --root %q --image %q --revision %q --tag %q' \
-  "$DEPLOY_PATH" "$RELEASE_IMAGE" "$RELEASE_REVISION" "$RELEASE_TAG"
+printf -v preflight_command 'exec python3 - --root %q --image %q --revision %q --tag %q --runtime %q --documents %q' \
+  "$DEPLOY_PATH" "$RELEASE_IMAGE" "$RELEASE_REVISION" "$RELEASE_TAG" "$RELEASE_RUNTIME" "$RELEASE_DOCUMENTS"
 preflight=$(ssh -p "$DEPLOY_SSH_PORT" "${ssh_options[@]}" "$destination" \
   "bash -c $(printf '%q' "$preflight_command")" < "$(dirname "$0")/deploy_preflight.py")
 printf '%s\n' "$preflight"
@@ -43,4 +49,8 @@ archive="$DEPLOY_PATH/release-$run_id-$attempt.tar.gz"
 scp -P "$DEPLOY_SSH_PORT" "${ssh_options[@]}" release.tar.gz "$destination:$archive"
 printf -v remote 'set -euo pipefail; umask 077; mkdir -p %q; tar -xzf %q -C %q; rm %q; exec python3 %q --root %q deploy --release %q --image %q --revision %q --tag %q' \
   "$release_dir" "$archive" "$release_dir" "$archive" "$release_dir/deploy/manage.py" "$DEPLOY_PATH" "$release_dir" "$RELEASE_IMAGE" "$RELEASE_REVISION" "$RELEASE_TAG"
+if [[ -n $RELEASE_RUNTIME ]]; then
+  printf -v ai_args ' --ai-runtime %q --ai-documents %q' "$RELEASE_RUNTIME" "$RELEASE_DOCUMENTS"
+  remote+=$ai_args
+fi
 ssh -p "$DEPLOY_SSH_PORT" "${ssh_options[@]}" "$destination" "bash -c $(printf '%q' "$remote")"

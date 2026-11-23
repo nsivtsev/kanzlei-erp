@@ -12,13 +12,14 @@ import sys
 from pathlib import Path
 
 
-def check_current(root, image, revision, tag, *, health):
+def check_current(root, image, revision, tag, *, health, ai_images=None):
     root = Path(root)
     current = root / "shared/current.json"
     if not current.exists() or (root / "shared/pending.json").exists():
         return False
     state = json.loads(current.read_text())
-    if (state.get("image"), state.get("revision"), state.get("tag")) != (image, revision, tag):
+    if (state.get("image"), state.get("revision"), state.get("tag"), state.get("ai_images")) != (
+            image, revision, tag, ai_images):
         return False
     health(state)
     return True
@@ -43,10 +44,18 @@ def main():
     parser.add_argument("--image", required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--tag", required=True)
+    parser.add_argument("--runtime", default="")
+    parser.add_argument("--documents", default="")
     args = parser.parse_args()
     if not re.fullmatch(r"ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}", args.image) or not re.fullmatch(
             r"[a-f0-9]{40}", args.revision) or not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", args.tag):
         raise ValueError("Invalid release identity")
+    ai_images = None
+    if args.runtime or args.documents:
+        ai_images = {"runtime": args.runtime, "documents": args.documents}
+        if (any(not re.fullmatch(r"ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}", ref)
+                for ref in ai_images.values()) or len({args.image, *ai_images.values()}) != 3):
+            raise ValueError("Invalid AI image references")
     root = args.root.resolve()
 
     def health(state):
@@ -55,10 +64,14 @@ def main():
         spec = importlib.util.spec_from_file_location("deployed_manage", release / "deploy/manage.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        config = module.read_config(root)
+        if ai_images is None:
+            config = module.read_config(root)
+            compose = module.Compose(root, release, args.image, module.Commands(), config)
+        else:
+            compose = module.compose_from_state(root, state, module.Commands())
+            config = compose.config
         if state["site"] != config["SITE_NAME"] or state.get("project", config["PROJECT_NAME"]) != config["PROJECT_NAME"]:
             raise ValueError("Current deployment configuration differs from saved state")
-        compose = module.Compose(root, release, args.image, module.Commands(), config)
         module.smoke_check(compose)
         compose.running()
 
@@ -69,7 +82,7 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RuntimeError("Another deployment or restore is running") from None
-        if check_current(root, args.image, args.revision, args.tag, health=health):
+        if check_current(root, args.image, args.revision, args.tag, health=health, ai_images=ai_images):
             print("Already deployed and healthy: " + args.tag, flush=True)
             print("SKIP")
             return

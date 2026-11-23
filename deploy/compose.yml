@@ -306,7 +306,9 @@ services:
     command: [--help]
     networks: [default, ai-private]
     environment:
-      <<: [*ai-stores, *ai-search, *ai-artifacts]
+      <<: [*ai-stores, *ai-erp, *ai-search, *ai-ingestion, *ai-model, *ai-artifacts]
+      AI_COORDINATOR_ONLY: "true"
+      AI_INGESTION_OCR_PROFILE: ${AI_INGESTION_OCR_PROFILE:-native}
     logging: *logging
 
 networks:
