@@ -874,3 +874,171 @@ def test_abandoned_index_jobs_delete_temporary_vectors(database, action):
     assert _jobs(database, "index")[0]["status"] == (
         "failed" if action == "exhaustion" else "superseded"
     )
+
+
+@pytest.fixture
+def failed_table_job(database):
+    from kanzlei_ai.documents.parse import PARSER_VERSION
+    from kanzlei_ai.providers.paddle_ocr import PADDLE_OCR_PROFILE
+
+    sync.initialize(database)
+    _inventory(database, _manifest())
+    job_id = _jobs(database)[0]["id"]
+    assert job_service.save_extraction_plan(
+        database,
+        job_id,
+        job_service.claim(database, job_id),
+        dict(
+            parser_version=PARSER_VERSION,
+            content_sha256="a" * 64,
+            page_count=2,
+            native_blocks=[dict(page=1, kind="text", text="Synthetischer Test")],
+            ocr_pages=[2],
+        ),
+    )
+    lines = [f"| RE-2026-{i:04} | {'Prüfung ' * 24} | {i},00 EUR |" for i in range(125)]
+    header = ["| Rechnung | Beschreibung | Betrag |", "| --- | --- | ---: |"]
+    assert job_service.save_ocr_page(
+        database,
+        job_id,
+        job_service.claim(database, job_id),
+        dict(
+            page=2,
+            provider_profile=PADDLE_OCR_PROFILE,
+            blocks=[dict(page=2, kind="table", text="\n".join(header + lines))],
+        ),
+    )
+    assert job_service.fail_terminal(
+        database, job_id, job_service.claim(database, job_id), "TABLE_LIMIT_EXCEEDED"
+    )
+    return job_id, header, lines
+
+
+def test_retry_table_publication_reuses_completed_pages_once(
+    database, failed_table_job, monkeypatch
+):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from kanzlei_ai.models import document_artifacts
+
+    job_id, header, lines = failed_table_job
+
+    def retry():
+        return sync.retry_table_publication(database, "synthetic", job_id, ocr_profile="paddle")
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = [workers.submit(retry), workers.submit(retry)]
+        assert sorted(task.result() for task in results) == ["queued", "stale_job"]
+    old, new = _jobs(database)
+    assert old["status"] == "failed" and old["error_code"] == "TABLE_LIMIT_EXCEEDED"
+    assert new["generation"] == old["generation"] + 1
+
+    deliveries = []
+    outbox.dispatch(
+        database,
+        lambda _: pytest.fail("A Paddle retry must use the Paddle route"),
+        publish_ocr=lambda job_id, profile: deliveries.append((job_id, profile)),
+    )
+    assert deliveries.count((new["id"], "paddle")) == 1
+
+    def unexpected(*_):
+        pytest.fail("A completed plan must publish without reading the PDF or running OCR")
+
+    monkeypatch.setattr(worker, "_background_connector", unexpected)
+    monkeypatch.setattr(
+        worker, "_artifact_store", lambda _: SimpleNamespace(put=lambda *_: "synthetic/artifact")
+    )
+    assert worker._extract_or_stage(
+        database,
+        new["id"],
+        job_service.claim(database, new["id"], ocr_profile="paddle"),
+        SimpleNamespace(ingestion_enabled=True, search_index_enabled=False),
+        ocr_provider_factory=unexpected,
+    )
+    assert retry() == "stale_job"
+    with database.connect() as conn:
+        assert (
+            conn.execute(select(document_artifacts.c.generation)).scalar_one() == new["generation"]
+        )
+        chunks = (
+            conn.execute(
+                select(document_chunks)
+                .where(document_chunks.c.kind == "table")
+                .order_by(document_chunks.c.ordinal)
+            )
+            .mappings()
+            .all()
+        )
+    assert len(chunks) > 1
+    reconstructed = []
+    for chunk in chunks:
+        assert chunk["page"] == 2 and len(chunk["text"]) <= 1800
+        parts = chunk["text"].split("\n")
+        assert parts[:2] == header
+        reconstructed.extend(parts[2:])
+    assert reconstructed == lines
+
+
+@pytest.mark.parametrize(
+    "change", ["missing", "adapter", "parser", "pipeline", "profile", "revision"]
+)
+def test_retry_table_publication_skips_incompatible_job(database, failed_table_job, change):
+    from kanzlei_ai.models import extraction_plans, ocr_page_checkpoints
+
+    job_id, _, _ = failed_table_job
+    with database.begin() as conn:
+        if change == "missing":
+            conn.execute(ocr_page_checkpoints.delete())
+        elif change == "adapter":
+            conn.execute(ocr_page_checkpoints.update().values(provider_profile="old"))
+        elif change == "parser":
+            conn.execute(extraction_plans.update().values(parser_version="old"))
+        elif change == "pipeline":
+            conn.execute(jobs.update().values(pipeline_version="old"))
+        elif change == "revision":
+            conn.execute(sources.update().values(revision="b" * 64))
+    result = sync.retry_table_publication(
+        database, "synthetic", job_id, ocr_profile="native" if change == "profile" else "paddle"
+    )
+    assert (
+        result
+        == {
+            "missing": "incomplete_checkpoints",
+            "adapter": "incompatible_checkpoints",
+            "parser": "incompatible_checkpoints",
+            "pipeline": "incompatible_job",
+            "profile": "incompatible_job",
+            "revision": "stale_job",
+        }[change]
+    )
+    assert len(_jobs(database)) == 1
+
+
+def test_operator_retry_command_reports_only_status(
+    database, failed_table_job, monkeypatch, capsys
+):
+    import json
+    import sys
+
+    from kanzlei_ai.settings import Settings
+
+    job_id, _, _ = failed_table_job
+    monkeypatch.setattr(sys, "argv", ["coordinator", "retry-table-publication", job_id])
+    monkeypatch.setattr(coordinator, "engine_from_settings", lambda _: database)
+    monkeypatch.setattr(
+        coordinator,
+        "Settings",
+        lambda: Settings(
+            ingestion_enabled=True,
+            ingestion_connector_id="synthetic",
+            ingestion_ocr_profile="paddle",
+            model_profile="synthetic",
+            mistral_enabled=False,
+            chat_enabled=False,
+            search_index_enabled=False,
+        ),
+    )
+    coordinator.main()
+    assert json.loads(capsys.readouterr().out) == {"status": "queued"}
+    coordinator.main()
+    assert json.loads(capsys.readouterr().out) == {"status": "skipped", "reason": "stale_job"}

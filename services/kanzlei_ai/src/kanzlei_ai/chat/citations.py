@@ -1,12 +1,14 @@
 """Accept only structured, supported claims backed by exact SQL evidence."""
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Protocol
 
 from kanzlei_ai.chat.context import Evidence
 from kanzlei_ai.chat.language import abstention, excerpt_answer, invoice_answer
 from kanzlei_ai.connectors.base import ConnectorError
+from kanzlei_ai.documents.pdf_table import parse_pdf_table
 from kanzlei_ai.search.index import exact_identifiers
 
 _QUESTION_AMOUNT = re.compile(
@@ -41,7 +43,21 @@ _AMOUNT_HEADERS = {
     "итого",
     "всего",
 }
-_MARKDOWN_DIVIDER = re.compile(r":?-{3,}:?")
+_INVOICE_HEADERS = {
+    "rechnung",
+    "rechnung nr",
+    "rechnung nr.",
+    "rechnungsnr.",
+    "rechnungsnummer",
+    "invoice",
+    "invoice no",
+    "invoice no.",
+    "invoice number",
+    "счёт",
+    "счет",
+    "номер счёта",
+    "номер счета",
+}
 
 
 @dataclass(frozen=True)
@@ -81,31 +97,20 @@ class ChatProvider(Protocol):
     ) -> AnswerPacket | None: ...
 
 
-def _amount_from_table(text):
-    rows = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("|") and line.endswith("|"):
-            line = line[1:-1]
-        rows.append(tuple(cell.strip() for cell in line.split("|")))
-    if (
-        len(rows) == 3
-        and len(rows[1]) == len(rows[0])
-        and all(_MARKDOWN_DIVIDER.fullmatch(cell) for cell in rows[1])
-    ):
-        del rows[1]
-    if len(rows) != 2 or len(rows[0]) != len(rows[1]):
-        return None
-    columns = [i for i, cell in enumerate(rows[0]) if cell.casefold() in _AMOUNT_HEADERS]
-    if len(columns) != 1:
-        return None
-    value = rows[1][columns[0]]
+def _validated_amount(value):
     prefix = _PREFIX_CURRENCY.match(value)
     suffix = _SUFFIX_CURRENCY.search(value)
     if bool(prefix) == bool(suffix):
         return None
     number = value[prefix.end() :] if prefix else value[: suffix.start()]
     return value if _AMOUNT.fullmatch(number) else None
+
+
+def _row_amount(columns, row):
+    values = [
+        value for header, value in zip(columns, row, strict=True) if header in _AMOUNT_HEADERS
+    ]
+    return _validated_amount(values[0]) if len(values) == 1 else None
 
 
 def is_invoice_amount_question(question: str) -> bool:
@@ -117,6 +122,31 @@ def supported_amount(question: str, context: tuple[Evidence, ...]) -> VerifiedIn
     if len(identifiers) != 1 or not _QUESTION_AMOUNT.search(question):
         return None
     identifier = next(iter(identifiers))
+    tables = [
+        (evidence, table)
+        for evidence in context
+        if evidence.source_kind == "pdf"
+        and evidence.kind == "table"
+        and (table := parse_pdf_table(evidence.text)) is not None
+    ]
+    matches: list[tuple[str | None, Evidence]] = []
+    for evidence, table in tables:
+        columns = tuple(cell.casefold() for cell in table.columns)
+        identity_columns = [i for i, name in enumerate(columns) if name in _INVOICE_HEADERS]
+        for row in table.rows:
+            if any(
+                unicodedata.normalize("NFKC", row[i]).casefold() == identifier
+                for i in identity_columns
+            ):
+                amount = _row_amount(columns, row) if len(identity_columns) == 1 else None
+                matches.append((amount, evidence))
+    if matches:
+        if len(matches) == 1:
+            amount, evidence = matches[0]
+            if amount is not None:
+                return VerifiedInvoice(amount, evidence)
+        return None
+
     # Amount tables can be separate from the invoice heading. Resolve through
     # the same source and generation, never by mixing two documents.
     invoice_heading = re.compile(
@@ -134,11 +164,12 @@ def supported_amount(question: str, context: tuple[Evidence, ...]) -> VerifiedIn
         return None
     eligible = [
         VerifiedInvoice(amount, evidence)
-        for evidence in context
-        if evidence.source_kind == "pdf"
-        and evidence.dependency.version_key() in invoices
-        and evidence.kind == "table"
-        and (amount := _amount_from_table(evidence.text))
+        for evidence, table in tables
+        if evidence.dependency.version_key() in invoices
+        and not evidence.table_fragment
+        and len(table.rows) == 1
+        and not _INVOICE_HEADERS.intersection(columns := tuple(c.casefold() for c in table.columns))
+        and (amount := _row_amount(columns, table.rows[0]))
     ]
     if len({answer.amount for answer in eligible}) != 1:
         return None

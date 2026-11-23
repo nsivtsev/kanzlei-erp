@@ -372,9 +372,10 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
                     {"page": item.page, "kind": item.kind, "text": item.text}
                     for item in parsed.blocks
                 ],
-            )
+            ),
+            split_pdf_tables=mime_type == "application/pdf",
         )
-        if (is_email or is_docx) and len(chunks) > MAX_CHUNKS:
+        if len(chunks) > MAX_CHUNKS:
             raise TerminalExtractionError("CHUNK_LIMIT_EXCEEDED")
         if not extraction_claim_is_live(engine, job_id, token):
             return False
@@ -399,6 +400,7 @@ def _extract_or_stage(engine, job_id, token, settings, *, ocr_provider_factory=N
                         "kind": chunk.kind,
                         "ordinal": chunk.ordinal,
                         "text": chunk.text,
+                        "table_fragment": chunk.table_fragment,
                     }
                     for chunk in chunks
                 ],

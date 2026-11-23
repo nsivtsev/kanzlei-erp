@@ -260,6 +260,32 @@ shell before reconciling and restarting any authorized remote worker.
   `coordinator dispatch`, or restart the coordinator to do both. Check for
   remaining queue lag before reopening the pilot.
 
+### Retry publication from completed Paddle pages
+
+Use this procedure for the nine pilot extraction jobs that ended with
+`TABLE_LIMIT_EXCEEDED`. Deploy the updated coordinator and Paddle worker,
+apply the AI database migration, and use the private archive configuration
+with `AI_INGESTION_ENABLED=true`, `AI_INGESTION_OCR_PROFILE=paddle`,
+`AI_MODEL_PROFILE=synthetic` and Mistral, search indexing and public chat disabled.
+Keep routine feed polling paused while draining this cohort. Check the
+Paddle backlog before dispatch so queued work from an earlier run is visible.
+
+1. Identify the original nine extraction job IDs on the server. Keep the list
+   in the private operating environment. Run `coordinator retry-table-publication JOB_ID`
+   for each ID, selecting the connector with `--connector` if required.
+2. Record each `queued` or `skipped` result privately. A skipped job is stale
+   or incompatible, or its OCR checkpoints are incomplete. A queued job uses
+   the same PDF revision and copies the full compatible Paddle plan into a new
+   generation. It resumes at publication without reading the PDF or invoking OCR.
+3. Run `coordinator recover` and `coordinator dispatch` with the updated Paddle
+   worker listening on `ocr-paddle`. Use `coordinator ops-status --json` to watch
+   for lag. In the private database, follow each queued original job to the
+   extraction job with the same source and revision and the next generation.
+   Count it as published when that job is completed and a matching artifact
+   exists for the current source revision and generation. Record terminal
+   failures by their safe error codes. Report only the aggregate published,
+   skipped and failed counts and reasons, accounting for all nine originals.
+
 ## Rotate credentials or stop AI
 
 In a locked window, stop consumers, update the credentials at the issuer and

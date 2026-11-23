@@ -55,6 +55,7 @@ class Evidence:
     title: str = "PDF"
     mime_type: str = PDF_MIME
     content_sha256: str = ""
+    table_fragment: bool = False
 
     @property
     def source_kind(self) -> SourceKind | None:
@@ -164,6 +165,7 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             chunk.page,
             chunk.kind,
             chunk.text,
+            chunk.table_fragment,
             source.manifest["title"].as_string().label("title"),
             mime.label("mime_type"),
             artifact.content_sha256,
@@ -215,7 +217,14 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
         if not title or len(title) > 500 or any(ord(char) < 32 for char in title):
             title = {EMAIL_MIME: "E-Mail", DOCX_MIME: "Word-Dokument"}.get(row.mime_type, "PDF")
         result[dependency] = Evidence(
-            dependency, page, row.kind, row.text, title, row.mime_type, row.content_sha256
+            dependency,
+            page,
+            row.kind,
+            row.text,
+            title,
+            row.mime_type,
+            row.content_sha256,
+            row.table_fragment,
         )
     return result
 

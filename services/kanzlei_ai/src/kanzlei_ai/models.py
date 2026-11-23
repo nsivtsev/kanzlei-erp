@@ -173,6 +173,7 @@ document_chunks = Table(
     Column("kind", String(20), nullable=False),
     Column("ordinal", Integer, nullable=False),
     Column("text", Text, nullable=False),
+    Column("table_fragment", Boolean, nullable=False, server_default=false()),
     UniqueConstraint("source_id", "revision", "generation", "parser_version", "ordinal"),
 )
 index_publications = Table(

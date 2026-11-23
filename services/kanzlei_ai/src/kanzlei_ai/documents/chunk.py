@@ -7,6 +7,9 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from kanzlei_ai.documents.parse import TerminalExtractionError
+from kanzlei_ai.documents.pdf_table import parse_pdf_table
+
 
 class OversizedTable(ValueError):
     """A table cannot be split without losing its header/row relationship."""
@@ -36,15 +39,40 @@ class Chunk:
     kind: str
     ordinal: int
     text: str
+    table_fragment: bool = False
 
 
-def _parts(text: str, kind: str, maximum: int) -> list[str]:
-    if kind == "table":
-        # A table is an atomic claim surface.  Splitting cells into unrelated
-        # chunks destroys the row/header association needed for safe answers.
-        if len(text) > maximum:
+def _table_parts(text: str, maximum: int) -> list[tuple[str, str, bool]]:
+    table = parse_pdf_table(text)
+    if table is None:
+        raise TerminalExtractionError("UNSUPPORTED_TABLE_STRUCTURE")
+    if len(text) <= maximum:
+        return [("table", text, False)]
+    if not table.row_lines:
+        raise OversizedTable("TABLE_LIMIT_EXCEEDED")
+    header_length = len("\n".join(table.header_lines))
+    parts = []
+    lines = list(table.header_lines)
+    length = header_length
+    for row in table.row_lines:
+        row_length = len(row) + 1
+        if header_length + row_length > maximum:
             raise OversizedTable("TABLE_LIMIT_EXCEEDED")
-        return [text]
+        if length + row_length > maximum:
+            parts.append("\n".join(lines))
+            lines = list(table.header_lines)
+            length = header_length
+        lines.append(row)
+        length += row_length
+    parts.append("\n".join(lines))
+    return [
+        *(("text", part, False) for part in _text_parts(table.before, maximum)),
+        *(("table", part, len(parts) > 1) for part in parts),
+        *(("text", part, False) for part in _text_parts(table.after, maximum)),
+    ]
+
+
+def _text_parts(text: str, maximum: int) -> list[str]:
     paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
     result: list[str] = []
     for paragraph in paragraphs:
@@ -59,7 +87,21 @@ def _parts(text: str, kind: str, maximum: int) -> list[str]:
     return result
 
 
-def deterministic_chunks(value: ChunkInput, *, max_characters: int = 1800) -> list[Chunk]:
+def _parts(
+    text: str, kind: str, maximum: int, split_pdf_tables: bool
+) -> list[tuple[str, str, bool]]:
+    if kind == "table":
+        if split_pdf_tables:
+            return _table_parts(text, maximum)
+        if len(text) > maximum:
+            raise OversizedTable("TABLE_LIMIT_EXCEEDED")
+        return [(kind, text, False)]
+    return [(kind, part, False) for part in _text_parts(text, maximum)]
+
+
+def deterministic_chunks(
+    value: ChunkInput, *, max_characters: int = 1800, split_pdf_tables: bool = True
+) -> list[Chunk]:
     if not 1 <= max_characters <= 10000:
         raise ValueError("Invalid chunk bound")
     chunks: list[Chunk] = []
@@ -76,9 +118,9 @@ def deterministic_chunks(value: ChunkInput, *, max_characters: int = 1800) -> li
         page, kind, text = block["page"], block["kind"], block["text"].strip()
         if not text:
             continue
-        for part in _parts(text, kind, max_characters):
+        for part_kind, part, table_fragment in _parts(text, kind, max_characters, split_pdf_tables):
             seed = json.dumps(
-                {**identity, "page": page, "kind": kind, "ordinal": ordinal, "text": part},
+                {**identity, "page": page, "kind": part_kind, "ordinal": ordinal, "text": part},
                 sort_keys=True,
                 separators=(",", ":"),
             ).encode()
@@ -87,9 +129,10 @@ def deterministic_chunks(value: ChunkInput, *, max_characters: int = 1800) -> li
                     id=hashlib.sha256(seed).hexdigest(),
                     **identity,
                     page=page,
-                    kind=kind,
+                    kind=part_kind,
                     ordinal=ordinal,
                     text=part,
+                    table_fragment=table_fragment,
                 )
             )
             ordinal += 1
