@@ -56,15 +56,13 @@ class TestAIBrowserAuth(FrappeTestCase):
 			(self.sid, "Administrator", frappe.utils.now(), json.dumps({"session_expiry": "01:00:00"})),
 		)
 
-	def call(self, method, *, service=True, headers=None, verb="POST", **kwargs):
+	def call(self, method, *, service=True, headers=None, verb="POST", base_url=ERP_ORIGIN, **kwargs):
 		base_headers = (
 			{"X-Kanzlei-AI-Service-Key": self.key}
 			if service
 			else {"Origin": ERP_ORIGIN, "Cookie": "sid=" + self.sid, "X-Frappe-CSRF-Token": self.csrf}
 		)
-		builder = EnvironBuilder(
-			method=verb, base_url=ERP_ORIGIN, headers={**base_headers, **(headers or {})}
-		)
+		builder = EnvironBuilder(method=verb, base_url=base_url, headers={**base_headers, **(headers or {})})
 		with patch.object(frappe.local, "request", Request(builder.get_environ()), create=True):
 			endpoint = getattr(api, method, None)
 			self.assertTrue(callable(endpoint), "Browser RPC is missing")
@@ -139,6 +137,55 @@ class TestAIBrowserAuth(FrappeTestCase):
 		self.config["allowed_users"] = []
 		self.assert_failure(
 			self.call("issue_browser_ticket", service=False, **payload), 401, "UNAUTHENTICATED"
+		)
+
+	def test_same_host_chat_uses_public_https_origin_behind_tls_termination(self):
+		self.config["browser_chat_origin"] = ERP_ORIGIN
+		erp_host = urlsplit(ERP_ORIGIN).netloc
+		internal_origin = ERP_ORIGIN.replace("https://", "http://", 1)
+		payload = {"state": self.state, "challenge": self.challenge}
+		ticket = self.call("issue_browser_ticket", service=False, base_url=internal_origin, **payload)
+		self.assertIsInstance(ticket, dict)
+		self.assertIsInstance(self.exchange(ticket["ticket"], chat_origin=ERP_ORIGIN), dict)
+
+		for host, origin in (
+			(erp_host, internal_origin),
+			(erp_host, CHAT_ORIGIN),
+			(urlsplit(CHAT_ORIGIN).netloc, ERP_ORIGIN),
+			(f"{erp_host}:80", ERP_ORIGIN),
+			(f"{erp_host}:8443", ERP_ORIGIN),
+		):
+			with self.subTest(host=host, origin=origin):
+				self.assert_failure(
+					self.call(
+						"issue_browser_ticket",
+						service=False,
+						base_url=internal_origin,
+						headers={
+							"Host": host,
+							"Origin": origin,
+							"X-Forwarded-Proto": "https",
+							"X-Forwarded-Host": erp_host,
+						},
+						**payload,
+					),
+					401,
+					"UNAUTHENTICATED",
+				)
+
+	def test_loopback_http_chat_origin_cannot_override_an_https_request_origin(self):
+		self.config["browser_chat_origin"] = "http://chat.localhost"
+		self.assert_failure(
+			self.call(
+				"issue_browser_ticket",
+				service=False,
+				base_url="https://chat.localhost",
+				headers={"Origin": self.config["browser_chat_origin"]},
+				state=self.state,
+				challenge=self.challenge,
+			),
+			401,
+			"UNAUTHENTICATED",
 		)
 
 	def test_browser_ticket_expiry_logout_and_missing_configuration(self):

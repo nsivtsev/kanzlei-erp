@@ -147,12 +147,18 @@ def issue_browser_ticket(state, challenge):
 	origin = browser_chat_origin(settings)
 	browser_binding(state, challenge)
 	request = frappe.local.request
+	erp_origin = request.host_url.rstrip("/")
+	public_origin = urlsplit(origin)
+	# Match the Host including any explicit port, since request.host can strip
+	# the default port for the internal HTTP scheme after TLS termination.
+	if public_origin.scheme == "https" and request.headers.get("Host") == public_origin.netloc:
+		erp_origin = origin
 	csrf = frappe.session.get("data") or {}
 	csrf = csrf.get("csrf_token")
 	# The generic Frappe CSRF middleware can allow trusted referrers. This
 	# browser-only endpoint also requires the actual session cookie and token.
 	if (
-		request.headers.get("Origin") != request.host_url.rstrip("/")
+		request.headers.get("Origin") != erp_origin
 		or unquote(request.cookies.get("sid", "")) != frappe.session.sid
 		or not csrf
 		or not hmac.compare_digest(request.headers.get("X-Frappe-CSRF-Token", "").encode(), csrf.encode())
