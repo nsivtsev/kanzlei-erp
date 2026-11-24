@@ -25,6 +25,7 @@ from kanzlei_ai.providers.paddle_ocr import PADDLE_OCR_PROFILE
 
 PIPELINE_VERSION = "pdf-native-v1"
 ARCHIVE_OCR_PROFILES = ("native", "paddle")
+_RETRYABLE_TABLE_ERRORS = {"TABLE_LIMIT_EXCEEDED", "UNSUPPORTED_TABLE_STRUCTURE"}
 
 
 def initialize(engine):
@@ -222,10 +223,10 @@ def retry_table_publication(
         if (
             source["manifest"]["mime_type"] != "application/pdf"
             or source["status"] != "failed"
-            or source["error_code"] != "TABLE_LIMIT_EXCEEDED"
+            or source["error_code"] not in _RETRYABLE_TABLE_ERRORS
             or job["stage"] != "extract"
             or job["status"] != "failed"
-            or job["error_code"] != "TABLE_LIMIT_EXCEEDED"
+            or job["error_code"] != source["error_code"]
             or job["pipeline_version"] != pipeline_version
             or job["ocr_profile"] != "paddle"
             or _effective_ocr_profile(connector, ocr_profile) != "paddle"

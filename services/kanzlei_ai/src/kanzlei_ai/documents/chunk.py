@@ -48,9 +48,14 @@ def _table_parts(text: str, maximum: int) -> list[tuple[str, str, bool]]:
         raise TerminalExtractionError("UNSUPPORTED_TABLE_STRUCTURE")
     if len(text) <= maximum:
         return [("table", text, False)]
-    if not table.row_lines:
-        raise OversizedTable("TABLE_LIMIT_EXCEEDED")
+    table = table.compact_markdown()
+    table_text = "\n".join((*table.header_lines, *table.row_lines))
+    compact = "\n\n".join(part for part in (table.before, table_text, table.after) if part)
+    if len(compact) <= maximum:
+        return [("table", compact, False)]
     header_length = len("\n".join(table.header_lines))
+    if header_length > maximum:
+        raise OversizedTable("TABLE_LIMIT_EXCEEDED")
     parts = []
     lines = list(table.header_lines)
     length = header_length
