@@ -48,9 +48,14 @@ def test_equal_bytes_never_merge_different_source_identities():
     assert a.source_id != b.source_id
 
 
-def test_oversized_table_is_rejected_without_splitting_header_from_rows():
+@pytest.mark.parametrize("markdown", [False, True])
+def test_oversized_table_is_rejected_without_splitting_header_from_rows(markdown):
     from kanzlei_ai.documents.chunk import ChunkInput, OversizedTable, deterministic_chunks
 
+    cell = "x" * 100
+    text = f"Header | Value\nrow | {cell}"
+    if markdown:
+        text = f"| {'Header':100} | Value |\n| {'-' * 100} | --- |\n| row | {cell} |"
     value = ChunkInput(
         connector_id="fixture-erp",
         source_id="file:alpha",
@@ -58,7 +63,7 @@ def test_oversized_table_is_rejected_without_splitting_header_from_rows():
         generation=1,
         parser_version="docling-native-v1",
         content_sha256="b" * 64,
-        blocks=[{"page": 1, "kind": "table", "text": "Header | Value\nrow | " + "x" * 100}],
+        blocks=[{"page": 1, "kind": "table", "text": text}],
     )
     with pytest.raises(OversizedTable, match="TABLE_LIMIT_EXCEEDED"):
         deterministic_chunks(value, max_characters=90)
@@ -67,6 +72,7 @@ def test_oversized_table_is_rejected_without_splitting_header_from_rows():
 @pytest.mark.parametrize("markdown", [False, True])
 def test_long_pdf_table_preserves_all_rows_and_headers(markdown):
     from kanzlei_ai.documents.chunk import ChunkInput, deterministic_chunks
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
 
     def line(cells):
         unframed = " | ".join(cells)
@@ -85,14 +91,15 @@ def test_long_pdf_table_preserves_all_rows_and_headers(markdown):
     chunks = deterministic_chunks(value)
     assert len(chunks) > 1
     assert chunks == deterministic_chunks(value)
+    original = parse_pdf_table(table)
     reconstructed = []
     for ordinal, chunk in enumerate(chunks):
         assert chunk.page == 2 and chunk.kind == "table" and chunk.ordinal == ordinal
         assert len(chunk.text) <= 1800
-        lines = chunk.text.split("\n")
-        assert lines[: len(header)] == header
-        reconstructed.extend(lines[len(header) :])
-    assert reconstructed == rows
+        parsed = parse_pdf_table(chunk.text)
+        assert parsed.columns == original.columns
+        reconstructed.extend(parsed.rows)
+    assert reconstructed == list(original.rows)
 
 
 def test_pdf_table_counts_header_newlines_and_whole_row_towards_bound():
@@ -109,12 +116,91 @@ def test_pdf_table_counts_header_newlines_and_whole_row_towards_bound():
         deterministic_chunks(value, max_characters=len(table) - 1)
 
 
+def test_padded_markdown_is_compacted_before_splitting_rows():
+    from kanzlei_ai.documents.chunk import ChunkInput, deterministic_chunks
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
+
+    padding = " " * 1000
+    description = r"Beratung  A \| B" + "x" * 40
+    backslashes = "Pfad" + "\\" * 2
+    trailing_escape = "Ende" + "\\"
+    table = "\n".join(
+        [
+            "Synthetische Tabelle",
+            "",
+            f"| Leistung{padding} | Code{padding} | Betrag{padding} |",
+            f"| :{'-' * 200} | {'-' * 200} | {'-' * 200}: |",
+            f"| {description}{padding} | {padding} | 1,23 EUR{padding} |",
+            f"| {backslashes}{padding} | {trailing_escape}{padding} | 4,56 EUR{padding} |",
+            "",
+            "Synthetische Fußnote",
+        ]
+    )
+    value = ChunkInput(
+        "erp", "file:fixture", "a", 1, "parser", "b", [{"page": 3, "kind": "table", "text": table}]
+    )
+
+    chunks = deterministic_chunks(value, max_characters=125)
+    assert chunks == deterministic_chunks(value, max_characters=125)
+    assert all(chunk.page == 3 and len(chunk.text) <= 125 for chunk in chunks)
+    caption, first, second, footnote = chunks
+    assert (caption.kind, caption.text) == ("text", "Synthetische Tabelle")
+    assert (footnote.kind, footnote.text) == ("text", "Synthetische Fußnote")
+    assert all(chunk.kind == "table" and chunk.table_fragment for chunk in (first, second))
+    parts = [parse_pdf_table(chunk.text) for chunk in (first, second)]
+    assert all(part.columns == ("Leistung", "Code", "Betrag") for part in parts)
+    assert [part.rows[0] for part in parts] == [
+        (description, "", "1,23 EUR"),
+        (backslashes, trailing_escape, "4,56 EUR"),
+    ]
+    assert all(part.header_lines[1] == "| :--- | --- | ---: |" for part in parts)
+
+
+def test_header_only_table_fits_after_compaction_even_with_a_long_caption():
+    from kanzlei_ai.documents.chunk import ChunkInput, deterministic_chunks
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
+
+    caption = "Beschreibung " * 160
+    text = f"{caption.strip()}\n\n| {'A':1800} | {'B':1800} |\n| {'-' * 1800} | --- |"
+    value = ChunkInput(
+        "erp", "file:fixture", "a", 1, "parser", "b", [{"page": 2, "kind": "table", "text": text}]
+    )
+
+    chunks = deterministic_chunks(value)
+    assert all(chunk.page == 2 and len(chunk.text) <= 1800 for chunk in chunks)
+    assert " ".join(chunk.text for chunk in chunks[:-1]) == caption.strip()
+    table = chunks[-1]
+    parsed = parse_pdf_table(table.text)
+    assert table.kind == "table" and not table.table_fragment
+    assert parsed.columns == ("A", "B") and parsed.rows == ()
+
+
+@pytest.mark.parametrize("alignment", ["", ":"])
+def test_unframed_markdown_with_a_divider_is_also_compacted(alignment):
+    from kanzlei_ai.documents.chunk import ChunkInput, deterministic_chunks
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
+
+    text = f"A   |B\n{alignment}{'-' * 1800}|---{alignment}\n{'left':1800}|right"
+    value = ChunkInput(
+        "erp", "file:fixture", "a", 1, "parser", "b", [{"page": 1, "kind": "table", "text": text}]
+    )
+
+    (chunk,) = deterministic_chunks(value)
+    parsed = parse_pdf_table(chunk.text)
+    assert len(chunk.text) <= 1800
+    assert parsed.columns == ("A", "B") and parsed.rows == (("left", "right"),)
+
+
 @pytest.mark.parametrize(
     "table",
     [
         "| A | B |\n| --- | --- |\n| x | y | z |",
         "A | B\nx | y\n\nz | w",
         "| A | B |\n| --- | --- |\n| x | y |\n\nz | w",
+        "|  |  |  |\n| --- | invalid | --- |\n| A | | C |",
+        "|  |  |  |\n| --- | --- |\n| A | | C |",
+        "|  |  |  |\n| --- | --- | --- |\n| A | C |",
+        "|  |  |  |\n| --- | --- | --- |\n| A | | C\\|",
     ],
 )
 def test_unsupported_pdf_table_is_a_safe_error(table):

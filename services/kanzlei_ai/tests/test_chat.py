@@ -417,6 +417,24 @@ def test_single_row_fragment_cannot_supply_amount_for_a_separate_invoice_heading
     assert packet is None
 
 
+def test_empty_header_cannot_supply_an_invoice_amount_even_with_a_separate_heading():
+    from dataclasses import replace
+
+    from kanzlei_ai.chat.citations import AnswerPacket, validate_answer
+    from kanzlei_ai.connectors.base import ConnectorError
+    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+
+    heading, table, _ = fixture_context()
+    table = replace(
+        table, text="| | | |\n| --- | --- | --- |\n| RE-2026-0042 | 65,00 EUR | 76,25 EUR |"
+    )
+    question = "Wie hoch ist der Betrag der Rechnung RE-2026-0042?"
+    context = (heading, table)
+    assert asyncio.run(ExtractiveChatProvider().generate(question, context)) is None
+    with pytest.raises(ConnectorError, match="INVALID_EVIDENCE"):
+        validate_answer(question, context, AnswerPacket(table.dependency.chunk_id, "76,25 EUR"))
+
+
 def test_order_identifier_does_not_prove_an_invoice_amount():
     from dataclasses import replace
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 
 _MARKDOWN_DIVIDER = re.compile(r":?-+:?")
 _MARKDOWN_PIPE = re.compile(r"(?<!\\)((?:\\\\)*)\|")
+_MARKDOWN_END_PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|$")
 _BLANK_LINES = re.compile(r"\n(?:[ \t\r]*\n)+")
 
 
@@ -16,6 +17,33 @@ class PdfTable:
     row_lines: tuple[str, ...]
     before: str = ""
     after: str = ""
+
+    def compact_markdown(self) -> "PdfTable":
+        if len(self.header_lines) != 2:
+            return self
+        heading, separator = self.header_lines
+        heading = _compact_markdown_row(heading, self.columns)
+        divider = tuple(
+            re.sub(r"-{4,}", "---", cell) for cell in _markdown_cells(separator.strip())
+        )
+        if heading.lstrip().startswith("|"):
+            separator = _compact_markdown_row(separator, divider)
+        else:
+            # An unframed divider with spaced pipes can be mistaken for native data.
+            separator = min(separator, "|".join(divider), key=len)
+        return replace(
+            self,
+            header_lines=(heading, separator),
+            row_lines=tuple(
+                _compact_markdown_row(line, cells)
+                for line, cells in zip(self.row_lines, self.rows, strict=True)
+            ),
+        )
+
+
+def _compact_markdown_row(line: str, cells: tuple[str, ...]) -> str:
+    # A space before each delimiter keeps a trailing backslash inside its cell.
+    return min(line, "| " + " | ".join(cells) + " |", key=len)
 
 
 def _markdown_cells(line: str) -> tuple[str, ...]:
@@ -53,7 +81,14 @@ def _parse_table(text: str) -> PdfTable | None:
         return None
     cells = _markdown_cells if framed or has_divider else _plain_cells
     columns, *rows = (cells(line) for line in stripped)
-    if (cells is _plain_cells and len(columns) < 2) or not any(columns):
+    if cells is _plain_cells and len(columns) < 2:
+        return None
+    if not any(columns) and (
+        not has_divider
+        or any(
+            not line.startswith("|") or not _MARKDOWN_END_PIPE.search(line, 1) for line in stripped
+        )
+    ):
         return None
     if any(len(row) != len(columns) for row in rows):
         return None

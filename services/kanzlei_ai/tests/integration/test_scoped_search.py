@@ -526,7 +526,8 @@ def test_dense_lookup_with_real_adapter_has_no_exact_or_lexical_match(search_db)
         assert [hit.chunk_id for hit in hits] == [current.chunk_id]
 
 
-def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, monkeypatch):
+@pytest.mark.parametrize("layout", ["native", "empty-header"])
+def test_long_pdf_publishes_and_retrieves_the_late_matching_row(search_db, monkeypatch, layout):
     from base64 import b64decode
     from pathlib import Path
     from types import SimpleNamespace
@@ -538,18 +539,35 @@ def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, mo
     from kanzlei_ai import jobs, sync, worker
     from kanzlei_ai.app import create_app
     from kanzlei_ai.chat.api import ChatRuntime, router
+    from kanzlei_ai.documents.parse import PARSER_VERSION, Block, ParsedPdf
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
     from kanzlei_ai.models import chat_turns
     from kanzlei_ai.models import jobs as jobs_table
     from kanzlei_ai.search import publication
     from kanzlei_ai.search.index import SearchIndex
 
-    engine, _ = search_db
+    engine, retrieve = search_db
     fixture = Path(__file__).parents[1] / "fixtures/documents/synthetic-long-table.pdf.b64"
     pdf = b64decode(fixture.read_bytes())
     description = " ".join(["Synthetic service description"] * 7)
     header = "Rechnung | Beschreibung | Netto | Betrag"
     expected = [f"RE-2026-{i:04} | {description} | {i},25 EUR | {i},75 EUR" for i in range(1, 126)]
     assert len("\n".join([header, *expected])) > 24_000
+    columns = tuple(header.split(" | "))
+    rows = [tuple(row.split(" | ")) for row in expected]
+    if layout == "empty-header":
+        columns = ("", "", "", "")
+        lines = [
+            "| " + " | ".join(cell.ljust(300) for cell in row) + " |" for row in [columns, *rows]
+        ]
+        lines.insert(1, "| " + " | ".join(["-" * 300] * len(columns)) + " |")
+        parsed = ParsedPdf(
+            PARSER_VERSION,
+            hashlib.sha256(pdf).hexdigest(),
+            2,
+            [Block(page=2, kind="table", text="\n".join(lines))],
+        )
+        monkeypatch.setattr(worker, "_process_extraction_portion", lambda *_: parsed)
 
     erp = Delegation(pdf)
     erp.connector_id = "origin"
@@ -596,10 +614,10 @@ def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, mo
     for chunk in chunks:
         assert chunk["page"] == 2 and len(chunk["text"]) <= 1800
         assert chunk["table_fragment"]
-        lines = chunk["text"].split("\n")
-        assert lines[0] == header
-        reconstructed.extend(lines[1:])
-    assert reconstructed == expected
+        table = parse_pdf_table(chunk["text"])
+        assert table.columns == columns
+        reconstructed.extend(table.rows)
+    assert reconstructed == rows
     assert len(chunks) > 10
     target = chunks[-1]
     assert "RE-2026-0125" in target["text"]
@@ -611,6 +629,8 @@ def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, mo
         try:
             token = jobs.claim(engine, index_job, stage="index")
             assert publication.process(engine, index_job, token, index)
+            (hit,) = retrieve(index, erp, query="RE-2026-0125", limit=1)
+            assert (hit.chunk_id, hit.page) == (target["id"], 2)
             app = create_app(probes={}, connector=erp)
             app.state.chat_runtime = ChatRuntime(engine, index)
             app.include_router(router)
@@ -618,6 +638,10 @@ def test_native_long_pdf_publishes_and_cites_the_late_matching_row(search_db, mo
             with TestClient(app, headers=_HEADERS) as browser:
                 conversation = browser.post(_PREFIX, json={"client_id": "A"}).json()["id"]
                 event, answer = run_turn(browser, conversation, question)[-1]
+                if layout == "empty-header":
+                    assert event == "answer" and answer["status"] == "no_evidence"
+                    assert answer["citations"] == []
+                    return
                 assert event == "answer" and answer["status"] == "answered"
                 assert "125,75 EUR" in answer["answer"]
                 assert answer["citations"][0]["page"] == 2

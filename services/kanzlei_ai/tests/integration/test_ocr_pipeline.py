@@ -877,7 +877,7 @@ def test_abandoned_index_jobs_delete_temporary_vectors(database, action):
 
 
 @pytest.fixture
-def failed_table_job(database):
+def failed_table_job(database, request):
     from kanzlei_ai.documents.parse import PARSER_VERSION
     from kanzlei_ai.providers.paddle_ocr import PADDLE_OCR_PROFILE
 
@@ -896,8 +896,25 @@ def failed_table_job(database):
             ocr_pages=[2],
         ),
     )
-    lines = [f"| RE-2026-{i:04} | {'Prüfung ' * 24} | {i},00 EUR |" for i in range(125)]
-    header = ["| Rechnung | Beschreibung | Betrag |", "| --- | --- | ---: |"]
+    case = getattr(request, "param", "long")
+    columns = ("Rechnung", "Beschreibung", "Betrag")
+    rows = [(f"RE-2026-{i:04}", ("Prüfung " * 24).strip(), f"{i},00 EUR") for i in range(125)]
+    error_code = "TABLE_LIMIT_EXCEEDED"
+    padding = 1
+    divider = 3
+    if case in {"padded-row", "header-only"}:
+        rows = rows[:1] if case == "padded-row" else []
+        padding = 1000
+        divider = 500
+    elif case == "empty-header":
+        columns = ("", "", "")
+        error_code = "UNSUPPORTED_TABLE_STRUCTURE"
+    divider_line = f"| {'-' * divider} | {'-' * divider} | {'-' * divider}: |"
+    lines = [
+        "| " + " | ".join(cell.ljust(padding) for cell in cells) + " |"
+        for cells in [columns, *rows]
+    ]
+    lines.insert(1, divider_line)
     assert job_service.save_ocr_page(
         database,
         job_id,
@@ -905,23 +922,27 @@ def failed_table_job(database):
         dict(
             page=2,
             provider_profile=PADDLE_OCR_PROFILE,
-            blocks=[dict(page=2, kind="table", text="\n".join(header + lines))],
+            blocks=[dict(page=2, kind="table", text="\n".join(lines))],
         ),
     )
     assert job_service.fail_terminal(
-        database, job_id, job_service.claim(database, job_id), "TABLE_LIMIT_EXCEEDED"
+        database, job_id, job_service.claim(database, job_id), error_code
     )
-    return job_id, header, lines
+    return job_id, error_code, columns, rows
 
 
+@pytest.mark.parametrize(
+    "failed_table_job", ["long", "padded-row", "header-only", "empty-header"], indirect=True
+)
 def test_retry_table_publication_reuses_completed_pages_once(
     database, failed_table_job, monkeypatch
 ):
     from concurrent.futures import ThreadPoolExecutor
 
+    from kanzlei_ai.documents.pdf_table import parse_pdf_table
     from kanzlei_ai.models import document_artifacts
 
-    job_id, header, lines = failed_table_job
+    job_id, error_code, columns, rows = failed_table_job
 
     def retry():
         return sync.retry_table_publication(database, "synthetic", job_id, ocr_profile="paddle")
@@ -930,7 +951,7 @@ def test_retry_table_publication_reuses_completed_pages_once(
         results = [workers.submit(retry), workers.submit(retry)]
         assert sorted(task.result() for task in results) == ["queued", "stale_job"]
     old, new = _jobs(database)
-    assert old["status"] == "failed" and old["error_code"] == "TABLE_LIMIT_EXCEEDED"
+    assert old["status"] == "failed" and old["error_code"] == error_code
     assert new["generation"] == old["generation"] + 1
 
     deliveries = []
@@ -969,23 +990,33 @@ def test_retry_table_publication_reuses_completed_pages_once(
             .mappings()
             .all()
         )
-    assert len(chunks) > 1
+    assert len(chunks) > 1 if len(rows) > 1 else len(chunks) == 1
     reconstructed = []
     for chunk in chunks:
         assert chunk["page"] == 2 and len(chunk["text"]) <= 1800
-        parts = chunk["text"].split("\n")
-        assert parts[:2] == header
-        reconstructed.extend(parts[2:])
-    assert reconstructed == lines
+        table = parse_pdf_table(chunk["text"])
+        assert table.columns == columns
+        reconstructed.extend(table.rows)
+    assert reconstructed == rows
 
 
 @pytest.mark.parametrize(
-    "change", ["missing", "adapter", "parser", "pipeline", "profile", "revision"]
+    "change",
+    [
+        "missing",
+        "adapter",
+        "parser",
+        "pipeline",
+        "profile",
+        "revision",
+        "mismatched-error",
+        "other-error",
+    ],
 )
 def test_retry_table_publication_skips_incompatible_job(database, failed_table_job, change):
     from kanzlei_ai.models import extraction_plans, ocr_page_checkpoints
 
-    job_id, _, _ = failed_table_job
+    job_id, *_ = failed_table_job
     with database.begin() as conn:
         if change == "missing":
             conn.execute(ocr_page_checkpoints.delete())
@@ -997,6 +1028,11 @@ def test_retry_table_publication_skips_incompatible_job(database, failed_table_j
             conn.execute(jobs.update().values(pipeline_version="old"))
         elif change == "revision":
             conn.execute(sources.update().values(revision="b" * 64))
+        elif change == "mismatched-error":
+            conn.execute(jobs.update().values(error_code="UNSUPPORTED_TABLE_STRUCTURE"))
+        elif change == "other-error":
+            conn.execute(jobs.update().values(error_code="OCR_REQUIRED"))
+            conn.execute(sources.update().values(error_code="OCR_REQUIRED"))
     result = sync.retry_table_publication(
         database, "synthetic", job_id, ocr_profile="native" if change == "profile" else "paddle"
     )
@@ -1009,6 +1045,8 @@ def test_retry_table_publication_skips_incompatible_job(database, failed_table_j
             "pipeline": "incompatible_job",
             "profile": "incompatible_job",
             "revision": "stale_job",
+            "mismatched-error": "incompatible_job",
+            "other-error": "incompatible_job",
         }[change]
     )
     assert len(_jobs(database)) == 1
@@ -1022,7 +1060,7 @@ def test_operator_retry_command_reports_only_status(
 
     from kanzlei_ai.settings import Settings
 
-    job_id, _, _ = failed_table_job
+    job_id, *_ = failed_table_job
     monkeypatch.setattr(sys, "argv", ["coordinator", "retry-table-publication", job_id])
     monkeypatch.setattr(coordinator, "engine_from_settings", lambda _: database)
     monkeypatch.setattr(
