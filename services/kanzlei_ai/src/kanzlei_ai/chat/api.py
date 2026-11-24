@@ -19,7 +19,12 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from kanzlei_ai.auth import AccessToken, Adapter
 from kanzlei_ai.chat import history
-from kanzlei_ai.chat.citations import ChatProvider, validate_answer
+from kanzlei_ai.chat.citations import (
+    ChatProvider,
+    is_invoice_amount_question,
+    supported_amount,
+    validate_answer,
+)
 from kanzlei_ai.chat.context import (
     DOCX_MIME,
     EMAIL_MIME,
@@ -439,9 +444,18 @@ async def _stream(service, session, question, conversation_id, commit: history.T
             context = await retrieve_context(service.engine, service.index, session, question)
             yield _sse("status", {"phase": "generating"})
             await _refresh_context(service, session, context)
-            packet = await _generate(service, session, question, context) if context else None
+            invoice_amount = is_invoice_amount_question(question)
+            packet = (
+                await _generate(service, session, question, context)
+                if context and not invoice_amount
+                else None
+            )
             yield _sse("status", {"phase": "validating"})
-            answer = validate_answer(question, context, packet)
+            answer = (
+                supported_amount(question, context)
+                if invoice_amount
+                else validate_answer(question, context, packet)
+            )
             await _refresh_context(service, session, context, include_labels=True)
             item = await database_call(
                 history.store_turn,

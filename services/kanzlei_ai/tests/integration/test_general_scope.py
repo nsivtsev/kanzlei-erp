@@ -18,7 +18,6 @@ from kanzlei_ai.chat.context import DOCX_MIME, Dependency, database_call, read_c
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import ClientPage, ClientRecord, Scope, SourceRef
 from kanzlei_ai.models import chat_conversations, chat_turns, index_publications, sources
-from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
 from kanzlei_ai.search.index import MISTRAL_INDEX_PROFILE
 
 pytestmark = pytest.mark.integration
@@ -567,13 +566,13 @@ def test_mistral_generation_requires_exact_online_source_consent(
             assert calls == ["policy"]
             assert [item.dependency for item in context] == retrieved
             calls.append("provider")
-            return await ExtractiveChatProvider().generate(question, context)
+            return AnswerPacket(retrieved[2].chunk_id, context[2].text)
 
     monkeypatch.setattr(erp, "check_processing_policy", policy, raising=False)
     runtime.provider = Provider()
     if case == "empty":
         retrieved.clear()
-    event, answer = run_turn(client, general)[-1]
+    event, answer = run_turn(client, general, "When does the seminar start?")[-1]
     if case == "b_denied":
         assert (event, answer, calls) == ("error", {"code": "FORBIDDEN"}, ["policy"])
         assert history(client, general).json()["items"] == []
@@ -581,6 +580,7 @@ def test_mistral_generation_requires_exact_online_source_consent(
         assert event == "answer" and answer["status"] == "no_evidence" and calls == []
     else:
         assert event == "answer" and answer["status"] == "answered"
+        assert answer["answer"] == "The document says:\n\nLe séminaire commence lundi."
         assert calls == ["policy", "provider"]
 
 

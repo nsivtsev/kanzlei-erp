@@ -3,7 +3,7 @@ import base64
 import hashlib
 import json
 from contextlib import closing
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from threading import Event
 
@@ -15,6 +15,8 @@ from starlette.testclient import TestClient
 from test_scoped_search import RankedIndex, add_source
 
 from kanzlei_ai.app import create_app
+from kanzlei_ai.chat.citations import AnswerPacket
+from kanzlei_ai.chat.language import abstention
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import (
     AuthorizationResult,
@@ -33,12 +35,13 @@ from kanzlei_ai.models import (
     jobs,
     sources,
 )
-from kanzlei_ai.search.index import INDEX_PROFILE
+from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, point_id
 
 pytestmark = pytest.mark.integration
 _PREFIX = "/v1/chat/conversations"
 _HEADERS = {"Authorization": "Bearer " + "x" * 43}
 _QUESTION = "Wie hoch ist der Betrag der Rechnung RE-2026-0042?"
+_EXCERPT_QUESTION = "When does the seminar start?"
 
 
 class Delegation:
@@ -223,6 +226,144 @@ def test_grounded_amount_and_pdf_survive_same_revision_reindex(chat, database):
     assert response.content == erp.pdf
 
 
+@pytest.mark.parametrize(
+    ("question", "evidence", "expected"),
+    [
+        (
+            "Wie hoch ist der Betrag der Rechnung RE-2026-9047?",
+            "complete",
+            "Der Betrag beträgt 1.249,50 EUR.",
+        ),
+        (
+            "What is the total amount of invoice RE-2026-9047?",
+            "complete",
+            "The amount is 1.249,50 EUR.",
+        ),
+        ("Какова сумма счёта RE-2026-9047?", "complete", "Сумма составляет 1.249,50 EUR."),
+        ("Wie hoch ist der Betrag der Rechnung RE-2026-9047?", "conflicting", None),
+        ("What is the total amount of invoice RE-2026-9047?", "fragmented", None),
+        ("Какова сумма счёта RE-2026-9047?", "missing", None),
+    ],
+)
+def test_ocr_invoice_amount_is_resolved_locally(chat, database, question, evidence, expected):
+    client, erp, runtime, conversation, _ = chat
+    fixture = Path(__file__).parents[1] / "fixtures/documents/synthetic-textless.pdf.b64"
+    erp.pdf = base64.b64decode(fixture.read_bytes())
+    digest = hashlib.sha256(erp.pdf).hexdigest()
+    scan = add_source(
+        database,
+        "scan",
+        ["A"],
+        "Rechnung RE-2026-9047",
+        connector_id=erp.connector_id,
+        profile=MISTRAL_INDEX_PROFILE,
+    )
+    table_id, total_id = "7" * 64, "8" * 64
+    total = "Gesamtbetrag 1.249,50 EUR"
+    table = (
+        "|  Leistung | Menge | Betrag  |\n| --- | --- | --- |\n|  Beratung | 5 | 1.249,50 EUR  |"
+    )
+    with database.begin() as connection:
+        artifact_id = connection.scalar(
+            document_artifacts.update()
+            .where(document_artifacts.c.source_id == scan.source_pk)
+            .values(page_count=1, content_sha256=digest)
+            .returning(document_artifacts.c.id)
+        )
+        connection.execute(
+            document_chunks.update()
+            .where(document_chunks.c.id == scan.chunk_id)
+            .values(page=1, content_sha256=digest)
+        )
+        common = {
+            "artifact_id": artifact_id,
+            "source_id": scan.source_pk,
+            "revision": scan.revision,
+            "generation": scan.generation,
+            "parser_version": "synthetic",
+            "content_sha256": digest,
+            "page": 1,
+        }
+        connection.execute(
+            document_chunks.insert().values(
+                **common,
+                id=total_id,
+                kind="text",
+                ordinal=2,
+                text=total,
+            )
+        )
+        if evidence != "missing":
+            connection.execute(
+                document_chunks.insert().values(
+                    **common,
+                    id=table_id,
+                    kind="table",
+                    ordinal=1,
+                    text=table,
+                    table_fragment=evidence == "fragmented",
+                )
+            )
+        if evidence == "conflicting":
+            connection.execute(
+                document_chunks.insert().values(
+                    **common,
+                    id="9" * 64,
+                    kind="table",
+                    ordinal=3,
+                    text=table.replace("1.249,50 EUR", "1.300,00 EUR"),
+                )
+            )
+
+    total_hit = replace(scan, point_id=point_id(scan.publication_id, total_id), chunk_id=total_id)
+    policy_calls, generation_calls = [], []
+
+    class MistralRankedIndex(RankedIndex):
+        profile = MISTRAL_INDEX_PROFILE
+
+        def candidates(self, *, before_query_embed, **kwargs):
+            before_query_embed()
+            return super().candidates(**kwargs)
+
+    async def policy(operation, scope, refs, *, access_token):
+        policy_calls.append(operation)
+
+    class Provider:
+        async def generate(self, question, context):
+            generation_calls.append(question)
+            assert any(
+                item.dependency.chunk_id == total_id and item.text == total for item in context
+            )
+            return AnswerPacket(total_id, "1.249,50 EUR")
+
+    erp.check_processing_policy = policy
+    runtime.index = MistralRankedIndex(exact=[scan], sparse=[total_hit])
+    runtime.provider = Provider()
+
+    event, answer = run_turn(client, conversation, question)[-1]
+    assert (event, answer["status"] if event == "answer" else answer) == (
+        "answer",
+        "answered" if expected else "no_evidence",
+    )
+    assert generation_calls == []
+    assert policy_calls and set(policy_calls) == {"embed"}
+    assert answer["answer"] == (expected or abstention(question))
+    assert history(client, conversation).json()["items"] == [answer]
+    if expected:
+        (citation,) = answer["citations"]
+        assert citation["page"] == 1 and citation["source_kind"] == "pdf"
+        with database.connect() as connection:
+            (stored,) = connection.scalar(
+                select(chat_turns.c.citations).where(chat_turns.c.id == answer["id"])
+            )
+        assert stored == {**citation, "chunk_id": table_id}
+        response = client.get(pdf_url(conversation, answer))
+        assert response.status_code == 200
+        assert hashlib.sha256(response.content).hexdigest() == digest
+    else:
+        assert answer["citations"] == []
+
+
 def test_native_fixture_answers_from_the_published_table(database):
     from qdrant_client import QdrantClient
 
@@ -404,32 +545,41 @@ def test_pdf_revalidates_after_read_and_discards_bytes_on_invalidation(chat):
 
 
 @pytest.mark.parametrize("mode", ["invalid_packet", "before_commit", "while_generating"])
-def test_only_a_fully_validated_answer_can_be_emitted_or_stored(chat, mode):
-    from kanzlei_ai.chat.citations import AnswerPacket
-    from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+def test_only_a_fully_validated_answer_can_be_emitted_or_stored(chat, database, mode):
+    from kanzlei_ai.chat.context import DOCX_MIME
 
     client, erp, runtime, conversation, _ = chat
+    excerpt = "The seminar starts Monday."
+    letter = add_source(database, "letter", ["A"], excerpt, connector_id=erp.connector_id)
+    with database.begin() as connection:
+        connection.execute(
+            sources.update()
+            .where(sources.c.id == letter.source_pk)
+            .values(manifest={"mime_type": DOCX_MIME})
+        )
+    runtime.index = RankedIndex(sparse=[letter])
     cancelled = []
 
     class Provider:
         async def generate(self, question, context):
             if mode == "invalid_packet":
-                return AnswerPacket("3" * 64, "42,50 EUR")
-            erp.denied.add("file:extra")
+                return AnswerPacket(letter.chunk_id, "The seminar starts Tuesday.")
+            erp.denied.add("file:letter")
             if mode == "while_generating":
                 try:
                     await asyncio.sleep(15)
                 finally:
                     cancelled.append(True)
-            return await ExtractiveChatProvider().generate(question, context)
+            return AnswerPacket(letter.chunk_id, excerpt)
 
     runtime.provider = Provider()
-    assert run_turn(client, conversation)[-1][0] == "error"
+    code = "INVALID_EVIDENCE" if mode == "invalid_packet" else "STALE_SOURCE"
+    assert run_turn(client, conversation, _EXCERPT_QUESTION)[-1] == ("error", {"code": code})
     assert history(client, conversation).json()["items"] == []
     assert bool(cancelled) == (mode == "while_generating")
 
 
-async def _asgi_turn(client, conversation, *, disconnect_when=None):
+async def _asgi_turn(client, conversation, *, question=_QUESTION, disconnect_when=None):
     path = f"{_PREFIX}/{conversation}/turns"
     scope = {
         "type": "http",
@@ -454,7 +604,7 @@ async def _asgi_turn(client, conversation, *, disconnect_when=None):
             initial = False
             return {
                 "type": "http.request",
-                "body": json.dumps({"question": _QUESTION}).encode(),
+                "body": json.dumps({"question": question}).encode(),
                 "more_body": False,
             }
         if disconnect_when is None:
@@ -489,7 +639,12 @@ def test_client_disconnect_cancels_generation_and_leaves_no_turn(chat):
                     cancelled.set()
 
         runtime.provider = Provider()
-        assert await _asgi_turn(client, conversation, disconnect_when=started) == []
+        assert (
+            await _asgi_turn(
+                client, conversation, question=_EXCERPT_QUESTION, disconnect_when=started
+            )
+            == []
+        )
         assert cancelled.is_set()
 
     asyncio.run(disconnect_after_provider_starts())
