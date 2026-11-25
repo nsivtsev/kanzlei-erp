@@ -2,6 +2,7 @@ import {
   SSEParser, validTicketMessage, randomBinding, challenge,
   chatScopeOptionValue, conversationCreateBody, conversationQuery, type ChatScope,
 } from './protocol';
+import { renderMarkdown } from './markdown';
 import { themeSwitcher } from './theme';
 import './style.css';
 
@@ -12,6 +13,7 @@ type Citation = { client?: Client } & (
 type Item = {
   id: string;
   created_at: string;
+  mode?: 'strict' | 'assistant';
   status: 'answered' | 'no_evidence' | 'unavailable';
   question: string | null;
   answer: string | null;
@@ -21,8 +23,8 @@ type Processing = 'pending' | 'ready' | 'failed';
 type Source = { source_id: string; title: string; status: Processing };
 type Filters = { query: string; status: 'all' | Processing };
 type Conversation = { id: string; created_at: string }
-  & ({ client_id: string } | { client_id: null; scope: { kind: 'general' } });
-type OwnedConversation = { id: string; created_at: string; scope_kind: 'client' | 'general' };
+  & ({ client_id: string } | { client_id: null; scope: { kind: 'general' | 'assistant' } });
+type OwnedConversation = { id: string; created_at: string; scope_kind: 'client' | 'general' | 'assistant' };
 type Grant = { access_token: string; token_type: string; identity: { expires_at: number; general_access?: unknown } };
 type Lease = { token: string; expiry: number; erpOrigin: string; generalAccess: boolean; controller: AbortController };
 type Page<T> = { items: T[]; next_cursor: string | null };
@@ -46,6 +48,8 @@ const revalidationDelay = 30_000;
 const apiBase = import.meta.env.BASE_URL.slice(0, -1);
 const conversationsPath = '/v1/chat/conversations';
 const maxPagedItems = 10_000;
+const questionLimit = 4000, strictQuestionLimit = 1000;
+const assistantScope: ChatScope = { kind: 'assistant' };
 const maxPages = 1_000;
 const sourceStatus: Record<Processing, string> = {
   pending: 'Ausstehend',
@@ -63,6 +67,8 @@ let chatScope: ChatScope | null = null;
 let conversation = '', draft = '', status = '';
 let askController: AbortController | null = null;
 let activeQuestion = '';
+let streamingAnswer = '';
+let strictMode = false;
 let historyCheck: object | null = null;
 let accessCheck: number | null = null;
 let revalidationTimer = 0;
@@ -144,6 +150,7 @@ function resetConversation() {
   askController?.abort();
   askController = null;
   activeQuestion = '';
+  streamingAnswer = '';
   clearViewer();
   conversation = '';
   history = [];
@@ -345,6 +352,8 @@ async function login() {
       status = '';
       render('scope');
       scheduleRevalidation();
+      // No Mandant is required: start in the broadest scope this account may use.
+      void selectScope(session.generalAccess ? { kind: 'general' } : assistantScope);
     } catch {
       if (attempt === loginGeneration) {
         logout(true);
@@ -673,28 +682,53 @@ function showChat() {
   revalidateView();
 }
 
+function showStreamingAnswer() {
+  const target = app.querySelector<HTMLElement>('#streaming-answer');
+  if (!target) return render();
+  target.textContent = streamingAnswer;
+  target.hidden = !streamingAnswer;
+  const scroll = app.querySelector<HTMLElement>('.chat-scroll');
+  if (scroll && scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 120) scroll.scrollTop = scroll.scrollHeight;
+}
+
 async function ask(question: string) {
   const session = lease, id = conversation, sequence = generation;
   if (!session || !question.trim() || askController || !id) return;
+  const strict = strictMode && chatScope?.kind !== 'assistant';
+  if (question.length > (strict ? strictQuestionLimit : questionLimit)) {
+    setStatus(`Die Frage ist zu lang (höchstens ${strict ? strictQuestionLimit : questionLimit} Zeichen).`);
+    return;
+  }
   const controller = new AbortController();
   askController = controller;
   activeQuestion = question;
+  streamingAnswer = '';
   draft = '';
-  status = 'Quellen werden geprüft …';
+  status = strict ? 'Quellen werden geprüft …' : 'Antwort wird erstellt …';
   render('cancel-answer');
   let terminal = false;
   try {
     const response = await api(session, `${conversationPath(id)}/turns`, {
-      method: 'POST', body: JSON.stringify({ question }), signal: controller.signal,
+      method: 'POST', body: JSON.stringify({ question, strict }), signal: controller.signal,
     }, sequence);
     if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream') || !response.body) throw Error();
     const parser = new SSEParser((event, data) => {
       if (!current(session, sequence) || controller.signal.aborted || terminal) return;
       if (event === 'status') {
         const phase = (data as { phase?: string }).phase;
-        setStatus(phase === 'retrieving' ? 'Quellen werden geprüft …'
+        setStatus(phase === 'retrieving' ? (strict ? 'Quellen werden geprüft …' : 'Dokumente werden durchsucht …')
           : phase === 'generating' ? 'Antwort wird erstellt …'
             : phase === 'validating' ? 'Antwort wird geprüft …' : 'Verarbeitung läuft …');
+      } else if (event === 'delta') {
+        const text = (data as { text?: unknown })?.text;
+        if (typeof text !== 'string') throw Error();
+        streamingAnswer += text;
+        if (streamingAnswer.length > 100_000) throw Error();
+        showStreamingAnswer();
+      } else if (event === 'reset') {
+        // Text before a document search is not part of the final answer.
+        streamingAnswer = '';
+        showStreamingAnswer();
       } else if (event === 'answer') {
         const item = data as Item;
         if (!item || typeof item.id !== 'string'
@@ -734,6 +768,7 @@ async function ask(question: string) {
     if (current(session, sequence) && askController === controller) {
       askController = null;
       activeQuestion = '';
+      streamingAnswer = '';
       render(document.activeElement instanceof HTMLElement && document.activeElement.dataset.focus === 'cancel-answer'
         ? 'question' : undefined);
     }
@@ -863,18 +898,19 @@ function renderHeader() {
   const header = el('header', undefined, 'topbar');
   header.append(el('strong', 'Kanzlei AI', 'wordmark'));
   const generalAccess = lease?.generalAccess;
-  if (signedIn && (clients.length || generalAccess)) {
+  if (signedIn) {
     const scope = el('div', undefined, 'scope');
     const label = el('label', 'Suchbereich');
     label.htmlFor = 'client';
     const select = el('select');
     select.id = 'client';
     select.dataset.focus = 'scope';
-    select.append(new Option(generalAccess ? 'Suchbereich auswählen' : 'Mandant auswählen', ''));
+    if (!chatScope) select.append(new Option('Suchbereich auswählen', ''));
     const choices = clients.map<{ label: string; selection: ChatScope }>(({ id, label }) => ({
       label, selection: { kind: 'client', client_id: id },
     }));
     if (generalAccess) choices.unshift({ label: 'Alle berechtigten Mandanten', selection: { kind: 'general' } });
+    choices.unshift({ label: 'Ohne Mandant', selection: assistantScope });
     const selections = new Map<string, ChatScope>();
     for (const { label, selection } of choices) {
       const value = chatScopeOptionValue(selection);
@@ -895,7 +931,7 @@ function renderHeader() {
 
 function renderSidebar() {
   const aside = el('aside', undefined, 'sidebar');
-  aside.setAttribute('aria-label', chatScope?.kind === 'general' ? 'Gespräche' : 'Gespräche und Dokumente');
+  aside.setAttribute('aria-label', chatScope?.kind === 'client' ? 'Gespräche und Dokumente' : 'Gespräche');
   const create = button('+ Neues Gespräch', () => void newConversation(), 'new-chat', 'new-chat');
   create.setAttribute('aria-label', 'Neues Gespräch');
   create.disabled = !chatScope;
@@ -950,6 +986,13 @@ function citationLabel(citation: Citation) {
   return clientName ? `${clientName} · ${action}` : action;
 }
 
+function citationMarker(item: Item, citation: Citation, number: number) {
+  const focus = `inline-${citationFocus(item.id, citation)}`;
+  const marker = button(`[${number}]`, () => void openCitation(item.id, citation, focus), 'citation-marker', focus);
+  marker.setAttribute('aria-label', `Beleg ${number}: ${citation.title}, ${citationLabel(citation)}`);
+  return marker;
+}
+
 function renderTurn(item: Item) {
   const article = el('article', undefined, 'turn');
   if (item.status === 'unavailable') {
@@ -961,20 +1004,28 @@ function renderTurn(item: Item) {
     article.append(el('p', item.answer || 'Keine ausreichenden Belege gefunden. Versuchen Sie es mit einem Dokumentnamen, einer Nummer oder einem Zeitraum.', 'turn-notice'));
     return article;
   }
-  const answer = el('p', item.answer || '', 'answer');
-  if (item.citations.length === 1) {
-    const citation = item.citations[0];
-    const focus = `inline-${citationFocus(item.id, citation)}`;
-    const marker = button('[1]', () => void openCitation(item.id, citation, focus), 'citation-marker', focus);
-    marker.setAttribute('aria-label', `Beleg 1: ${citation.title}, ${citationLabel(citation)}`);
-    answer.append(' ', marker);
+  const assistant = item.mode === 'assistant';
+  if (assistant) {
+    const grounded = item.citations.length > 0;
+    article.append(el('p', grounded ? 'Antwort aus Kanzlei-Dokumenten'
+      : 'Allgemeine Antwort · nicht aus Kanzlei-Dokumenten', `answer-mode ${grounded ? 'grounded' : 'general'}`));
+    const answer = el('div', undefined, 'answer markdown');
+    answer.append(renderMarkdown(item.answer || '', number => {
+      const citation = item.citations[number - 1];
+      return citation ? citationMarker(item, citation, number) : null;
+    }));
+    article.append(answer);
+  } else {
+    const answer = el('p', item.answer || '', 'answer');
+    if (item.citations.length === 1) answer.append(' ', citationMarker(item, item.citations[0], 1));
+    article.append(answer);
   }
-  article.append(answer);
   const list = el('ul', undefined, 'citations');
-  for (const citation of item.citations) {
+  for (const [index, citation] of item.citations.entries()) {
     const row = el('li');
     const focus = citationFocus(item.id, citation);
     const control = button('', () => void openCitation(item.id, citation, focus), 'citation', focus);
+    if (assistant) control.append(el('span', `[${index + 1}]`, 'citation-number'));
     control.setAttribute('aria-label', `${citation.title} · ${citationLabel(citation)}`);
     if (citationRequest?.turn === item.id && citationRequest.citation.id === citation.id) {
       control.setAttribute('aria-busy', String(!viewer));
@@ -1002,17 +1053,21 @@ function renderChat() {
   const body = el('div', undefined, 'chat-scroll');
   const content = el('div', undefined, 'chat-column');
   const named = history.find(item => item.status === 'answered' && item.citations.length)?.citations[0]?.title;
-  content.append(el('h1', named?.replace(/\.pdf$/i, '') || (conversation ? 'Gespräch' : 'Dokumentenchat')));
+  content.append(el('h1', named?.replace(/\.pdf$/i, '') || (conversation ? 'Gespräch' : 'KI-Assistent')));
+  const documents = chatScope && chatScope.kind !== 'assistant';
   if (!conversation) {
     const introduction = chatScope ? 'Beginnen Sie ein neues Gespräch oder öffnen Sie den Verlauf.'
-      : lease?.generalAccess ? 'Wählen Sie einen Suchbereich, um Fragen zu den Dokumenten zu stellen.'
-      : clients.length ? 'Wählen Sie einen Mandanten, um Fragen zu seinen Dokumenten zu stellen.'
-      : 'Für dieses Konto sind keine Mandanten freigegeben.';
+      : 'Wählen Sie einen Suchbereich.';
     content.append(el('p', introduction, 'muted'));
   } else if (!history.length && !askController) {
-    content.append(el('p', 'Stellen Sie eine Frage zu den Dokumenten in diesem Suchbereich.', 'muted'));
+    content.append(el('p', documents
+      ? 'Stellen Sie eine allgemeine Frage oder eine Frage zu den Dokumenten in diesem Suchbereich.'
+      : 'Stellen Sie eine allgemeine Frage. Für Antworten aus Dokumenten wählen Sie einen Mandanten als Suchbereich.', 'muted'));
     const suggestions = el('div', undefined, 'suggestions');
-    for (const example of ['Wie hoch ist der Rechnungsbetrag?', 'Wo steht das Leistungsdatum?']) {
+    const examples = documents
+      ? ['Wie hoch ist der Rechnungsbetrag?', 'Fasse die letzte E-Mail zusammen.']
+      : ['Was ist der Vorsteuerabzug?', 'Formuliere eine höfliche Erinnerung an fehlende Belege.'];
+    for (const example of examples) {
       suggestions.append(button(example, () => {
         draft = example;
         const field = document.querySelector<HTMLTextAreaElement>('#question')!;
@@ -1026,6 +1081,10 @@ function renderChat() {
   if (askController) {
     const pending = el('div', undefined, 'turn');
     pending.append(el('p', activeQuestion, 'question'));
+    const streaming = el('div', streamingAnswer, 'answer streaming');
+    streaming.id = 'streaming-answer';
+    streaming.hidden = !streamingAnswer;
+    pending.append(streaming);
     content.append(pending);
   }
   body.append(content);
@@ -1041,13 +1100,26 @@ function renderChat() {
     field.id = 'question';
     field.dataset.focus = 'question';
     field.required = true;
-    field.maxLength = 1000;
+    field.maxLength = questionLimit;
     field.rows = 2;
-    field.placeholder = 'Frage zu den Dokumenten stellen …';
+    field.placeholder = documents ? 'Frage stellen – allgemein oder zu den Dokumenten …' : 'Frage stellen …';
     field.value = draft;
     field.readOnly = !!askController;
     field.oninput = () => { draft = field.value; };
     form.append(label, field);
+    if (documents) {
+      const option = el('label', undefined, 'strict-option');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.id = 'strict';
+      box.dataset.focus = 'strict';
+      box.checked = strictMode;
+      box.disabled = !!askController;
+      box.onchange = () => { strictMode = box.checked; };
+      option.append(box, ' Nur wörtliche Belege');
+      option.title = 'Antwortet nur mit einer wörtlichen Stelle oder einem geprüften Rechnungsbetrag.';
+      form.append(option);
+    }
     if (askController) {
       form.append(button('Abbrechen', () => askController?.abort(), 'quiet', 'cancel-answer'));
     } else {
@@ -1198,7 +1270,7 @@ function render(focus?: string) {
 
   if (!signedIn) {
     const intro = el('section', undefined, 'welcome');
-    intro.append(el('h1', 'Ihre Dokumente im Gespräch'), el('p', 'Stellen Sie Fragen zu den freigegebenen Dokumenten eines Mandanten und prüfen Sie die Antworten an der Quelle.', 'muted'));
+    intro.append(el('h1', 'KI-Assistent der Kanzlei'), el('p', 'Stellen Sie allgemeine Fragen oder Fragen zu den freigegebenen Dokumenten und prüfen Sie Antworten aus Dokumenten an der Quelle.', 'muted'));
     intro.append(button('Mit ERP anmelden', () => void login(), 'primary', 'login'), liveStatus());
     main.append(intro);
   } else {

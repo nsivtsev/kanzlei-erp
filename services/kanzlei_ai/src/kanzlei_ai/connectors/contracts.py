@@ -52,7 +52,8 @@ class ScopeCheck(Contract):
     allowed: bool
 
 
-ProcessingOperation = Literal["ocr", "embed", "generate"]
+# "assist" sends only a staff question, without any Mandant source, to the model.
+ProcessingOperation = Literal["ocr", "embed", "generate", "assist"]
 
 
 class ProcessingPolicyCheck(ScopeCheck):

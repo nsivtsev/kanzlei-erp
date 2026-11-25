@@ -317,6 +317,12 @@ access_token=...)` immediately before sending data to an external provider.
 For a question-only embedding use the current authorized client scope and an
 empty source list. General chat uses the existing exact and lexical index
 instead of sending the question for embedding.
+Operation `assist` covers a staff question sent to the generative assistant
+without any Mandant source. Send it with the delegated `access_token`, no `scope`
+and an empty source list. The ERP allows it only when the Kanzlei-wide switch
+`kanzlei_ai_connector.assistant_generation` is literally `true`; it is off by
+default. Excerpts the assistant retrieves later still need `generate` for every
+referenced Mandant.
 For sourced generation include every excerpt's source reference, including all
 referenced Mandanten in general scope. For background OCR or document embeddings
 send the current source references. Each retry rechecks permission online.

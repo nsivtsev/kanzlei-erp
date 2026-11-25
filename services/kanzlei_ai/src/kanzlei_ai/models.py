@@ -219,7 +219,7 @@ chat_conversations = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     CheckConstraint(
         "(scope_kind = 'client' AND client_id IS NOT NULL) OR "
-        "(scope_kind = 'general' AND client_id IS NULL)",
+        "(scope_kind IN ('general', 'assistant') AND client_id IS NULL)",
         name="ck_chat_conversations_scope",
     ),
     Index(
@@ -245,10 +245,12 @@ chat_turns = Table(
     # These immutable snapshots carry exact source versions without pinning old index rows.
     Column("dependencies", JSON, nullable=False),
     Column("citations", JSON, nullable=False),
+    Column("mode", String(16), nullable=False, server_default="strict"),
     CheckConstraint(
         "(status = 'answered' AND answer IS NOT NULL) OR "
         "(status = 'no_evidence' AND answer IS NULL)",
         name="ck_chat_turns_completed",
     ),
+    CheckConstraint("mode IN ('strict', 'assistant')", name="ck_chat_turns_mode"),
     Index("ix_chat_turns_conversation_page", "conversation_id", "created_at", "id"),
 )

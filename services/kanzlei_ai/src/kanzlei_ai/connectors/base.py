@@ -47,7 +47,7 @@ class ERPConnector(Protocol):
     async def check_processing_policy(
         self,
         operation: ProcessingOperation,
-        scope: Scope,
+        scope: Scope | None,
         sources: list[SourceRef],
         *,
         access_token: str | None = None,

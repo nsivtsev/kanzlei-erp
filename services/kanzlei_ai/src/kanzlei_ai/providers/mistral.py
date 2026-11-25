@@ -217,3 +217,51 @@ class _MistralEndpoint:
         except httpx.RequestError:
             raise MistralError("MISTRAL_UNAVAILABLE") from None
         return _json_object(body)
+
+    async def stream_async(
+        self, transport: httpx.AsyncBaseTransport | None, path: str, payload: dict, *, limit: int
+    ):
+        """Yield each server-sent JSON event; the whole stream shares one deadline."""
+        total = 0
+        buffer = bytearray()
+        headers = {**self._headers, "Accept": "text/event-stream"}
+        try:
+            async with (
+                asyncio.timeout(self.timeout),
+                self.gate.request_async() if self.gate else nullcontext(),
+                httpx.AsyncClient(
+                    timeout=self.timeout,
+                    transport=transport,
+                    trust_env=False,
+                    follow_redirects=False,
+                ) as client,
+                client.stream(
+                    "POST", f"{self.base}/{path}", headers=headers, json=payload
+                ) as response,
+            ):
+                _check_response(response)
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > limit:
+                        raise MistralError("MISTRAL_RESPONSE_LIMIT_EXCEEDED")
+                    buffer.extend(chunk.replace(b"\r\n", b"\n"))
+                    while (end := buffer.find(b"\n\n")) >= 0:
+                        frame = bytes(buffer[:end]).decode("utf-8", "strict")
+                        del buffer[: end + 2]
+                        data = "\n".join(
+                            line[5:].lstrip(" ")
+                            for line in frame.split("\n")
+                            if line.startswith("data:")
+                        )
+                        if not data:
+                            continue
+                        if data == "[DONE]":
+                            return
+                        yield _json_object(data)
+        except (TimeoutError, httpx.TimeoutException):
+            raise MistralError("MISTRAL_TIMEOUT") from None
+        except httpx.RequestError:
+            raise MistralError("MISTRAL_UNAVAILABLE") from None
+        except UnicodeDecodeError:
+            raise MistralError("MISTRAL_INVALID_RESPONSE") from None
+        raise MistralError("MISTRAL_INVALID_RESPONSE")

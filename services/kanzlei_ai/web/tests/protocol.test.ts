@@ -24,6 +24,12 @@ describe('browser protocol', () => {
     expect(conversationCreateBody(client)).toEqual({ client_id: 'A +&/' });
     expect(conversationQuery(client)).toBe('client_id=A+%2B%26%2F');
   });
+  it('creates and lists assistant conversations without a client', () => {
+    const assistant = { kind: 'assistant' } as const;
+    expect(conversationCreateBody(assistant)).toEqual({ scope: { kind: 'assistant' } });
+    expect(conversationQuery(assistant)).toBe('scope=assistant');
+    expect(chatScopeOptionValue({ kind: 'client', client_id: 'assistant' })).not.toBe(chatScopeOptionValue(assistant));
+  });
   it('uses distinct option values even when a client ID equals the general option', () => {
     const general = chatScopeOptionValue({ kind: 'general' });
     expect(chatScopeOptionValue({ kind: 'client', client_id: general })).not.toBe(general);

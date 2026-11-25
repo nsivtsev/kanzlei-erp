@@ -76,3 +76,27 @@ def test_processing_check_preserves_an_explicit_erp_denial():
             adapter.check_processing_policy("generate", SCOPE, [SOURCE], access_token="g" * 43)
         )
     assert error.value.status == 403
+
+
+def test_assistant_question_check_sends_no_scope_or_sources():
+    def handle(request):
+        assert json.loads(request.content) == {
+            "version": 1,
+            "operation": "assist",
+            "sources": [],
+            "access_token": "g" * 43,
+        }
+        return httpx.Response(200, json={"message": {"version": 1, "allowed": True}})
+
+    asyncio.run(
+        connector(handle).check_processing_policy("assist", None, [], access_token="g" * 43)
+    )
+
+
+@pytest.mark.parametrize(("operation", "scope"), [("assist", SCOPE), ("generate", None)])
+def test_only_the_assistant_question_check_omits_scope(operation, scope):
+    def handle(request):
+        raise AssertionError("no request expected")
+
+    with pytest.raises(ConnectorError, match="INVALID_REQUEST"):
+        asyncio.run(connector(handle).check_processing_policy(operation, scope, []))

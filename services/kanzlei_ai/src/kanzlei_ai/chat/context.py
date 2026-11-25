@@ -68,7 +68,8 @@ class Session:
     token: str = field(repr=False)
     connector_id: str
     subject: str
-    scope: Scope
+    # None: an assistant conversation without access to documents.
+    scope: Scope | None
     index_profile: str = INDEX_PROFILE
 
 
@@ -87,6 +88,10 @@ def configure_query(connection):
 async def granted(session: Session, dependencies: Iterable[Dependency]) -> set[SourceRef]:
     refs = list(dict.fromkeys(dependency.source for dependency in dependencies))
     allowed = set()
+    if not refs:
+        return allowed
+    if session.scope is None:
+        raise ConnectorError("CHAT_UNAVAILABLE", 503)
     if session.scope.kind == "client" and any(
         ref.client_id != session.scope.client_id for ref in refs
     ):
@@ -181,6 +186,8 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             func.char_length(chunk.text).between(1, CHUNK_LIMIT),
         )
     )
+    if session.scope is None:
+        return {}
     if session.scope.kind == "client":
         statement = statement.where(scope_relation.client_id == session.scope.client_id)
     if expand:

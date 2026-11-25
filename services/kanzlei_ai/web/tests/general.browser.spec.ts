@@ -19,8 +19,12 @@ async function login(page: Page, generalAccess?: unknown) {
     });
   }
   await page.goto('/');
+  // Sign-in opens the default scope without a Mandant; wait for it before choosing another one.
+  const initial = page.waitForResponse(r => new URL(r.url()).pathname === paths.conversations
+    && r.request().method() === 'GET');
   await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
   await expect(page.getByLabel('Suchbereich')).toBeVisible();
+  await initial;
 }
 
 async function selectScope(page: Page, label: string, query: object) {
@@ -153,6 +157,7 @@ test('late general conversation list and answer cannot overwrite the selected Ma
   let releaseList!: () => void, releaseTurn!: () => void;
   const listGate = new Promise<void>(resolve => { releaseList = resolve; });
   const turnGate = new Promise<void>(resolve => { releaseTurn = resolve; });
+  await login(page, true);
   await page.route('**/v1/chat/conversations?scope=general', async route => {
     await listGate;
     await route.fulfill({ json: {
@@ -160,7 +165,6 @@ test('late general conversation list and answer cannot overwrite the selected Ma
       next_cursor: null,
     } }).catch(() => {});
   }, { times: 1 });
-  await login(page, true);
   const listRequest = page.waitForRequest('**/v1/chat/conversations?scope=general');
   const listCancelled = page.waitForEvent('requestfailed', request => request.url().endsWith('?scope=general'));
   await page.getByLabel('Suchbereich').selectOption({ label: generalLabel });
