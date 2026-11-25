@@ -11,6 +11,8 @@ from kanzlei_ai.connectors.contracts import (
     ProcessingOperation,
     Scope,
     SourceRef,
+    WorkContext,
+    WorkQuery,
 )
 
 
@@ -52,6 +54,9 @@ class ERPConnector(Protocol):
         *,
         access_token: str | None = None,
     ) -> None: ...
+    async def read_work_context(
+        self, access_token: str, scope: Scope, query: WorkQuery, *, external: bool
+    ) -> WorkContext: ...
     async def read_source(self, access_token: str, scope: Scope, source: SourceRef) -> bytes: ...
     async def resolve_source_locator(
         self, access_token: str, scope: Scope, source: SourceRef

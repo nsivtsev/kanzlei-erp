@@ -86,7 +86,11 @@ def configure_query(connection):
 
 
 async def granted(session: Session, dependencies: Iterable[Dependency]) -> set[SourceRef]:
-    refs = list(dict.fromkeys(dependency.source for dependency in dependencies))
+    return await granted_sources(session, [dependency.source for dependency in dependencies])
+
+
+async def granted_sources(session: Session, references: Iterable[SourceRef]) -> set[SourceRef]:
+    refs = list(dict.fromkeys(references))
     allowed = set()
     if not refs:
         return allowed
@@ -119,9 +123,8 @@ async def granted(session: Session, dependencies: Iterable[Dependency]) -> set[S
     return allowed
 
 
-def current_evidence(connection, session: Session, dependencies, *, expand=(), lock=False):
-    if not dependencies and not expand:
-        return {}
+def _published_chunks(session: Session):
+    """Chunks of each source's current publication for this index profile and scope."""
     source, publication, artifact, chunk = (
         sources.c,
         index_publications.c,
@@ -186,30 +189,14 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             func.char_length(chunk.text).between(1, CHUNK_LIMIT),
         )
     )
-    if session.scope is None:
-        return {}
     if session.scope.kind == "client":
         statement = statement.where(scope_relation.client_id == session.scope.client_id)
-    if expand:
-        statement = (
-            statement.where(
-                tuple_(*version).in_(expand),
-                chunk.kind == "table",
-                chunk.id.not_in([d.chunk_id for d in dependencies]),
-            )
-            .order_by(source.source_id, chunk.page, chunk.id, scope_relation.client_id)
-            .limit(RELATED_TABLE_LIMIT)
-        )
-    else:
-        statement = statement.where(tuple_(*version, chunk.id).in_([d.key() for d in dependencies]))
-    if lock:
-        statement = statement.with_for_update(
-            read=True,
-            of=(sources, relations, index_publications, document_artifacts, document_chunks),
-        )
+    return statement, version
 
+
+def _evidence(rows) -> dict[Dependency, Evidence]:
     result = {}
-    for row in connection.execute(statement):
+    for row in rows:
         dependency = Dependency(
             SourceRef(
                 source_id=row.source_id,
@@ -234,6 +221,96 @@ def current_evidence(connection, session: Session, dependencies, *, expand=(), l
             row.table_fragment,
         )
     return result
+
+
+def current_evidence(connection, session: Session, dependencies, *, expand=(), lock=False):
+    if (not dependencies and not expand) or session.scope is None:
+        return {}
+    statement, version = _published_chunks(session)
+    source, chunk = sources.c, document_chunks.c
+    if expand:
+        statement = (
+            statement.where(
+                tuple_(*version).in_(expand),
+                chunk.kind == "table",
+                chunk.id.not_in([d.chunk_id for d in dependencies]),
+            )
+            .order_by(source.source_id, chunk.page, chunk.id, relations.c.client_id)
+            .limit(RELATED_TABLE_LIMIT)
+        )
+    else:
+        statement = statement.where(tuple_(*version, chunk.id).in_([d.key() for d in dependencies]))
+    if lock:
+        statement = statement.with_for_update(
+            read=True,
+            of=(sources, relations, index_publications, document_artifacts, document_chunks),
+        )
+    return _evidence(connection.execute(statement))
+
+
+def _current_version(engine, session: Session, source_id: str, client_id: str):
+    source, publication = sources.c, index_publications.c
+    statement = (
+        select(source.revision, source.generation)
+        .select_from(
+            sources.join(relations, relations.c.source_id == source.id).join(
+                index_publications,
+                and_(
+                    publication.source_id == source.id,
+                    publication.revision == source.revision,
+                    publication.generation == source.generation,
+                    publication.profile == session.index_profile,
+                ),
+            )
+        )
+        .where(
+            source.connector_id == session.connector_id,
+            source.active.is_(True),
+            source.source_id == source_id,
+            relations.c.client_id == client_id,
+        )
+    )
+    with engine.begin() as connection:
+        configure_query(connection)
+        return connection.execute(statement).one_or_none()
+
+
+def _document_page(engine, session: Session, version_key, offset: int, limit: int):
+    statement, version = _published_chunks(session)
+    statement = (
+        statement.where(tuple_(*version).in_([version_key]))
+        .order_by(document_chunks.c.ordinal, document_chunks.c.id)
+        .offset(offset)
+        .limit(limit + 1)
+    )
+    with engine.begin() as connection:
+        configure_query(connection)
+        found = list(_evidence(connection.execute(statement)).values())
+    return tuple(found[:limit]), len(found) > limit
+
+
+async def current_source(engine, session: Session, source_id: str, client_id: str):
+    """The published version of a source the user picked, or None."""
+    if session.scope is None or (
+        session.scope.kind == "client" and client_id != session.scope.client_id
+    ):
+        return None
+    row = await database_call(_current_version, engine, session, source_id, client_id)
+    if row is None:
+        return None
+    ref = SourceRef(source_id=source_id, revision=row.revision, client_id=client_id)
+    return ref, row.generation
+
+
+async def read_document(
+    engine, session: Session, ref: SourceRef, generation: int, offset: int, limit: int
+) -> tuple[tuple[Evidence, ...], bool]:
+    """Chunks of one currently authorized source version in reading order."""
+    if ref not in await granted_sources(session, [ref]):
+        return (), False
+    await asyncio.sleep(0)
+    version_key = (ref.source_id, ref.revision, generation, ref.client_id)
+    return await database_call(_document_page, engine, session, version_key, offset, limit)
 
 
 def read_current(engine, session, dependencies, *, expand=()):

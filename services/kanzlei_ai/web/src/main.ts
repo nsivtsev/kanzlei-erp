@@ -18,10 +18,13 @@ type Item = {
   question: string | null;
   answer: string | null;
   citations: Citation[];
+  erp_data?: boolean;
 };
 type Processing = 'pending' | 'ready' | 'failed';
 type Source = { source_id: string; title: string; status: Processing };
 type Filters = { query: string; status: 'all' | Processing };
+type Attachment = { source_id: string; client_id: string; title: string };
+type Picker = { clientId: string; query: string; items: Source[] | null; error: boolean; request: AbortController | null };
 type Conversation = { id: string; created_at: string }
   & ({ client_id: string } | { client_id: null; scope: { kind: 'general' | 'assistant' } });
 type OwnedConversation = { id: string; created_at: string; scope_kind: 'client' | 'general' | 'assistant' };
@@ -49,6 +52,7 @@ const apiBase = import.meta.env.BASE_URL.slice(0, -1);
 const conversationsPath = '/v1/chat/conversations';
 const maxPagedItems = 10_000;
 const questionLimit = 4000, strictQuestionLimit = 1000;
+const maxAttachments = 3;
 const assistantScope: ChatScope = { kind: 'assistant' };
 const maxPages = 1_000;
 const sourceStatus: Record<Processing, string> = {
@@ -69,6 +73,9 @@ let askController: AbortController | null = null;
 let activeQuestion = '';
 let streamingAnswer = '';
 let strictMode = false;
+let attachments: Attachment[] = [];
+let picker: Picker | null = null;
+let pickerTimer = 0;
 let historyCheck: object | null = null;
 let accessCheck: number | null = null;
 let revalidationTimer = 0;
@@ -155,6 +162,60 @@ function resetConversation() {
   conversation = '';
   history = [];
   draft = '';
+  attachments = [];
+  closePicker(null);
+}
+
+function closePicker(focus: string | null = 'attach') {
+  clearTimeout(pickerTimer);
+  picker?.request?.abort();
+  picker = null;
+  if (focus !== null) render(focus);
+}
+
+function openPicker() {
+  const first = chatScope?.kind === 'client' ? chatScope.client_id : clients[0]?.id;
+  if (!first || !conversation || askController) return;
+  picker = { clientId: first, query: '', items: null, error: false, request: null };
+  void loadPicker('picker-search');
+}
+
+async function loadPicker(focus?: string) {
+  const session = lease, sequence = generation, state = picker;
+  if (!session || !state) return;
+  state.request?.abort();
+  const request = new AbortController();
+  state.request = request;
+  state.items = null;
+  state.error = false;
+  render(focus);
+  const mine = () => picker === state && state.request === request && current(session, sequence);
+  try {
+    const result = await (await api(session, '/v1/chat/conversations/sources', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: state.clientId, query: state.query.trim(), status: 'ready' }),
+      signal: request.signal,
+    }, sequence)).json() as Page<Source>;
+    if (!mine()) return;
+    if (!Array.isArray(result.items)) throw Error();
+    state.items = result.items.filter(item => typeof item?.source_id === 'string' && typeof item.title === 'string');
+  } catch {
+    if (mine()) state.error = true;
+  } finally {
+    if (mine()) {
+      state.request = null;
+      render();
+    }
+  }
+}
+
+function attach(source: Source, clientId: string) {
+  if (attachments.length >= maxAttachments
+      || attachments.some(item => item.source_id === source.source_id && item.client_id === clientId)) return;
+  attachments = [...attachments, { source_id: source.source_id, client_id: clientId, title: source.title }];
+  setStatus(`Angehängt: ${source.title}`);
+  if (attachments.length >= maxAttachments) closePicker('question');
+  else render('picker-search');
 }
 
 function resetScope() {
@@ -699,6 +760,8 @@ async function ask(question: string) {
     setStatus(`Die Frage ist zu lang (höchstens ${strict ? strictQuestionLimit : questionLimit} Zeichen).`);
     return;
   }
+  const sent = strict ? [] : attachments.map(({ source_id, client_id }) => ({ source_id, client_id }));
+  closePicker(null);
   const controller = new AbortController();
   askController = controller;
   activeQuestion = question;
@@ -709,7 +772,9 @@ async function ask(question: string) {
   let terminal = false;
   try {
     const response = await api(session, `${conversationPath(id)}/turns`, {
-      method: 'POST', body: JSON.stringify({ question, strict }), signal: controller.signal,
+      method: 'POST',
+      body: JSON.stringify(sent.length ? { question, strict, attachments: sent } : { question, strict }),
+      signal: controller.signal,
     }, sequence);
     if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream') || !response.body) throw Error();
     const parser = new SSEParser((event, data) => {
@@ -717,6 +782,7 @@ async function ask(question: string) {
       if (event === 'status') {
         const phase = (data as { phase?: string }).phase;
         setStatus(phase === 'retrieving' ? (strict ? 'Quellen werden geprüft …' : 'Dokumente werden durchsucht …')
+          : phase === 'reading' ? 'Angehängte Dokumente werden gelesen …'
           : phase === 'generating' ? 'Antwort wird erstellt …'
             : phase === 'validating' ? 'Antwort wird geprüft …' : 'Verarbeitung läuft …');
       } else if (event === 'delta') {
@@ -735,11 +801,16 @@ async function ask(question: string) {
             || !['answered', 'no_evidence', 'unavailable'].includes(item.status) || !Array.isArray(item.citations)) throw Error();
         terminal = true;
         history = [...history.filter(previous => previous.id !== item.id), item];
+        if (sent.length) attachments = [];
         status = '';
       } else if (event === 'error') {
         terminal = true;
         const code = (data as { code?: unknown })?.code;
         if (code === 'UNAUTHENTICATED') logout(true);
+        else if (code === 'ATTACHMENT_UNAVAILABLE') {
+          draft = question;
+          status = 'Ein angehängtes Dokument ist nicht mehr verfügbar. Bitte entfernen Sie es und versuchen Sie es erneut.';
+        }
         else if (code === 'STALE_SOURCE' || code === 'FORBIDDEN' || code === 'NOT_FOUND') invalidateScope();
         else if (code === 'CHAT_UNAVAILABLE') {
           invalidateScope();
@@ -1006,9 +1077,11 @@ function renderTurn(item: Item) {
   }
   const assistant = item.mode === 'assistant';
   if (assistant) {
-    const grounded = item.citations.length > 0;
-    article.append(el('p', grounded ? 'Antwort aus Kanzlei-Dokumenten'
-      : 'Allgemeine Antwort · nicht aus Kanzlei-Dokumenten', `answer-mode ${grounded ? 'grounded' : 'general'}`));
+    const grounded = item.citations.length > 0, erp = item.erp_data === true;
+    const mode = grounded && erp ? 'Antwort aus Kanzlei-Dokumenten und ERP-Daten'
+      : grounded ? 'Antwort aus Kanzlei-Dokumenten'
+        : erp ? 'Antwort aus ERP-Daten' : 'Allgemeine Antwort · nicht aus Kanzlei-Dokumenten';
+    article.append(el('p', mode, `answer-mode ${grounded || erp ? 'grounded' : 'general'}`));
     const answer = el('div', undefined, 'answer markdown');
     answer.append(renderMarkdown(item.answer || '', number => {
       const citation = item.citations[number - 1];
@@ -1065,7 +1138,7 @@ function renderChat() {
       : 'Stellen Sie eine allgemeine Frage. Für Antworten aus Dokumenten wählen Sie einen Mandanten als Suchbereich.', 'muted'));
     const suggestions = el('div', undefined, 'suggestions');
     const examples = documents
-      ? ['Wie hoch ist der Rechnungsbetrag?', 'Fasse die letzte E-Mail zusammen.']
+      ? ['Wie hoch ist der Rechnungsbetrag?', 'Welche Fristen stehen in den nächsten 14 Tagen an?']
       : ['Was ist der Vorsteuerabzug?', 'Formuliere eine höfliche Erinnerung an fehlende Belege.'];
     for (const example of examples) {
       suggestions.append(button(example, () => {
@@ -1106,7 +1179,33 @@ function renderChat() {
     field.value = draft;
     field.readOnly = !!askController;
     field.oninput = () => { draft = field.value; };
+    const attaching = documents && !strictMode;
+    if (attaching && attachments.length) {
+      const chips = el('ul', undefined, 'attachments');
+      chips.setAttribute('aria-label', 'Angehängte Dokumente');
+      attachments.forEach((item, index) => {
+        const chip = el('li', undefined, 'attachment');
+        chip.append(el('span', item.title, 'attachment-title'));
+        const remove = button('×', () => {
+          attachments = attachments.filter(other => other !== item);
+          setStatus(`Anhang entfernt: ${item.title}`);
+          render(attachments.length ? `remove-attachment-${Math.min(index, attachments.length - 1)}` : 'attach');
+        }, 'attachment-remove', `remove-attachment-${index}`);
+        remove.setAttribute('aria-label', `Anhang entfernen: ${item.title}`);
+        remove.disabled = !!askController;
+        chip.append(remove);
+        chips.append(chip);
+      });
+      form.append(chips);
+    }
     form.append(label, field);
+    if (attaching) {
+      const open = button('Dokument anhängen', () => picker ? closePicker() : openPicker(), 'quiet attach', 'attach');
+      open.setAttribute('aria-expanded', String(!!picker));
+      open.title = `Bis zu ${maxAttachments} Dokumente als Kontext anhängen`;
+      open.disabled = !!askController || attachments.length >= maxAttachments;
+      form.append(open);
+    }
     if (documents) {
       const option = el('label', undefined, 'strict-option');
       const box = el('input');
@@ -1115,7 +1214,11 @@ function renderChat() {
       box.dataset.focus = 'strict';
       box.checked = strictMode;
       box.disabled = !!askController;
-      box.onchange = () => { strictMode = box.checked; };
+      box.onchange = () => {
+        strictMode = box.checked;
+        if (strictMode) closePicker(null);
+        render('strict');
+      };
       option.append(box, ' Nur wörtliche Belege');
       option.title = 'Antwortet nur mit einer wörtlichen Stelle oder einem geprüften Rechnungsbetrag.';
       form.append(option);
@@ -1137,10 +1240,71 @@ function renderChat() {
       event.preventDefault();
       void ask(field.value);
     };
+    if (picker && attaching) footer.append(renderPicker(picker));
     footer.append(form);
   }
   chat.append(footer);
   return chat;
+}
+
+function renderPicker(state: Picker) {
+  const panel = el('div', undefined, 'picker');
+  panel.setAttribute('role', 'group');
+  panel.setAttribute('aria-label', 'Dokument anhängen');
+  panel.onkeydown = event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closePicker();
+    }
+  };
+  const head = el('div', undefined, 'picker-head');
+  if (chatScope?.kind === 'general') {
+    const select = el('select');
+    select.dataset.focus = 'picker-client';
+    select.setAttribute('aria-label', 'Mandant für Anhänge');
+    for (const item of clients) {
+      const option = el('option', item.label);
+      option.value = item.id;
+      option.selected = item.id === state.clientId;
+      select.append(option);
+    }
+    select.onchange = () => {
+      state.clientId = select.value;
+      void loadPicker('picker-client');
+    };
+    head.append(select);
+  }
+  const search = el('input');
+  search.type = 'search';
+  search.dataset.focus = 'picker-search';
+  search.setAttribute('aria-label', 'Dokumente suchen');
+  search.placeholder = 'Dokumentname …';
+  search.maxLength = 200;
+  search.value = state.query;
+  search.oninput = () => {
+    state.query = search.value;
+    clearTimeout(pickerTimer);
+    pickerTimer = window.setTimeout(() => { if (picker === state) void loadPicker(); }, 250);
+  };
+  head.append(search, button('Schließen', () => closePicker(), 'quiet', 'picker-close'));
+  panel.append(head);
+  if (state.error) panel.append(el('p', 'Dokumente konnten nicht geladen werden.', 'muted'));
+  else if (!state.items) panel.append(el('p', 'Dokumente werden geladen …', 'muted'));
+  else if (!state.items.length) panel.append(el('p', 'Keine verarbeiteten Dokumente gefunden.', 'muted'));
+  else {
+    const list = el('ul', undefined, 'picker-list');
+    for (const item of state.items) {
+      const row = el('li');
+      const added = attachments.some(other => other.source_id === item.source_id && other.client_id === state.clientId);
+      const choose = button(item.title, () => attach(item, state.clientId), 'picker-item');
+      choose.disabled = added || attachments.length >= maxAttachments;
+      if (added) choose.setAttribute('aria-label', `${item.title} (angehängt)`);
+      row.append(choose);
+      list.append(row);
+    }
+    panel.append(list);
+  }
+  return panel;
 }
 
 function renderCatalogue() {

@@ -327,6 +327,22 @@ For sourced generation include every excerpt's source reference, including all
 referenced Mandanten in general scope. For background OCR or document embeddings
 send the current source references. Each retry rechecks permission online.
 
+## Assistant work context
+
+`read_work_context(access_token, scope, query, external)` returns structured ERP
+data for the assistant's `erp_query` tool. `query` is one fixed view with no
+free-form filter: `{"kind": "tasks" | "deadlines" | "client", "client_id"?,
+"days"?}`. `tasks` lists open Tasks of a Mandant, `deadlines` adds open FiBu
+package due dates within `days` (1 to 90, default 30), and `client` gives a short
+overview of one Mandant. In general scope `client_id` is optional, except for
+`client`. The ERP reads rows through Frappe's permission-aware list API,
+rechecks each record and its Mandant, and returns at most 25 records.
+With `external: true` the switch `assistant_generation` must be on, and records
+of a Mandant without a `generate` grant are left out.
+
+The AI service stores the Mandanten whose records an answer used. History and
+conversation memory hide that answer when the user loses access to any of them.
+
 ## General chat
 
 Apply the AI database migration before enabling general chat. Give pilot users

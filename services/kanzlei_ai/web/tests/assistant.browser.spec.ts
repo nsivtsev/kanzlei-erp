@@ -56,3 +56,51 @@ for (const width of [1100, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+for (const width of [1100, 390]) {
+  test(`attaches documents from the catalogue and labels ERP answers at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Mit ERP anmelden' }).click();
+    await page.getByLabel('Suchbereich').selectOption({ label: 'Mandant A' });
+    await page.getByRole('button', { name: 'Neues Gespräch' }).click();
+
+    const open = page.getByRole('button', { name: 'Dokument anhängen' });
+    await open.click();
+    await expect(open).toHaveAttribute('aria-expanded', 'true');
+    const catalogue = page.waitForRequest(r => r.url().endsWith('/v1/chat/conversations/sources'));
+    await page.getByLabel('Dokumente suchen').fill('test');
+    expect((await catalogue).postDataJSON()).toEqual({ client_id: 'a', query: 'test', status: 'ready' });
+    await page.getByRole('button', { name: 'Testdokument', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Anhang entfernen: Testdokument' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Testdokument (angehängt)' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(open).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByLabel('Dokumente suchen')).toHaveCount(0);
+
+    // Strict mode cannot use attachments; the chips stay for the next generative turn.
+    const strict = page.getByLabel('Nur wörtliche Belege');
+    await strict.check();
+    await expect(open).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Anhang entfernen: Testdokument' })).toHaveCount(0);
+    await strict.uncheck();
+
+    const turn = page.waitForRequest(r => r.url().endsWith('/turns'));
+    await page.getByLabel('Ihre Frage').fill('Fasse den Anhang zusammen.');
+    await page.getByRole('button', { name: 'Senden' }).click();
+    expect((await turn).postDataJSON()).toEqual({
+      question: 'Fasse den Anhang zusammen.', strict: false, attachments: [{ source_id: 's', client_id: 'a' }],
+    });
+    await expect(page.locator('.answer.markdown').last()).toContainText('Zusammenfassung von Testdokument');
+    await expect(page.getByText('Antwort aus Kanzlei-Dokumenten')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Anhang entfernen: Testdokument' })).toHaveCount(0);
+
+    const next = page.waitForRequest(r => r.url().endsWith('/turns'));
+    await page.getByLabel('Ihre Frage').fill('Fristen in den nächsten 14 Tagen?');
+    await page.getByRole('button', { name: 'Senden' }).click();
+    expect((await next).postDataJSON()).toEqual({ question: 'Fristen in den nächsten 14 Tagen?', strict: false });
+    await expect(page.getByText('Antwort aus ERP-Daten')).toBeVisible();
+    await expect(page.locator('.answer.markdown').last().locator('strong', { hasText: 'USt-Voranmeldung' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}

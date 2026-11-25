@@ -185,6 +185,40 @@ class AuthorizationResult(Contract):
     decisions: Annotated[list[Decision], Field(min_length=1, max_length=50)]
 
 
+WorkKind = Literal["tasks", "deadlines", "client"]
+IsoDate = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+_WorkText = Annotated[str, Field(min_length=1, max_length=500, pattern=r"^[^\x00-\x1f\x7f]*$")]
+
+
+class WorkQuery(BaseModel):
+    """One fixed, bounded ERP view; there are no free-form filters."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    kind: WorkKind
+    client_id: Identifier | None = None
+    days: Annotated[int, Field(ge=1, le=90)] = 30
+
+
+class WorkItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    type: Literal["task", "question", "fibu_package", "client"]
+    id: Identifier
+    client_id: Identifier
+    client_label: _WorkText
+    title: _WorkText
+    status: Annotated[str, Field(min_length=1, max_length=100)] | None
+    due_date: IsoDate | None
+    due_kind: Literal["task", "document", "internal", "external"] | None
+    note: _WorkText | None
+
+
+class WorkContext(Contract):
+    version: Literal[1]
+    today: IsoDate
+    items: Annotated[list[WorkItem], Field(max_length=25)]
+    truncated: bool
+
+
 class Revoked(Contract):
     revoked: Literal[True]
 

@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from kanzlei_ai.chat.assistant import SEARCH_TOOL, TOOLS, cite
+from kanzlei_ai.chat.assistant import SEARCH_TOOL, TOOLS, cite, strip_markers
 from kanzlei_ai.chat.context import Dependency, Evidence
 from kanzlei_ai.connectors.contracts import SourceRef
 from kanzlei_ai.providers.mistral import MistralError
@@ -121,3 +121,9 @@ def test_oversized_stream_and_http_errors_are_sanitized():
             )
         )
     assert error.value.retry_after == 7 and SECRET not in str(error.value)
+
+
+def test_memory_text_drops_earlier_citation_numbers():
+    assert strip_markers("Betrag 1.249,50 EUR [1]. Siehe auch [2] und [3] .") == (
+        "Betrag 1.249,50 EUR. Siehe auch und."
+    )

@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
 )
 
 metadata = MetaData()
@@ -246,6 +247,8 @@ chat_turns = Table(
     Column("dependencies", JSON, nullable=False),
     Column("citations", JSON, nullable=False),
     Column("mode", String(16), nullable=False, server_default="strict"),
+    # Mandanten whose structured ERP data (tasks, deadlines) the answer used.
+    Column("erp_clients", JSON, nullable=False, server_default=text("'[]'")),
     CheckConstraint(
         "(status = 'answered' AND answer IS NOT NULL) OR "
         "(status = 'no_evidence' AND answer IS NULL)",

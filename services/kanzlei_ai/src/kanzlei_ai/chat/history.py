@@ -7,7 +7,14 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 from sqlalchemy import select, tuple_
 
-from kanzlei_ai.chat.assistant import ASSISTANT_CONTEXT_LIMIT, AssistantAnswer
+from kanzlei_ai.chat.assistant import (
+    ERP_CLIENT_LIMIT,
+    MEMORY_DEPENDENCY_LIMIT,
+    STORED_DEPENDENCY_LIMIT,
+    AssistantAnswer,
+    Memory,
+    strip_markers,
+)
 from kanzlei_ai.chat.citations import VerifiedAnswer, render_answer
 from kanzlei_ai.chat.context import (
     CONTEXT_LIMIT,
@@ -21,14 +28,19 @@ from kanzlei_ai.chat.context import (
     database_call,
 )
 from kanzlei_ai.connectors.base import ConnectorError, ERPConnector
-from kanzlei_ai.connectors.contracts import Identity, Scope, SourceRef
+from kanzlei_ai.connectors.contracts import Identifier, Identity, Scope, SourceRef, WorkQuery
 from kanzlei_ai.models import chat_conversations, chat_turns
 from kanzlei_ai.search import retrieve as search_retrieve
 
 HISTORY_LIMIT = 10
 CONVERSATION_LIMIT = 100
+MEMORY_TURNS = 6
+MEMORY_CHARACTERS = 24_000
+MEMORY_ANSWER_CHARACTERS = 8_000
+MEMORY_ERP_CLIENTS = 10
 ASSISTANT_SCOPE = "assistant"
 _dependencies = TypeAdapter(list[Dependency])
+_clients = TypeAdapter(list[Identifier])
 
 
 class StoredCitation(BaseModel):
@@ -212,6 +224,7 @@ def store_turn(
     commit.checkpoint()
     dependencies = [evidence.dependency for evidence in context]
     assistant = isinstance(answer, AssistantAnswer)
+    erp_clients = sorted(answer.erp_clients) if assistant else []
     cited = answer.cited if assistant else (answer.evidence,) if answer is not None else ()
     citations = [
         StoredCitation(
@@ -240,6 +253,7 @@ def store_turn(
             citations=[citation.model_dump() for citation in citations],
             dependencies=_dependencies.dump_python(dependencies, mode="json"),
             mode="assistant" if assistant else "strict",
+            erp_clients=erp_clients,
         )
         .returning(chat_turns)
     )
@@ -260,12 +274,14 @@ def store_turn(
     return _history_view(row, citations)
 
 
-def _stored_proof(row) -> tuple[list[Dependency], list[StoredCitation]]:
+def _stored_proof(row) -> tuple[list[Dependency], list[StoredCitation], set[str]]:
     assistant = row.mode == "assistant"
     try:
         if (
             not isinstance(row.dependencies, list)
-            or len(row.dependencies) > (ASSISTANT_CONTEXT_LIMIT if assistant else CONTEXT_LIMIT)
+            or len(row.dependencies) > (STORED_DEPENDENCY_LIMIT if assistant else CONTEXT_LIMIT)
+            or not isinstance(row.erp_clients, list)
+            or len(row.erp_clients) > (ERP_CLIENT_LIMIT if assistant else 0)
             or not isinstance(row.citations, list)
             or (
                 (row.status != "answered" or len(row.citations) > len(row.dependencies))
@@ -276,6 +292,9 @@ def _stored_proof(row) -> tuple[list[Dependency], list[StoredCitation]]:
             raise ValueError
         dependencies = _dependencies.validate_python(row.dependencies)
         citations = [StoredCitation.model_validate(value) for value in row.citations]
+        erp_clients = set(_clients.validate_python(row.erp_clients))
+        if len(erp_clients) != len(row.erp_clients):
+            raise ValueError
         chunk_ids = {dependency.chunk_id for dependency in dependencies}
         if (
             len(chunk_ids) != len(dependencies)
@@ -285,11 +304,11 @@ def _stored_proof(row) -> tuple[list[Dependency], list[StoredCitation]]:
             raise ValueError
     except (ValidationError, ValueError):
         raise ConnectorError("CHAT_UNAVAILABLE", 503) from None
-    return dependencies, citations
+    return dependencies, citations, erp_clients
 
 
 def _history_view(row, citations, *, available=True):
-    return {
+    view = {
         "id": row.id,
         "created_at": row.created_at.isoformat(),
         "mode": row.mode,
@@ -306,6 +325,9 @@ def _history_view(row, citations, *, available=True):
             else []
         ),
     }
+    if available and row.erp_clients:
+        view["erp_data"] = True
+    return view
 
 
 def _history_rows(engine, conversation_id, cursor):
@@ -327,15 +349,40 @@ def _history_rows(engine, conversation_id, cursor):
         ).all()
 
 
+async def accessible_clients(session: Session, clients, *, external=False) -> set[str]:
+    """Mandanten whose ERP data the user may still read (and, if external, send out)."""
+    allowed = set()
+    if clients and session.scope is None:
+        raise ConnectorError("CHAT_UNAVAILABLE", 503)
+    for client in sorted(clients):
+        scope = Scope(kind="client", client_id=client)
+        if session.scope.kind == "client" and client != session.scope.client_id:
+            continue
+        try:
+            if external:
+                await session.connector.read_work_context(
+                    session.token, scope, WorkQuery(kind="client"), external=True
+                )
+            else:
+                await session.connector.check_scope(session.token, scope)
+        except ConnectorError as error:
+            if error.status not in (403, 404):
+                raise
+            continue
+        allowed.add(client)
+    return allowed
+
+
 async def read_history(engine, session, conversation_id, cursor):
     rows = await database_call(_history_rows, engine, conversation_id, cursor)
     page_rows = rows[:HISTORY_LIMIT]
     proofs = [_stored_proof(row) for row in page_rows]
-    all_dependencies = list(dict.fromkeys(d for proof, _ in proofs for d in proof))
+    all_dependencies = list(dict.fromkeys(d for proof, _, _ in proofs for d in proof))
     current, labels = await checked_dependencies(engine, session, all_dependencies)
+    clients = await accessible_clients(session, {c for _, _, erp in proofs for c in erp})
     items = []
-    for row, (deps, citations) in zip(page_rows, proofs, strict=True):
-        available = all(dep in current for dep in deps)
+    for row, (deps, citations, erp) in zip(page_rows, proofs, strict=True):
+        available = all(dep in current for dep in deps) and erp <= clients
         item = _history_view(row, citations, available=available)
         if available and labels is not None:
             by_chunk = {dep.chunk_id: dep for dep in deps}
@@ -348,6 +395,56 @@ async def read_history(engine, session, conversation_id, cursor):
         "items": items,
         "next_cursor": page_rows[-1].id if len(rows) > HISTORY_LIMIT else None,
     }
+
+
+def _recent_rows(engine, conversation_id, before_limit):
+    with engine.begin() as connection:
+        configure_query(connection)
+        table = chat_turns.c
+        return connection.execute(
+            select(chat_turns)
+            .where(table.conversation_id == conversation_id, table.status == "answered")
+            .order_by(table.created_at.desc(), table.id.desc())
+            .limit(before_limit)
+        ).all()
+
+
+async def recent_memory(engine, session, conversation_id, *, external=False) -> Memory:
+    """The latest answered turns that are still fully available, within fixed budgets.
+
+    A turn joins memory only while every source and ERP Mandant it depended on
+    is still current and permitted, so a revoked source can never reach the
+    model through an earlier answer. The new turn inherits these dependencies.
+    """
+    rows = await database_call(_recent_rows, engine, conversation_id, MEMORY_TURNS)
+    chosen = []
+    dependencies: dict[Dependency, None] = {}
+    clients: set[str] = set()
+    characters = 0
+    for row in rows:
+        deps, _, erp = _stored_proof(row)
+        size = len(row.question) + min(len(row.answer), MEMORY_ANSWER_CHARACTERS)
+        merged = dependencies | dict.fromkeys(deps)
+        if (
+            characters + size > MEMORY_CHARACTERS
+            or len(merged) > MEMORY_DEPENDENCY_LIMIT
+            or len(clients | erp) > MEMORY_ERP_CLIENTS
+        ):
+            break
+        chosen.append((row, deps, erp))
+        dependencies, characters = merged, characters + size
+        clients |= erp
+    if not chosen:
+        return Memory()
+    current, _ = await checked_dependencies(engine, session, list(dependencies))
+    allowed = await accessible_clients(session, clients, external=external)
+    turns, evidence, used = [], {}, set()
+    for row, deps, erp in reversed(chosen):
+        if all(dep in current for dep in deps) and erp <= allowed:
+            turns.append((row.question, strip_markers(row.answer[:MEMORY_ANSWER_CHARACTERS])))
+            evidence.update(dict.fromkeys(current[dep] for dep in deps))
+            used |= erp
+    return Memory(tuple(turns), tuple(evidence), frozenset(used))
 
 
 async def checked_dependencies(engine, session, dependencies):
@@ -387,10 +484,10 @@ def _citation_proof(engine, conversation_id, turn_id, citation_id):
             )
         ).one_or_none()
     if row is not None:
-        dependencies, citations = _stored_proof(row)
+        dependencies, citations, erp = _stored_proof(row)
         for citation in citations:
             if citation.id == citation_id:
-                return dependencies, citation
+                return dependencies, citation, erp
     raise ConnectorError("NOT_FOUND", 404)
 
 
@@ -408,7 +505,9 @@ async def check_citation(engine, session, dependencies, citation) -> Evidence:
 
 
 async def find_citation(engine, session, conversation_id, turn_id, citation_id):
-    deps, citation = await database_call(
+    deps, citation, erp = await database_call(
         _citation_proof, engine, conversation_id, turn_id, citation_id
     )
+    if not erp <= await accessible_clients(session, erp):
+        raise ConnectorError("NOT_FOUND", 404)
     return deps, citation, await check_citation(engine, session, deps, citation)

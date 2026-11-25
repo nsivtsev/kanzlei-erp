@@ -137,6 +137,15 @@ def check_processing_policy(operation=None, scope=None, sources=None, access_tok
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 @endpoint
+def read_work_context(access_token=None, scope=None, query=None, external=None, version=1, **extra):
+	from kanzlei_erp.ai_connector import work_context
+
+	with auth.principal(access_token):
+		return work_context.read(scope, query, external)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@endpoint
 def resolve_source_locator(access_token=None, scope=None, source=None, version=1, **extra):
 	from kanzlei_erp.ai_connector import inventory
 

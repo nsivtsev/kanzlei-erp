@@ -61,20 +61,26 @@ if (u.pathname === '/v1/chat/conversations/sources') {
 const thread = conversations.get(u.pathname.split('/')[4]);
 if (u.pathname.endsWith('/history')) return json(res, { items: thread?.turns ?? [], next_cursor: null });
 if (u.pathname.endsWith('/turns')) {
-  const { question, strict } = JSON.parse(body);
+  const { question, strict, attachments } = JSON.parse(body);
   const assistantScope = thread?.conversation.scope?.kind === 'assistant';
-  if (assistantScope || question.startsWith('Assistent:')) {
-    const grounded = !assistantScope;
-    const text = grounded
+  const attached = Array.isArray(attachments) && attachments.length > 0;
+  const erp = question.startsWith('Fristen');
+  if (assistantScope || question.startsWith('Assistent:') || attached || erp) {
+    const grounded = !assistantScope && !erp;
+    const text = attached ? `Zusammenfassung von **Testdokument** (${attachments.length} Anhang) [1].`
+      : erp ? '- **USt-Voranmeldung** (Mandant A, fällig 2026-12-10)'
+      : grounded
       ? 'Laut **Testdokument** beträgt der Betrag *1.249,50 EUR* [1].\n\n- Fällig: sofort\n- Unbekannt [7]'
       : '**Vorsteuerabzug** erlaubt Unternehmen, gezahlte Umsatzsteuer abzuziehen.\n\n1. Rechnung prüfen\n2. `Leistung` erfassen\n\n<img src=x onerror="window.injected=1">';
     const answer = {
       id: randomUUID(), created_at: new Date().toISOString(), mode: 'assistant', status: 'answered', question,
       answer: text.replace(' [7]', ''),
       citations: grounded ? [{ id: 'x', title: 'Testdokument', page: 1 }] : [],
+      ...(erp ? { erp_data: true } : {}),
     };
     thread?.turns.push(answer);
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    if (attached) res.write(`event: status\ndata: {"phase":"reading"}\n\n`);
     res.write(`event: status\ndata: {"phase":"generating"}\n\n`);
     if (grounded) res.write('event: delta\ndata: {"text":"Ich suche "}\n\nevent: reset\ndata: {}\n\n');
     for (const piece of text.match(/\S+\s*/g)) res.write(`event: delta\ndata: ${JSON.stringify({ text: piece })}\n\n`);
