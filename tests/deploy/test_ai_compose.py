@@ -161,6 +161,27 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertEqual(compose.env['AI_CHAT_WEB_DIR'], '/dev/null')
         self.assertTrue(any('stop' in call and 'ai-api' in call for call in commands.calls))
 
+    def test_release_chat_bundle_replaces_the_configured_fallback(self):
+        digest = 'a' * 64
+        fallback = self.root / 'fallback'
+        (fallback / 'assets').mkdir(parents=True)
+        (fallback / 'index.html').write_text('old')
+        settings = ('AI_ENABLED=1\nAI_API_IMAGE=registry.example/api@sha256:' + digest +
+            '\nAI_WORKER_IMAGE=registry.example/worker@sha256:' + digest +
+            '\nAI_POSTGRES_PASSWORD=' + 'b' * 32 + '\nAI_ERP_SERVICE_KEY=' + 'c' * 32 + '\n')
+        config = dict(self.config(settings), AI_CHAT_ENABLED='true', AI_CHAT_WEB_DIR=str(fallback))
+        release = self.root / 'release'
+        (release / 'deploy').mkdir(parents=True)
+        (release / 'deploy/compose.yml').write_text('services:\n  caddy:\n')
+        compose = manager.Compose(self.root, release, 'image', object(), config)
+        self.assertEqual(compose.env['AI_CHAT_WEB_DIR'], str(fallback))
+        (release / 'chat-web' / 'assets').mkdir(parents=True)
+        (release / 'chat-web' / 'index.html').write_text('new')
+        compose = manager.Compose(self.root, release, 'image', object(), config)
+        self.assertEqual(compose.env['AI_CHAT_WEB_DIR'], str(release / 'chat-web'))
+        disabled = manager.Compose(self.root, release, 'image', object(), dict(config, AI_CHAT_ENABLED='false'))
+        self.assertEqual(disabled.env['AI_CHAT_WEB_DIR'], '/dev/null')
+
     def test_restore_atomic_replace_failure_preserves_live_ai_settings(self):
         from unittest.mock import patch
         backup = self.root / 'backup.env'

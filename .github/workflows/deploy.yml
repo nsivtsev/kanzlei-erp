@@ -23,7 +23,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: read
@@ -61,18 +61,37 @@ jobs:
         run: |
           python3 scripts/ci_release.py promote "$RELEASE_TAG" "$REVISION" "$VERIFIED_IMAGE" \
             --runtime "$VERIFIED_RUNTIME" --documents "$VERIFIED_DOCUMENTS" --metadata release-images.json
-      - name: Package matching deployment configuration
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.resolve.outputs.ready == 'true'
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Package matching deployment configuration and chat UI
         if: steps.resolve.outputs.ready == 'true'
         env:
           REVISION: ${{ steps.resolve.outputs.revision }}
         run: |
           bundle_dir=$(mktemp -d)
-          trap 'rm -rf "$bundle_dir"' EXIT
+          web_dir=$(mktemp -d)
+          trap 'rm -rf "$bundle_dir" "$web_dir"' EXIT
           git archive --format=tar "$REVISION" deploy | tar -xf - -C "$bundle_dir"
           if [[ -f $bundle_dir/deploy/release-images.version ]]; then
             cp release-images.json "$bundle_dir/deploy/"
           fi
-          tar -czf release.tar.gz -C "$bundle_dir" deploy
+          contents=(deploy)
+          # The chat UI is built from the release revision so it always matches the AI API.
+          if git cat-file -e "$REVISION:services/kanzlei_ai/web/package-lock.json" 2>/dev/null; then
+            git archive --format=tar "$REVISION" services/kanzlei_ai/web | tar -xf - -C "$web_dir"
+            (
+              cd "$web_dir/services/kanzlei_ai/web"
+              npm ci --ignore-scripts --no-audit --no-fund
+              KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:8180 npm run build
+            )
+            cp -R "$web_dir/services/kanzlei_ai/web/dist" "$bundle_dir/chat-web"
+            test -f "$bundle_dir/chat-web/index.html" && test -d "$bundle_dir/chat-web/assets"
+            contents+=(chat-web)
+          fi
+          tar -czf release.tar.gz -C "$bundle_dir" "${contents[@]}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: steps.resolve.outputs.ready == 'true'
         with:
