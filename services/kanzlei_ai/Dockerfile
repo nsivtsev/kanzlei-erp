@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
-FROM python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72 AS runtime-base
+FROM python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72 AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -12,26 +12,30 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
+RUN useradd --uid 10001 --create-home app
+EXPOSE 8000
+LABEL org.opencontainers.image.source="https://github.com/nsivtsev/kanzlei-erp"
+
+# Application code comes after every dependency layer: a code change must not
+# rebuild, publish or store another copy of the dependencies.
+FROM dependencies AS runtime
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
-RUN useradd --uid 10001 --create-home app
 USER app
-EXPOSE 8000
-LABEL org.opencontainers.image.source="https://github.com/nsivtsev/kanzlei-erp"
 CMD ["uvicorn", "kanzlei_ai.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
-
-FROM runtime-base AS runtime
 ARG REVISION
 LABEL org.opencontainers.image.revision="${REVISION}" \
       io.kanzlei.image.role="runtime"
 
 # Only the document worker carries Docling and CPU inference dependencies.
-FROM runtime-base AS document-dependencies
-USER root
+FROM dependencies AS document-dependencies
 RUN apt-get update \
     && apt-get install --no-install-recommends -y libglib2.0-0 libgl1 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --extra documents --no-install-project
+COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra documents --no-editable
 USER app

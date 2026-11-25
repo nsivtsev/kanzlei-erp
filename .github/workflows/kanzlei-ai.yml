@@ -83,8 +83,8 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci
-      - name: Install Playwright's Chromium-based Chrome channel
-        run: npx --no-install playwright install --with-deps chrome
+      - name: Use the runner's Chrome, installing it only when absent
+        run: test -x /opt/google/chrome/chrome || npx --no-install playwright install --with-deps chrome
       - name: Build and test with synthetic loopback fixtures
         run: |
           sudo unshare --net -- bash -euc '
