@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 SOURCE = Path(__file__).resolve().parents[2] / "deploy" / "manage.py"
 manager = None
@@ -19,9 +21,10 @@ if SOURCE.exists():
 class FakeCommands:
 	"""Replace the Docker process boundary; state and files use the real filesystem."""
 
-	def __init__(self, fail_on=None):
+	def __init__(self, fail_on=None, s3="disabled"):
 		self.calls = []
 		self.fail_on = fail_on
+		self.s3 = s3
 
 	def run(self, args, *, env=None, timeout=None):
 		self.calls.append(list(args))
@@ -33,6 +36,8 @@ class FakeCommands:
 			for name in ("database.sql.gz", "public.tgz", "private.tgz"):
 				(destination / name).write_bytes(b"backup fixture")
 			(destination / "site_config.json").write_text('{"encryption_key":"preserved-key"}')
+		if "execute" in args and "kanzlei-s3-enabled" in args[-1]:
+			return "Linking fresh assets to volume...\n" + (f"kanzlei-s3-{self.s3}" if self.s3 else "")
 		if "ps" in args:
 			return "container-id\n"
 		if "inspect" in args:
@@ -75,6 +80,10 @@ class DeploymentTests(unittest.TestCase):
 		self.assertIsNotNone(manager, "Deployment manager has not been implemented")
 		self.temp = tempfile.TemporaryDirectory()
 		self.addCleanup(self.temp.cleanup)
+		# Stability sampling and HTTP retries must not slow the suite down.
+		sleep = patch.object(manager.time, "sleep")
+		sleep.start()
+		self.addCleanup(sleep.stop)
 		self.root = Path(self.temp.name).resolve()
 		(self.root / "shared").mkdir()
 		(self.root / "backups").mkdir()
@@ -355,22 +364,122 @@ class DeploymentTests(unittest.TestCase):
 			deployer.deploy()
 
 
-	def test_s3_export_runs_before_snapshot_copy_and_failure_blocks_migration(self):
-		commands = FakeCommands()
+	def latest_manifest(self):
+		return manager.read_json(next((self.root / "backups").iterdir()) / "manifest.json")
+
+	def test_backup_leaves_s3_objects_in_the_bucket_and_records_the_reference(self):
+		commands = FakeCommands(s3="enabled")
 		self.deployer(commands).deploy()
-		export = next(i for i, call in enumerate(commands.calls) if "kanzlei_erp.s3_backup.export_snapshot" in " ".join(call))
-		copy = next(i for i, call in enumerate(commands.calls) if call[:2] == ["docker", "cp"])
-		self.assertLess(export, copy)
-		class BrokenS3(FakeCommands):
-			def run(self, args, **kwargs):
-				if "kanzlei_erp.s3_backup.export_snapshot" in " ".join(args):
-					raise RuntimeError("S3 export failed")
-				return super().run(args, **kwargs)
-		# A fresh candidate release ensures this goes through the backup path again.
-		commands = BrokenS3()
-		with self.assertRaisesRegex(RuntimeError, "S3 export"):
-			self.deployer(commands).backup(self.state)
+		self.assertFalse(any("s3_backup" in value for call in commands.calls for value in call))
+		manifest = self.latest_manifest()
+		self.assertFalse(manifest["s3"])
+		self.assertTrue(manifest["s3_referenced"])
+
+	def test_backup_of_disk_backed_site_records_no_s3_reference(self):
+		self.deployer().deploy()
+		self.assertFalse(self.latest_manifest()["s3_referenced"])
+
+	def test_unknown_s3_state_blocks_migration(self):
+		commands = FakeCommands(s3=None)
+		with self.assertRaisesRegex(RuntimeError, "S3"):
+			self.deployer(commands).deploy()
 		self.assertFalse(any("migrate" in call for call in commands.calls))
+
+	def test_failed_backup_removes_host_and_volume_copies(self):
+		class FullDisk(FakeCommands):
+			def run(self, args, **kwargs):
+				if args[:2] == ["docker", "cp"]:
+					(Path(args[-1]) / "partial").write_bytes(b"partial")
+					raise RuntimeError("no space left on device")
+				return super().run(args, **kwargs)
+
+		commands = FullDisk()
+		with self.assertRaisesRegex(RuntimeError, "no space"):
+			self.deployer(commands).deploy()
+		self.assertEqual(list((self.root / "backups").iterdir()), [])
+		removals = [call[-1] for call in commands.calls if call[-3:-1] == ["rm", "-rf"]]
+		self.assertEqual(len(removals), 1)
+		self.assertIn("/private/kanzlei-snapshots/deploy-", removals[0])
+
+	def test_failed_backup_never_removes_an_existing_destination(self):
+		destination = self.root / "offsite/snapshot"
+		destination.mkdir(parents=True)
+		(destination / "kept").write_bytes(b"unpublished")
+		with self.assertRaises(FileExistsError):
+			self.deployer().backup(self.state, destination=destination)
+		self.assertTrue((destination / "kept").exists())
+
+	def test_possibly_running_backup_container_keeps_evidence(self):
+		class StuckContainer(FakeCommands):
+			def run(self, args, **kwargs):
+				if "backup" in args or args[:3] == ["docker", "rm", "-f"]:
+					self.calls.append(list(args))
+					raise RuntimeError("docker daemon unavailable")
+				return super().run(args, **kwargs)
+
+		commands = StuckContainer()
+		with self.assertRaises(manager.UnsafeContainerError):
+			self.deployer(commands).backup(self.state)
+		self.assertEqual(len(list((self.root / "backups").iterdir())), 1)
+		self.assertFalse(any(call[-3:-1] == ["rm", "-rf"] for call in commands.calls))
+
+	def test_backup_ignores_python_caches_of_the_previous_release(self):
+		# Caches may belong to root after a manual run and are unreadable to deploy.
+		cache = self.previous / "deploy/__pycache__"
+		cache.mkdir()
+		(cache / "manage.cpython-314.pyc").write_bytes(b"cache")
+		self.deployer().deploy()
+		backup = next((self.root / "backups").iterdir())
+		self.assertTrue((backup / "release/deploy/compose.yml").exists())
+		self.assertFalse((backup / "release/deploy/__pycache__").exists())
+
+	def test_insufficient_space_stops_before_maintenance(self):
+		commands = FakeCommands()
+		with patch.object(manager.shutil, "disk_usage", return_value=SimpleNamespace(free=1024**3)):
+			with self.assertRaisesRegex(RuntimeError, "free space"):
+				self.deployer(commands).deploy()
+		self.assertTrue(any("pull" in call for call in commands.calls))
+		self.assertFalse(any("stop" in call or "maintenance_mode" in call for call in commands.calls))
+		self.assertFalse((self.root / "shared/pending.json").exists())
+
+	def test_space_estimate_ignores_s3_payloads_of_older_snapshots(self):
+		self.assertIsNone(manager.backup_space_required(self.root))
+		backup = self.root / "backups/20261125T080206Z-3d76aefe"
+		(backup / "s3/objects").mkdir(parents=True)
+		for name, size in (("database.sql.gz", 2 * 1024**3), ("s3/objects/000000000000", 8 * 1024**3)):
+			with (backup / name).open("wb") as handle:
+				handle.truncate(size)  # Sparse: no disk is used.
+		manager.atomic_json(backup / "manifest.json", {"checksums": {"database.sql.gz": "", "s3/objects/000000000000": ""}})
+		self.assertEqual(manager.backup_space_required(self.root), 4 * 1024**3 + 512 * 1024**2)
+
+	def test_local_restore_refuses_snapshot_that_references_a_live_bucket(self):
+		self.deployer(FakeCommands(s3="enabled")).deploy()
+		backup = next((self.root / "backups").iterdir())
+		self.config.write_text(self.config.read_text().replace("erp.example.com", "erp.localhost") + "HTTPS_ENABLED=0\n")
+		manifest = manager.read_json(backup / "manifest.json")
+		manifest["previous"]["site"] = "erp.localhost"
+		manager.atomic_json(backup / "manifest.json", manifest)
+		commands = FakeCommands()
+		with self.assertRaisesRegex(ValueError, "S3 bucket"):
+			manager.restore(self.root, backup, "erp.localhost", commands=commands)
+		self.assertEqual(commands.calls, [])
+
+	def test_s3_target_is_rejected_when_snapshot_has_no_objects(self):
+		self.deployer(FakeCommands(s3="enabled")).deploy()
+		backup = next((self.root / "backups").iterdir())
+		target = self.root / "target.json"
+		target.write_text("{}")
+		target.chmod(0o600)
+		commands = FakeCommands()
+		with self.assertRaisesRegex(ValueError, "no S3 objects"):
+			manager.restore(self.root, backup, "erp.example.com", commands=commands, s3_target=target)
+		self.assertEqual(commands.calls, [])
+
+	def test_production_restore_keeps_using_the_existing_bucket(self):
+		self.deployer(FakeCommands(s3="enabled")).deploy()
+		backup = next((self.root / "backups").iterdir())
+		manager.restore(self.root, backup, "erp.example.com", commands=FakeCommands(), smoke=lambda _: None)
+		self.assertEqual(manager.read_json(self.root / "shared/current.json")["image"], self.old_image)
 
 	def test_restore_script_restores_s3_before_returning_to_smoke(self):
 		commands = FakeCommands()
@@ -481,6 +590,18 @@ class DeploymentTests(unittest.TestCase):
 				complete.append(path)
 		self.assertEqual(len(complete), 7)
 		self.assertTrue(incomplete.exists())
+
+	def test_retention_removes_only_interrupted_deployment_snapshots(self):
+		self.deployer().deploy()
+		interrupted = self.root / "backups/20261124T193136Z-94a3cc35"
+		manual = self.root / "backups/pre-migration-originals"
+		for path in (interrupted, manual):
+			path.mkdir()
+			(path / "database.sql.gz").write_bytes(b"partial")
+		self.deployer().prune_backups()
+		self.assertFalse(interrupted.exists())
+		self.assertTrue(manual.exists())
+		self.assertEqual(len(list((self.root / "backups").iterdir())), 2)
 
 	def test_changed_site_is_rejected_before_docker_changes(self):
 		self.config.write_text(self.config.read_text().replace("erp.example.com", "another.example.com"))

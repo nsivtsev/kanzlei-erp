@@ -2,23 +2,22 @@
 
 For scheduled encrypted external copies, see [daily offsite backups](offsite-backups.md).
 
-The deployment manager stops the application, scheduler and workers before taking
-the database/files backup and exporting S3. Keep every other writer to the managed
-site prefix stopped too. A bucket must not be shared with another writer under the
-same prefix.
+Deployment and offsite snapshots contain the database, local files and site
+configuration, **not S3 objects**. The bucket must be protected at provider level
+(Hetzner Object Storage versioning/backup). Until that is configured, a deleted or
+damaged object cannot be recovered from a new snapshot.
 
-Each new snapshot includes an `s3/manifest.json` and streamed object payloads for
-the entire managed prefix. Required objects referenced by the database must exist;
-a missing object makes backup fail. Every payload records its size and SHA-256,
-including empty objects. The outer backup manifest covers the S3 manifest and all
-payloads. The manifest contains no access key or secret; database and site config
-backups are still sensitive and the complete backup directory remains private.
+The manifest field `s3_referenced` records whether the site stored files in S3. A
+production restore reconnects to the existing bucket and leaves its objects unchanged;
+objects deleted after the snapshot must be recovered from the provider backup. A local
+HTTP/`.localhost` restore of such a snapshot is refused, because it would attach to
+the original bucket.
 
-Older disk-only backup snapshots remain supported. An old release image without
-the S3 exporter can make a disk-only snapshot, but cannot back up an S3-enabled
-site. The seven completed snapshot retention rule remains unchanged.
+## Restore older snapshots that contain S3 objects
 
-## Restore
+Snapshots made before this change include an `s3/manifest.json` and object payloads
+and remain fully restorable as described below. They count toward the seven retained
+snapshots, so later deployments remove them.
 
 Use the deployment manager's existing explicit restore command. It validates
 local snapshot checksums before starting Docker changes, restores the database

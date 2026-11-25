@@ -30,6 +30,13 @@ ROLE_LABEL = "io.kanzlei.image.role"
 IMAGE_RE = re.compile(r"ghcr\.io/nsivtsev/kanzlei-erp@sha256:[a-f0-9]{64}\Z")
 TAG_RE = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 DOMAIN_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\Z")
+SNAPSHOT_RE = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\Z")
+MINIMUM_BACKUP_SPACE = 2 * 1024**3
+# Works in every release image and fails closed when the site cannot be inspected.
+S3_STATE = (
+	'"kanzlei-s3-enabled" if frappe.db.exists("DocType", "Drive Disk Settings")'
+	' and frappe.db.get_single_value("Drive Disk Settings", "enabled") else "kanzlei-s3-disabled"'
+)
 
 
 def atomic_json(path, value):
@@ -527,6 +534,19 @@ def verify_backup(backup):
 	return manifest
 
 
+def backup_space_required(root):
+	"""Peak space of the next snapshot (volume export + host copy), or None before the first one."""
+	for candidate in sorted((Path(root) / "backups").glob("*"), reverse=True):
+		try:
+			names = read_json(candidate / "manifest.json")["checksums"]
+			# Older snapshots also carry S3 objects, which are no longer copied.
+			size = sum((candidate / name).stat().st_size for name in names if not name.startswith("s3/"))
+		except (OSError, ValueError, KeyError, TypeError):
+			continue
+		return max(2 * size + 512 * 1024**2, MINIMUM_BACKUP_SPACE)
+	return None
+
+
 class Deployer:
 	def __init__(self, root, release, image, revision, tag, *, commands=None, smoke=None, resume=False):
 		validate_release(image, revision, tag)
@@ -556,6 +576,24 @@ class Deployer:
 		)
 		container = self.config["PROJECT_NAME"] + "-backup-" + identifier.lower()
 		try:
+			self.export_backup(compose, previous, backup, snapshot, container)
+		except UnsafeContainerError:
+			# A writer may still be alive; keep everything for inspection.
+			raise
+		except BaseException:
+			# An incomplete snapshot is useless and would starve the next attempt of space.
+			# Free the host copy first: a full disk cannot start the volume cleanup container.
+			shutil.rmtree(backup, ignore_errors=True)
+			with contextlib.suppress(Exception):
+				compose.call("run", "--rm", "-T", "--no-deps", "backend", "rm", "-rf", snapshot, timeout=300)
+			raise
+		# The exported host snapshot is authoritative; avoid accumulating a second copy in sites.
+		compose.call("run", "--rm", "-T", "--no-deps", "backend", "rm", "-rf", snapshot)
+		print("Backup complete: " + str(backup), flush=True)
+		return str(backup)
+
+	def export_backup(self, compose, previous, backup, snapshot, container):
+		try:
 			compose.call(
 				"run",
 				"--name",
@@ -579,23 +617,23 @@ class Deployer:
 				"--backup-path-conf",
 				snapshot + "/site_config.json",
 			)
-			# Writers remain stopped throughout DB/files and object snapshots. Older
-			# release images have no exporter: permit only a genuinely disk-backed site.
-			compose.call(
-				"run", "--rm", "-T", "--no-deps", "-e", "SITE_NAME", "backend", "bash", "-euc",
-				"if env/bin/python -c 'import importlib.util; raise SystemExit(0 if importlib.util.find_spec(\"kanzlei_erp.s3_backup\") else 1)'; then\n"
-				+ "bench --site \"$SITE_NAME\" execute kanzlei_erp.s3_backup.export_snapshot --kwargs "
-				+ shlex.quote(json.dumps({"path": snapshot + "/s3"}))
-				+ "\nelse\nbench --site \"$SITE_NAME\" execute "
-				+ shlex.quote('frappe.throw("S3 backup support missing in current image") if frappe.db.exists("DocType", "Drive Disk Settings") and frappe.db.get_single_value("Drive Disk Settings", "enabled") else None')
-				+ "\nfi",
+			# S3 objects stay in their bucket, which has its own provider-level backups.
+			s3_state = compose.call(
+				"run", "--rm", "-T", "--no-deps", "backend",
+				"bench", "--site", self.config["SITE_NAME"], "execute", S3_STATE,
 			)
+			if not re.search(r"kanzlei-s3-(enabled|disabled)", s3_state):
+				raise RuntimeError("Cannot determine whether the site stores files in S3")
 			self.commands.run(["docker", "cp", container + ":" + snapshot + "/.", str(backup)])
 		finally:
 			with contextlib.suppress(Exception):
 				self.commands.run(["docker", "rm", "-f", container])
 		shutil.copy2(self.root / "shared" / "production.env", backup / "production.env")
-		shutil.copytree(Path(previous["release"]) / "deploy", backup / "release" / "deploy")
+		shutil.copytree(
+			Path(previous["release"]) / "deploy",
+			backup / "release" / "deploy",
+			ignore=shutil.ignore_patterns("__pycache__"),
+		)
 		for path in backup.rglob("*"):
 			if path.is_file():
 				path.chmod(0o600)
@@ -603,7 +641,8 @@ class Deployer:
 			backup / "manifest.json",
 			{
 				"previous": previous,
-				"s3": (backup / "s3/manifest.json").is_file(),
+				"s3": False,
+				"s3_referenced": "kanzlei-s3-enabled" in s3_state,
 				"checksums": {
 					str(path.relative_to(backup)): checksum(path)
 					for path in backup.rglob("*")
@@ -612,10 +651,6 @@ class Deployer:
 			},
 		)
 		verify_backup(backup)
-		# The exported host snapshot is authoritative; avoid accumulating a second copy in sites.
-		compose.call("run", "--rm", "-T", "--no-deps", "backend", "rm", "-rf", snapshot)
-		print("Backup complete: " + str(backup), flush=True)
-		return str(backup)
 
 	def initialize(self):
 		self.new.call(
@@ -739,6 +774,14 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 		) != self.revision:
 			raise ValueError("Image revision label does not match the requested commit")
 		self.new.clear_interrupted_tasks()
+		if previous and not pending:
+			required = backup_space_required(self.root) or MINIMUM_BACKUP_SPACE
+			free = shutil.disk_usage(self.root).free
+			if free < required:
+				raise RuntimeError(
+					f"Insufficient free space for the pre-update snapshot: {free / 1024**3:.1f} GiB free, "
+					f"{required / 1024**3:.1f} GiB required"
+				)
 		old = (
 			compose_from_state(self.root, previous, self.commands, self.config)
 			if previous
@@ -837,6 +880,10 @@ bench --site "$SITE_NAME" execute kanzlei_erp.suite_setup.configure
 	def prune_backups(self):
 		backups = []
 		for path in sorted((self.root / "backups").glob("*")):
+			if SNAPSHOT_RE.fullmatch(path.name) and path.is_dir() and not (path / "manifest.json").exists():
+				# The manifest is written last: this deployment snapshot was interrupted.
+				shutil.rmtree(path)
+				continue
 			try:
 				verify_backup(path.resolve())
 			except (OSError, ValueError, KeyError, TypeError):
@@ -971,6 +1018,13 @@ def restore(root, backup, confirm_site, *, commands=None, smoke=None, s3_target=
 		if manifest.get("s3") and read_json(backup / "s3/manifest.json").get("enabled"):
 			if (config["HTTPS_ENABLED"] == "0" or config["DOMAIN"].endswith(".localhost")) and not s3_target:
 				raise ValueError("Local S3 restore requires an explicit S3 target configuration")
+		if not manifest.get("s3"):
+			if s3_target:
+				raise ValueError("This snapshot contains no S3 objects; an S3 target does not apply")
+			if manifest.get("s3_referenced") and (
+				config["HTTPS_ENABLED"] == "0" or config["DOMAIN"].endswith(".localhost")
+			):
+				raise ValueError("Local restore would attach to the original S3 bucket")
 		if s3_target:
 			s3_target = Path(s3_target).resolve()
 			if not s3_target.is_file() or s3_target.stat().st_mode & 0o077:
