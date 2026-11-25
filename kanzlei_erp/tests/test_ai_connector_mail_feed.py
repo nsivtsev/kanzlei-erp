@@ -4,10 +4,21 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import frappe
+from frappe.model.base_document import get_controller
 from frappe.tests.utils import FrappeTestCase
 
 from kanzlei_erp import ai_connector, email_history
 from kanzlei_erp.ai_connector import inventory
+
+
+class TestAIConnectorFeedControllers(FrappeTestCase):
+	def test_feed_doctypes_resolve_their_controllers(self):
+		for doctype, classname in (
+			("AI Source Event", "AISourceEvent"),
+			("AI Source State", "AISourceState"),
+		):
+			with self.subTest(doctype=doctype):
+				self.assertEqual(get_controller(doctype).__name__, classname)
 
 
 class TestAIConnectorMailFeed(FrappeTestCase):

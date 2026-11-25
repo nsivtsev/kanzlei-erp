@@ -1,5 +1,5 @@
 from frappe.model.document import Document
 
 
-class AiSourceState(Document):
+class AISourceState(Document):
 	pass
