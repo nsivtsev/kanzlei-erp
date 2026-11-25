@@ -1,17 +1,17 @@
-export type ChatScope = { kind: 'client'; client_id: string } | { kind: 'general' };
+export type ChatScope = { kind: 'client'; client_id: string } | { kind: 'general' } | { kind: 'assistant' };
 
 export function chatScopeOptionValue(scope: ChatScope) {
-  return scope.kind === 'general' ? 'general' : `client:${scope.client_id}`;
+  return scope.kind === 'client' ? `client:${scope.client_id}` : scope.kind;
 }
 
 export function conversationCreateBody(scope: ChatScope) {
-  return scope.kind === 'general' ? { scope: { kind: 'general' } } : { client_id: scope.client_id };
+  return scope.kind === 'client' ? { client_id: scope.client_id } : { scope: { kind: scope.kind } };
 }
 
 export function conversationQuery(scope: ChatScope) {
-  return new URLSearchParams(scope.kind === 'general'
-    ? { scope: 'general' }
-    : { client_id: scope.client_id }).toString();
+  return new URLSearchParams(scope.kind === 'client'
+    ? { client_id: scope.client_id }
+    : { scope: scope.kind }).toString();
 }
 
 export function validTicketMessage(value: unknown, state: string): value is {type:string;state:string;ticket:string} {

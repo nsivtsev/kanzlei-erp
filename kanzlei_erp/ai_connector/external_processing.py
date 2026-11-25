@@ -3,12 +3,14 @@
 from kanzlei_erp.ai_connector import auth, inventory, mail, native_drive, policy
 from kanzlei_erp.ai_connector.errors import fail
 
-OPERATIONS = ("ocr", "embed", "generate")
+OPERATIONS = ("ocr", "embed", "generate", "assist")
 
 
 def check(operation, scope, sources, access_token):
 	if operation not in OPERATIONS or not isinstance(sources, list) or len(sources) > policy.MAX_BATCH:
 		fail()
+	if operation == "assist":
+		return _check_assist(scope, sources, access_token)
 	references = [policy.reference(source) for source in sources]
 	with inventory.current_permission_context():
 		if access_token is not None:
@@ -20,6 +22,18 @@ def check(operation, scope, sources, access_token):
 			inventory.refresh_principal_permissions(user)
 			with inventory.principal(user):
 				_check_current(operation, scope, references, background_clients=clients)
+	return {"version": 1, "allowed": True}
+
+
+def _check_assist(scope, sources, access_token):
+	# A staff question without any Mandant source. Sources found later are
+	# checked separately with "generate" under their own scope.
+	if scope is not None or sources or access_token is None:
+		fail()
+	with inventory.current_permission_context(), auth.principal(access_token) as identity:
+		inventory.refresh_principal_permissions(identity["subject"])
+		if auth.config().get("assistant_generation") is not True:
+			fail("FORBIDDEN", 403)
 	return {"version": 1, "allowed": True}
 
 

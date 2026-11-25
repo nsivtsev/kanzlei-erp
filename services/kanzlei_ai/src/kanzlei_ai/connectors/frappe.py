@@ -204,18 +204,20 @@ class FrappeConnector:
     async def check_processing_policy(
         self,
         operation: ProcessingOperation,
-        scope: Scope,
+        scope: Scope | None,
         sources: list[SourceRef],
         *,
         access_token: str | None = None,
     ) -> None:
-        if len(sources) > _MAX_AUTHORIZATION_REFERENCES:
+        if len(sources) > _MAX_AUTHORIZATION_REFERENCES or (scope is None) != (
+            operation == "assist"
+        ):
             raise ConnectorError("INVALID_REQUEST", 400)
         result = await self._typed(
             ProcessingPolicyCheck,
             "check_processing_policy",
             operation=operation,
-            scope=scope.model_dump(exclude_none=True),
+            **({"scope": scope.model_dump(exclude_none=True)} if scope is not None else {}),
             sources=[source.model_dump() for source in sources],
             **({"access_token": access_token} if access_token is not None else {}),
         )

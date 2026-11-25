@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     coordinator_only: bool = False
     chat_enabled: bool = False
     chat_browser_erp_origin: HttpUrl | None = None
+    # Generative assistant model; compare candidates on synthetic questions before a change.
+    chat_assistant_model: str = Field(
+        default="mistral-small-2603", min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9.-]*$"
+    )
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:56379/0")
     health_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
     erp_base_url: HttpUrl | None = None

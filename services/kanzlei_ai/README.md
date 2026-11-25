@@ -246,6 +246,18 @@ isolated ERP site's `kanzlei_ai_connector.browser_chat_origin` must match the
 exact web origin (scheme, host and port). See the [ERP connector contract](docs/erp-connector.md)
 and [web startup instructions](web/README.md).
 
+Conversations need no Mandant. Without one ("Ohne Mandant") the assistant answers
+general questions only. With a Mandant or "Alle berechtigten Mandanten" the model
+decides itself whether to search the documents through the `search_documents`
+tool; the service runs each search under the caller's grant and conversation scope.
+Answers stream as Markdown, cite excerpts as `[n]` and are marked as general or
+document-based. Unknown citation numbers are removed. The former exact-quote mode
+remains available per question ("Nur wörtliche Belege", `strict: true`). Every
+retrieved source becomes a dependency of the stored answer. With the Mistral
+profile the service checks `assist` before sending the question and `generate`
+before sending excerpts; `AI_CHAT_ASSISTANT_MODEL` selects the model. The shared
+Mistral request gate still allows one request at a time across processes.
+
 The UI uses the ERP browser session to sign in and keeps the short-lived grant
 in memory. A conversation stays in its selected Mandant. History and original
 PDF bytes are reauthorized on access; a revoked or replaced source is not

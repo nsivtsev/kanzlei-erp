@@ -18,7 +18,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from kanzlei_ai.auth import AccessToken, Adapter
-from kanzlei_ai.chat import history
+from kanzlei_ai.chat import assistant, history
 from kanzlei_ai.chat.citations import (
     ChatProvider,
     is_invoice_amount_question,
@@ -38,28 +38,40 @@ from kanzlei_ai.chat.context import (
 from kanzlei_ai.connectors.base import ConnectorError
 from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Scope, SourceRef
 from kanzlei_ai.models import document_artifacts, index_publications, jobs, relations, sources
-from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider
+from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider, SyntheticAssistantProvider
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
 from kanzlei_ai.search.publication import INDEX_STAGE
 
 _POLL_SECONDS = 2.0
 _ENDPOINT_SECONDS = 15
 _STREAM_SECONDS = 25
-_REQUEST_LIMIT = 8192
+_ASSISTANT_SECONDS = 120
+_REQUEST_LIMIT = 32 * 1024
+_QUESTION_LIMIT = 4000
 _MAX_ACTIVE_REQUESTS = 8
 _MAX_ACTIVE_TURNS = 4
 _PDF_LIMIT = 20 * 1024 * 1024
 _SOURCE_PAGE_SIZE = 25
 _GENERAL_SCOPE = Scope(kind="general")
+_UNSET = object()
 _MAIL_ATTACHMENT_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_mail_attachment"
 _DRIVE_DOWNLOAD_PATH = "/api/method/kanzlei_erp.ai_connector.api.download_drive_docx"
 
 
 class ChatRuntime:
-    def __init__(self, engine: Engine, index: SearchIndex, provider: ChatProvider | None = None):
+    def __init__(
+        self,
+        engine: Engine,
+        index: SearchIndex,
+        provider: ChatProvider | None = None,
+        assistant_provider: assistant.AssistantProvider | None = None,
+    ):
         self.engine = engine
         self.index = index
         self.provider = provider if provider is not None else ExtractiveChatProvider()
+        self.assistant = (
+            assistant_provider if assistant_provider is not None else SyntheticAssistantProvider()
+        )
         self.active_requests = 0
         self.active_turns = 0
 
@@ -104,7 +116,7 @@ class ClientBody(BaseModel):
 
 class GeneralScopeBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    kind: Literal["general"]
+    kind: Literal["general", "assistant"]
 
 
 class GeneralBody(BaseModel):
@@ -117,7 +129,9 @@ CreateBody = RootModel[ClientBody | GeneralBody]
 
 class TurnBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    question: Annotated[str, Field(min_length=1, max_length=1000, repr=False)]
+    question: Annotated[str, Field(min_length=1, max_length=_QUESTION_LIMIT, repr=False)]
+    # The exact-quote pipeline: one literal excerpt or an invoice amount, else abstention.
+    strict: bool = False
 
 
 class SourcePageBody(ClientBody):
@@ -150,7 +164,7 @@ def _id(value, *, cursor=False):
     raise ConnectorError("INVALID_REQUEST", 422) if cursor else ConnectorError("NOT_FOUND", 404)
 
 
-async def _session(adapter, access_token, service, *, scope=None, conversation_id=None):
+async def _session(adapter, access_token, service, *, scope=_UNSET, conversation_id=None):
     identity = await history.current_identity(adapter, access_token)
     if conversation_id is not None:
         scope = await database_call(
@@ -160,7 +174,9 @@ async def _session(adapter, access_token, service, *, scope=None, conversation_i
             identity.subject,
             _id(conversation_id),
         )
-    if scope.client_id is not None and "\x00" in scope.client_id:
+    if scope is _UNSET:
+        raise ConnectorError("INVALID_REQUEST", 422)
+    if scope is not None and scope.client_id is not None and "\x00" in scope.client_id:
         raise ConnectorError("INVALID_REQUEST", 422)
     session = Session(
         adapter,
@@ -170,12 +186,13 @@ async def _session(adapter, access_token, service, *, scope=None, conversation_i
         scope,
         index_profile=getattr(service.index, "profile", INDEX_PROFILE),
     )
-    await adapter.check_scope(access_token, session.scope)
+    if session.scope is not None:
+        await adapter.check_scope(access_token, session.scope)
     return session
 
 
 async def _verify_general_session(session):
-    if session.scope == _GENERAL_SCOPE:
+    if session.scope is None or session.scope == _GENERAL_SCOPE:
         await history.verify_session(session)
 
 
@@ -189,7 +206,7 @@ async def _verify_conversation(service, session, conversation_id):
 async def create(request: Request, adapter: Adapter, access_token: AccessToken, service: Runtime):
     body = (await _body(request, CreateBody)).root
     scope = (
-        _GENERAL_SCOPE
+        (_GENERAL_SCOPE if body.scope.kind == "general" else None)
         if isinstance(body, GeneralBody)
         else Scope(kind="client", client_id=body.client_id)
     )
@@ -205,12 +222,16 @@ async def list_owned(
     access_token: AccessToken,
     service: Runtime,
     client_id: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
-    scope: Literal["general"] | None = None,
+    scope: Literal["general", "assistant"] | None = None,
 ):
     if (scope is None) == (client_id is None):
         raise ConnectorError("INVALID_REQUEST", 422)
     requested_scope = (
-        _GENERAL_SCOPE if scope == "general" else Scope(kind="client", client_id=client_id)
+        _GENERAL_SCOPE
+        if scope == "general"
+        else None
+        if scope == "assistant"
+        else Scope(kind="client", client_id=client_id)
     )
     session = await _session(adapter, access_token, service, scope=requested_scope)
     items = await database_call(history.list_conversations, service.engine, session)
@@ -344,7 +365,7 @@ async def source_list(
     cursor: SourceCursor = None,
 ):
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    if session.scope.kind == "general":
+    if session.scope is None or session.scope.kind == "general":
         raise ConnectorError("NOT_FOUND", 404)
     return await _list_source_page(service, session, cursor)
 
@@ -470,7 +491,7 @@ async def _stream(service, session, question, conversation_id, commit: history.T
             labels = await _refresh_context(service, session, context, include_labels=True)
             await _verify_conversation(service, session, conversation_id)
             if answer is not None and labels is not None:
-                history.label_citation(item, answer.evidence.dependency.source, labels)
+                history.label_citations(item, [answer.evidence.dependency.source], labels)
         yield _sse("answer", item)
     except ConnectorError as error:
         yield _sse("error", {"code": error.code})
@@ -478,6 +499,83 @@ async def _stream(service, session, question, conversation_id, commit: history.T
         yield _sse("error", {"code": "CHAT_UNAVAILABLE"})
     finally:
         commit.cancel()
+        service.active_turns -= 1
+
+
+async def _stream_assistant(service, session, question, conversation_id, commit):
+    if service.active_turns >= _MAX_ACTIVE_TURNS:
+        yield _sse("error", {"code": "CHAT_BUSY"})
+        return
+    service.active_turns += 1
+    events: asyncio.Queue = asyncio.Queue()
+    retrieved: list = []
+
+    async def emit(event, payload):
+        await events.put((event, payload))
+
+    async def search(query):
+        found = await assistant.document_search(service.engine, service.index, session)(query)
+        retrieved.extend(found)
+        return found
+
+    task = None
+    try:
+        async with asyncio.timeout(commit.remaining()):
+            task = asyncio.create_task(
+                assistant.answer(session, service.assistant, question, search=search, emit=emit)
+            )
+            while True:
+                waiter = asyncio.create_task(events.get())
+                done, _ = await asyncio.wait({task, waiter}, timeout=_POLL_SECONDS)
+                if waiter in done:
+                    event, payload = waiter.result()
+                    yield _sse(event, payload)
+                    continue
+                waiter.cancel()
+                await asyncio.gather(waiter, return_exceptions=True)
+                if task in done:
+                    while not events.empty():
+                        event, payload = events.get_nowait()
+                        yield _sse(event, payload)
+                    break
+                if retrieved:
+                    # Stop as soon as a used source is revoked or replaced.
+                    await _refresh_context(service, session, tuple(retrieved))
+            try:
+                result = task.result()
+            except ConnectorError:
+                raise
+            except (asyncio.CancelledError, Exception):
+                raise ConnectorError("CHAT_UNAVAILABLE", 503) from None
+            yield _sse("status", {"phase": "validating"})
+            await _refresh_context(service, session, result.context, include_labels=True)
+            item = await database_call(
+                history.store_turn,
+                service.engine,
+                session,
+                conversation_id,
+                question,
+                result.context,
+                result,
+                commit,
+            )
+            labels = await _refresh_context(service, session, result.context, include_labels=True)
+            await _verify_conversation(service, session, conversation_id)
+            if labels is not None:
+                history.label_citations(
+                    item, [evidence.dependency.source for evidence in result.cited], labels
+                )
+        yield _sse("answer", item)
+    except ConnectorError as error:
+        yield _sse("error", {"code": error.code})
+    except (TimeoutError, RuntimeError):
+        yield _sse("error", {"code": "CHAT_UNAVAILABLE"})
+    finally:
+        commit.cancel()
+        if task is not None and not task.done():
+            task.cancel()
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
         service.active_turns -= 1
 
 
@@ -526,11 +624,15 @@ async def turn(
     if not question or "\x00" in question:
         raise ConnectorError("INVALID_REQUEST", 422)
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
-    commit = history.TurnCommit(_STREAM_SECONDS)
-    return ChatStream(
-        _stream(service, session, question, conversation_id, commit),
-        commit,
-    )
+    if body.strict:
+        if session.scope is None or len(question) > 1000:
+            raise ConnectorError("INVALID_REQUEST", 422)
+        commit = history.TurnCommit(_STREAM_SECONDS)
+        stream = _stream(service, session, question, conversation_id, commit)
+    else:
+        commit = history.TurnCommit(_ASSISTANT_SECONDS)
+        stream = _stream_assistant(service, session, question, conversation_id, commit)
+    return ChatStream(stream, commit)
 
 
 @router.get("/{conversation_id}/turns/{turn_id}/citations/{citation_id}/pdf")

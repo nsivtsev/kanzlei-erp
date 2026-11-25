@@ -285,6 +285,22 @@ h2 { font: 650 1.0625rem / 1.3 var(--font-display); letter-spacing: -.015em; }
 .answer { max-width: 66ch; font-size: 1.0625rem; line-height: 1.65; text-wrap: pretty; }
 .answer, .citation-page { font-variant-numeric: tabular-nums; }
 .question, .answer { white-space: pre-wrap; }
+.answer.markdown { white-space: normal; }
+.answer.markdown > :first-child { margin-block-start: 0; }
+.answer.markdown > :last-child { margin-block-end: 0; }
+.answer.markdown p, .answer.markdown ul, .answer.markdown ol, .answer.markdown pre { margin-block: 0 .75rem; }
+.answer.markdown ul, .answer.markdown ol { padding-inline-start: 1.4rem; }
+.answer.markdown h3, .answer.markdown h4 { margin-block: 1rem .4rem; font-size: 1.0625rem; }
+.answer.markdown code { font: .9em var(--font-mono); background: var(--panel); border-radius: 4px; padding: .05rem .25rem; }
+.answer.markdown pre { overflow-x: auto; padding: .75rem; background: var(--panel); border-radius: var(--control-radius); }
+.answer.markdown pre code { background: none; padding: 0; }
+.answer.streaming { color: var(--muted); }
+.answer-mode { margin: 0; font-size: .75rem; font-weight: 650; letter-spacing: .02em; color: var(--muted); }
+.answer-mode.grounded { color: var(--ready); }
+.citation-number { grid-row: span 2; font: 650 .75rem / 1 var(--font-mono); color: var(--accent); }
+.citation:has(.citation-number) { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+.citation:has(.citation-number) .citation-page { grid-column: 3; }
+.citation:has(.citation-number)::after { grid-column: 4; }
 .turn-notice { color: var(--muted); max-width: 62ch; }
 .citations { display: flex; flex-direction: column; gap: .5rem; list-style: none; padding: 0; margin: 0; max-width: 100%; }
 .citation {
@@ -356,6 +372,15 @@ h2 { font: 650 1.0625rem / 1.3 var(--font-display); letter-spacing: -.015em; }
 }
 .composer textarea:focus-visible { outline-offset: -2px; }
 .composer form button { min-width: 5.5rem; font-size: .875rem; }
+.composer .strict-option {
+  grid-column: 1 / -1;
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .8125rem;
+  color: var(--muted);
+}
 .composer .primary { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; }
 .composer .primary::after {
   content: '';

@@ -184,7 +184,10 @@ def chat(database):
 
 
 def run_turn(client, conversation, question=_QUESTION):
-    response = client.post(f"{_PREFIX}/{conversation}/turns", json={"question": question})
+    # The exact-quote pipeline; assistant turns have their own tests.
+    response = client.post(
+        f"{_PREFIX}/{conversation}/turns", json={"question": question, "strict": True}
+    )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     return [
@@ -604,7 +607,7 @@ async def _asgi_turn(client, conversation, *, question=_QUESTION, disconnect_whe
             initial = False
             return {
                 "type": "http.request",
-                "body": json.dumps({"question": question}).encode(),
+                "body": json.dumps({"question": question, "strict": True}).encode(),
                 "more_body": False,
             }
         if disconnect_when is None:

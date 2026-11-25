@@ -34,18 +34,19 @@ const owner = req.headers.authorization;
 const client = u.searchParams.get('client_id');
 if (u.pathname === '/v1/chat/conversations' && req.method === 'POST') {
   const selection = JSON.parse(body);
-  const general = selection.scope?.kind === 'general';
+  const kind = selection.scope?.kind;
   const conversation = {
-    id: randomUUID(), client_id: general ? null : selection.client_id, created_at: new Date().toISOString(),
-    ...(general ? { scope: { kind: 'general' } } : {}),
+    id: randomUUID(), client_id: kind ? null : selection.client_id, created_at: new Date().toISOString(),
+    ...(kind ? { scope: { kind } } : {}),
   };
   conversations.set(conversation.id, { owner, conversation, turns: [] });
   return json(res, conversation);
 }
 if (u.pathname === '/v1/chat/conversations') {
-  const clientId = u.searchParams.get('scope') === 'general' ? null : client;
+  const kind = u.searchParams.get('scope');
   const items = [...conversations.values()]
-    .filter(row => row.owner === owner && row.conversation.client_id === clientId)
+    .filter(row => row.owner === owner && (kind
+      ? row.conversation.scope?.kind === kind : row.conversation.client_id === client))
     .map(row => row.conversation);
   return json(res, { items, next_cursor: null });
 }
@@ -60,7 +61,26 @@ if (u.pathname === '/v1/chat/conversations/sources') {
 const thread = conversations.get(u.pathname.split('/')[4]);
 if (u.pathname.endsWith('/history')) return json(res, { items: thread?.turns ?? [], next_cursor: null });
 if (u.pathname.endsWith('/turns')) {
-  const { question } = JSON.parse(body);
+  const { question, strict } = JSON.parse(body);
+  const assistantScope = thread?.conversation.scope?.kind === 'assistant';
+  if (assistantScope || question.startsWith('Assistent:')) {
+    const grounded = !assistantScope;
+    const text = grounded
+      ? 'Laut **Testdokument** beträgt der Betrag *1.249,50 EUR* [1].\n\n- Fällig: sofort\n- Unbekannt [7]'
+      : '**Vorsteuerabzug** erlaubt Unternehmen, gezahlte Umsatzsteuer abzuziehen.\n\n1. Rechnung prüfen\n2. `Leistung` erfassen\n\n<img src=x onerror="window.injected=1">';
+    const answer = {
+      id: randomUUID(), created_at: new Date().toISOString(), mode: 'assistant', status: 'answered', question,
+      answer: text.replace(' [7]', ''),
+      citations: grounded ? [{ id: 'x', title: 'Testdokument', page: 1 }] : [],
+    };
+    thread?.turns.push(answer);
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    res.write(`event: status\ndata: {"phase":"generating"}\n\n`);
+    if (grounded) res.write('event: delta\ndata: {"text":"Ich suche "}\n\nevent: reset\ndata: {}\n\n');
+    for (const piece of text.match(/\S+\s*/g)) res.write(`event: delta\ndata: ${JSON.stringify({ text: piece })}\n\n`);
+    setTimeout(() => res.end(`event: answer\ndata: ${JSON.stringify(answer)}\n\n`), 300);
+    return;
+  }
   const invoice = /RE-2026-0042/iu.test(question);
   const email = question === 'What does the email say about Berlin?';
   const docx = question.includes('Word document') ? (question.includes('(attachment)') ? 'attachment' : 'drive') : null;

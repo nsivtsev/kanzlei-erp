@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 from sqlalchemy import select, tuple_
 
+from kanzlei_ai.chat.assistant import ASSISTANT_CONTEXT_LIMIT, AssistantAnswer
 from kanzlei_ai.chat.citations import VerifiedAnswer, render_answer
 from kanzlei_ai.chat.context import (
     CONTEXT_LIMIT,
@@ -26,6 +27,7 @@ from kanzlei_ai.search import retrieve as search_retrieve
 
 HISTORY_LIMIT = 10
 CONVERSATION_LIMIT = 100
+ASSISTANT_SCOPE = "assistant"
 _dependencies = TypeAdapter(list[Dependency])
 
 
@@ -86,7 +88,8 @@ async def verify_session(session: Session) -> None:
     identity = await current_identity(session.connector, session.token)
     if (identity.connector_id, identity.subject) != (session.connector_id, session.subject):
         raise ConnectorError("UNAUTHENTICATED", 401)
-    await session.connector.check_scope(session.token, session.scope)
+    if session.scope is not None:
+        await session.connector.check_scope(session.token, session.scope)
 
 
 def _conversation_filter(connector_id, subject, conversation_id):
@@ -105,17 +108,20 @@ def _require_conversation(connection, connector_id, subject, conversation_id, *,
     return row
 
 
-def lookup(engine, connector_id, subject, conversation_id) -> Scope:
+def lookup(engine, connector_id, subject, conversation_id) -> Scope | None:
+    """Return the conversation's document scope; None for an assistant without documents."""
     with engine.begin() as connection:
         configure_query(connection)
         row = _require_conversation(connection, connector_id, subject, conversation_id)
+        if row.scope_kind == ASSISTANT_SCOPE:
+            return None
         return Scope(kind=row.scope_kind, client_id=row.client_id)
 
 
 def _conversation_view(row):
     view = {"id": row.id, "client_id": row.client_id, "created_at": row.created_at.isoformat()}
-    if row.scope_kind == "general":
-        view["scope"] = {"kind": "general"}
+    if row.scope_kind in ("general", ASSISTANT_SCOPE):
+        view["scope"] = {"kind": row.scope_kind}
     return view
 
 
@@ -128,8 +134,8 @@ def create_conversation(engine, session: Session):
                 id=str(uuid4()),
                 connector_id=session.connector_id,
                 subject=session.subject,
-                client_id=session.scope.client_id,
-                scope_kind=session.scope.kind,
+                client_id=session.scope.client_id if session.scope else None,
+                scope_kind=session.scope.kind if session.scope else ASSISTANT_SCOPE,
             )
             .returning(chat_conversations)
         ).one()
@@ -143,8 +149,10 @@ def list_conversations(engine, session: Session):
             select(chat_conversations)
             .where(
                 *_owner_filter(session.connector_id, session.subject),
-                chat_conversations.c.scope_kind == session.scope.kind,
-                chat_conversations.c.client_id == session.scope.client_id,
+                chat_conversations.c.scope_kind
+                == (session.scope.kind if session.scope else ASSISTANT_SCOPE),
+                chat_conversations.c.client_id
+                == (session.scope.client_id if session.scope else None),
             )
             .order_by(chat_conversations.c.created_at.desc(), chat_conversations.c.id.desc())
             .limit(CONVERSATION_LIMIT)
@@ -198,22 +206,23 @@ def store_turn(
     conversation_id,
     question,
     context: tuple[Evidence, ...],
-    answer: VerifiedAnswer | None,
+    answer: VerifiedAnswer | AssistantAnswer | None,
     commit: TurnCommit,
 ):
     commit.checkpoint()
     dependencies = [evidence.dependency for evidence in context]
-    citations = []
-    if answer is not None:
-        citations = [
-            StoredCitation(
-                id=str(uuid4()),
-                chunk_id=answer.evidence.dependency.chunk_id,
-                page=answer.evidence.page,
-                title=answer.evidence.title,
-                source_kind=answer.evidence.source_kind,
-            )
-        ]
+    assistant = isinstance(answer, AssistantAnswer)
+    cited = answer.cited if assistant else (answer.evidence,) if answer is not None else ()
+    citations = [
+        StoredCitation(
+            id=str(uuid4()),
+            chunk_id=evidence.dependency.chunk_id,
+            page=evidence.page,
+            title=evidence.title,
+            source_kind=evidence.source_kind,
+        )
+        for evidence in cited
+    ]
     statement = (
         chat_turns.insert()
         .values(
@@ -221,9 +230,16 @@ def store_turn(
             conversation_id=conversation_id,
             status="answered" if answer is not None else "no_evidence",
             question=question,
-            answer=render_answer(question, answer) if answer is not None else None,
+            answer=(
+                answer.text
+                if assistant
+                else render_answer(question, answer)
+                if answer is not None
+                else None
+            ),
             citations=[citation.model_dump() for citation in citations],
             dependencies=_dependencies.dump_python(dependencies, mode="json"),
+            mode="assistant" if assistant else "strict",
         )
         .returning(chat_turns)
     )
@@ -245,19 +261,26 @@ def store_turn(
 
 
 def _stored_proof(row) -> tuple[list[Dependency], list[StoredCitation]]:
+    assistant = row.mode == "assistant"
     try:
         if (
             not isinstance(row.dependencies, list)
-            or len(row.dependencies) > CONTEXT_LIMIT
+            or len(row.dependencies) > (ASSISTANT_CONTEXT_LIMIT if assistant else CONTEXT_LIMIT)
             or not isinstance(row.citations, list)
-            or len(row.citations) != (1 if row.status == "answered" else 0)
+            or (
+                (row.status != "answered" or len(row.citations) > len(row.dependencies))
+                if assistant
+                else len(row.citations) != (1 if row.status == "answered" else 0)
+            )
         ):
             raise ValueError
         dependencies = _dependencies.validate_python(row.dependencies)
         citations = [StoredCitation.model_validate(value) for value in row.citations]
         chunk_ids = {dependency.chunk_id for dependency in dependencies}
-        if len(chunk_ids) != len(dependencies) or any(
-            citation.chunk_id not in chunk_ids for citation in citations
+        if (
+            len(chunk_ids) != len(dependencies)
+            or any(citation.chunk_id not in chunk_ids for citation in citations)
+            or len({citation.chunk_id for citation in citations}) != len(citations)
         ):
             raise ValueError
     except (ValidationError, ValueError):
@@ -269,6 +292,7 @@ def _history_view(row, citations, *, available=True):
     return {
         "id": row.id,
         "created_at": row.created_at.isoformat(),
+        "mode": row.mode,
         "status": row.status if available else "unavailable",
         "question": row.question if available else None,
         "answer": (
@@ -313,9 +337,12 @@ async def read_history(engine, session, conversation_id, cursor):
     for row, (deps, citations) in zip(page_rows, proofs, strict=True):
         available = all(dep in current for dep in deps)
         item = _history_view(row, citations, available=available)
-        if available and citations and labels is not None:
-            cited = next(dep for dep in deps if dep.chunk_id == citations[0].chunk_id)
-            label_citation(item, current[cited].dependency.source, labels)
+        if available and labels is not None:
+            by_chunk = {dep.chunk_id: dep for dep in deps}
+            sources = [
+                current[by_chunk[citation.chunk_id]].dependency.source for citation in citations
+            ]
+            label_citations(item, sources, labels)
         items.append(item)
     return {
         "items": items,
@@ -324,6 +351,11 @@ async def read_history(engine, session, conversation_id, cursor):
 
 
 async def checked_dependencies(engine, session, dependencies):
+    if session.scope is None:
+        if dependencies:
+            raise ConnectorError("CHAT_UNAVAILABLE", 503)
+        await verify_session(session)
+        return {}, None
     if session.scope.kind == "client":
         return await checked_evidence(engine, session, dependencies), None
     labels = (
@@ -339,8 +371,9 @@ async def checked_dependencies(engine, session, dependencies):
     return current, labels
 
 
-def label_citation(item, source: SourceRef, labels: dict[str, str]):
-    item["citations"][0]["client"] = {"id": source.client_id, "label": labels[source.client_id]}
+def label_citations(item, sources: list[SourceRef], labels: dict[str, str]):
+    for citation, source in zip(item["citations"], sources, strict=True):
+        citation["client"] = {"id": source.client_id, "label": labels[source.client_id]}
 
 
 def _citation_proof(engine, conversation_id, turn_id, citation_id):

@@ -68,9 +68,28 @@ class TestAIProcessingPolicy(TestCase):
 
 	def call(self, operation, *, scope=CLIENT, sources=None, delegated=True, **kwargs):
 		payload = {"access_token": "current-grant"} if delegated else {}
-		return api.check_processing_policy(
-			operation=operation, scope=scope, sources=sources, **payload, **kwargs
-		)
+		if scope is not None:
+			payload["scope"] = scope
+		return api.check_processing_policy(operation=operation, sources=sources, **payload, **kwargs)
+
+	def test_assistant_question_requires_the_kanzlei_switch_and_a_delegated_identity(self):
+		self.assertEqual(self.call("assist", scope=None, sources=[]).status_code, 403)
+		self.config["assistant_generation"] = "true"
+		self.assertEqual(self.call("assist", scope=None, sources=[]).status_code, 403)
+		self.config["assistant_generation"] = True
+		self.assertEqual(self.call("assist", scope=None, sources=[]), {"version": 1, "allowed": True})
+		self.assertEqual(self.events[-3:], ["current", ("grant", "current-grant"), "staff"])
+		self.assertNotIn(("scope", None), self.events)
+
+	def test_assistant_question_rejects_scope_sources_and_background_identity(self):
+		self.config["assistant_generation"] = True
+		for kwargs in (
+			{"scope": CLIENT, "sources": []},
+			{"scope": None, "sources": [SOURCE_A]},
+			{"scope": None, "sources": [], "delegated": False},
+		):
+			with self.subTest(**{key: str(value) for key, value in kwargs.items()}):
+				self.assertEqual(self.call("assist", **kwargs).status_code, 400)
 
 	def test_missing_setting_and_non_boolean_grants_are_denied(self):
 		for value in ({}, {"A": {"embed": 1}}, {"A": {"embed": "true"}}, {"A": {"ocr": True}}):
