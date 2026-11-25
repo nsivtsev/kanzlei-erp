@@ -32,11 +32,21 @@ from kanzlei_ai.chat.context import (
     Session,
     checked_evidence,
     configure_query,
+    current_source,
     database_call,
+    read_document,
     retrieve_context,
 )
 from kanzlei_ai.connectors.base import ConnectorError
-from kanzlei_ai.connectors.contracts import DocumentPage, Identifier, Scope, SourceRef
+from kanzlei_ai.connectors.contracts import (
+    DocumentPage,
+    Identifier,
+    Scope,
+    SourceId,
+    SourceRef,
+    WorkContext,
+    WorkQuery,
+)
 from kanzlei_ai.models import document_artifacts, index_publications, jobs, relations, sources
 from kanzlei_ai.providers.chat_fake import ExtractiveChatProvider, SyntheticAssistantProvider
 from kanzlei_ai.search.index import INDEX_PROFILE, MISTRAL_INDEX_PROFILE, SearchIndex
@@ -127,11 +137,21 @@ class GeneralBody(BaseModel):
 CreateBody = RootModel[ClientBody | GeneralBody]
 
 
+class AttachmentBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    source_id: SourceId
+    client_id: Identifier
+
+
 class TurnBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     question: Annotated[str, Field(min_length=1, max_length=_QUESTION_LIMIT, repr=False)]
     # The exact-quote pipeline: one literal excerpt or an invoice amount, else abstention.
     strict: bool = False
+    # Documents the user picked from the catalogue; the assistant reads them first.
+    attachments: Annotated[
+        list[AttachmentBody], Field(max_length=assistant.ATTACHMENT_LIMIT, repr=False)
+    ] = []
 
 
 class SourcePageBody(ClientBody):
@@ -502,27 +522,79 @@ async def _stream(service, session, question, conversation_id, commit: history.T
         service.active_turns -= 1
 
 
-async def _stream_assistant(service, session, question, conversation_id, commit):
+class _ServerTools:
+    """Tool calls run under the delegated identity; every result is recorded for rechecks."""
+
+    def __init__(self, service: ChatRuntime, session: Session, retrieved: list):
+        self.service = service
+        self.session = session
+        self.retrieved = retrieved
+
+    async def search(self, query):
+        found = await retrieve_context(self.service.engine, self.service.index, self.session, query)
+        self.retrieved.extend(found)
+        return found
+
+    async def read(self, source, generation, offset):
+        found, more = await read_document(
+            self.service.engine, self.session, source, generation, offset, assistant.DOCUMENT_CHUNKS
+        )
+        self.retrieved.extend(found)
+        return found, more
+
+    async def work(self, query: WorkQuery) -> WorkContext:
+        return await self.session.connector.read_work_context(
+            self.session.token,
+            self.session.scope,
+            query,
+            external=bool(self.service.assistant.external),
+        )
+
+    async def attach(self, item: AttachmentBody) -> assistant.Attachment:
+        current = await current_source(
+            self.service.engine, self.session, item.source_id, item.client_id
+        )
+        found, more = await self.read(*current, 0) if current is not None else ((), False)
+        if not found:
+            raise ConnectorError("ATTACHMENT_UNAVAILABLE", 409)
+        return assistant.Attachment(found, more)
+
+
+async def _stream_assistant(service, session, question, conversation_id, commit, attachments=()):
     if service.active_turns >= _MAX_ACTIVE_TURNS:
         yield _sse("error", {"code": "CHAT_BUSY"})
         return
     service.active_turns += 1
     events: asyncio.Queue = asyncio.Queue()
     retrieved: list = []
+    tools = _ServerTools(service, session, retrieved) if session.scope is not None else None
+    external = bool(service.assistant.external)
 
     async def emit(event, payload):
         await events.put((event, payload))
 
-    async def search(query):
-        found = await assistant.document_search(service.engine, service.index, session)(query)
-        retrieved.extend(found)
-        return found
-
     task = None
     try:
         async with asyncio.timeout(commit.remaining()):
+            memory = await history.recent_memory(
+                service.engine, session, conversation_id, external=external
+            )
+            retrieved.extend(memory.evidence)
+            loaded = []
+            if attachments:
+                yield _sse("status", {"phase": "reading"})
+                for item in attachments:
+                    loaded.append(await tools.attach(item))
             task = asyncio.create_task(
-                assistant.answer(session, service.assistant, question, search=search, emit=emit)
+                assistant.answer(
+                    session,
+                    service.assistant,
+                    question,
+                    tools=tools,
+                    emit=emit,
+                    memory=memory,
+                    attachments=tuple(loaded),
+                )
             )
             while True:
                 waiter = asyncio.create_task(events.get())
@@ -540,7 +612,7 @@ async def _stream_assistant(service, session, question, conversation_id, commit)
                     break
                 if retrieved:
                     # Stop as soon as a used source is revoked or replaced.
-                    await _refresh_context(service, session, tuple(retrieved))
+                    await _refresh_context(service, session, tuple(dict.fromkeys(retrieved)))
             try:
                 result = task.result()
             except ConnectorError:
@@ -548,18 +620,23 @@ async def _stream_assistant(service, session, question, conversation_id, commit)
             except (asyncio.CancelledError, Exception):
                 raise ConnectorError("CHAT_UNAVAILABLE", 503) from None
             yield _sse("status", {"phase": "validating"})
-            await _refresh_context(service, session, result.context, include_labels=True)
+            dependencies = result.dependencies
+            if result.erp_clients and not result.erp_clients <= await history.accessible_clients(
+                session, result.erp_clients
+            ):
+                raise ConnectorError("STALE_SOURCE", 409)
+            await _refresh_context(service, session, dependencies, include_labels=True)
             item = await database_call(
                 history.store_turn,
                 service.engine,
                 session,
                 conversation_id,
                 question,
-                result.context,
+                dependencies,
                 result,
                 commit,
             )
-            labels = await _refresh_context(service, session, result.context, include_labels=True)
+            labels = await _refresh_context(service, session, dependencies, include_labels=True)
             await _verify_conversation(service, session, conversation_id)
             if labels is not None:
                 history.label_citations(
@@ -624,6 +701,11 @@ async def turn(
     if not question or "\x00" in question:
         raise ConnectorError("INVALID_REQUEST", 422)
     session = await _session(adapter, access_token, service, conversation_id=conversation_id)
+    attachments = tuple(body.attachments)
+    if attachments and (
+        body.strict or session.scope is None or len(set(attachments)) != len(attachments)
+    ):
+        raise ConnectorError("INVALID_REQUEST", 422)
     if body.strict:
         if session.scope is None or len(question) > 1000:
             raise ConnectorError("INVALID_REQUEST", 422)
@@ -631,7 +713,7 @@ async def turn(
         stream = _stream(service, session, question, conversation_id, commit)
     else:
         commit = history.TurnCommit(_ASSISTANT_SECONDS)
-        stream = _stream_assistant(service, session, question, conversation_id, commit)
+        stream = _stream_assistant(service, session, question, conversation_id, commit, attachments)
     return ChatStream(stream, commit)
 
 

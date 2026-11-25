@@ -25,6 +25,8 @@ from kanzlei_ai.connectors.contracts import (
     ScopeCheck,
     SourceLocator,
     SourceRef,
+    WorkContext,
+    WorkQuery,
 )
 
 _AUTHORIZATION_BATCH_SIZE = 4
@@ -223,6 +225,18 @@ class FrappeConnector:
         )
         if result.allowed is not True:
             raise ConnectorError("FORBIDDEN", 403)
+
+    async def read_work_context(
+        self, access_token: str, scope: Scope, query: WorkQuery, *, external: bool
+    ) -> WorkContext:
+        return await self._typed(
+            WorkContext,
+            "read_work_context",
+            access_token=access_token,
+            scope=scope.model_dump(exclude_none=True),
+            query=query.model_dump(exclude_none=True),
+            external=external,
+        )
 
     async def read_source(self, access_token: str, scope: Scope, source: SourceRef) -> bytes:
         content, headers = await self._rpc(
