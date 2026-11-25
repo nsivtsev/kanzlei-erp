@@ -134,11 +134,15 @@ the UI under `/chat/` and proxies its `/chat/v1/` requests to the AI API on
 the Compose network. The ERP login, handoff and original downloads use the
 existing ERP routes. The chat paths return `404` while AI or chat is disabled.
 
-From `services/kanzlei_ai/web`, run `npm ci` and
-`KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:8180 npm run build`. Copy `dist/`
-to a versioned directory on the deployment host and set `AI_CHAT_WEB_DIR`
-to the absolute path to that directory containing `index.html` and `assets/`.
-Use a directory dedicated to the bundle. Caddy mounts it read-only.
+Each release builds the UI from its own revision and ships it as `chat-web/`
+in the release directory. The deployment serves that bundle, so the UI always
+matches the deployed AI API; no manual copy is needed.
+
+`AI_CHAT_WEB_DIR` remains required as a fallback for releases without a
+bundled UI. Point it at a directory containing `index.html` and `assets/`,
+built from `services/kanzlei_ai/web` with `npm ci` and
+`KANZLEI_AI_PROXY_TARGET=http://127.0.0.1:8180 npm run build`. Caddy mounts the
+served bundle read-only.
 
 In the ERP site's private connector settings, set `allowed_users` to the
 pilot accounts and `browser_chat_origin` to `https://erp.stb-golke.de`.

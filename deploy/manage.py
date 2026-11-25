@@ -242,6 +242,15 @@ class Commands:
 		return result.stdout.strip()
 
 
+def bundled_chat_web(release):
+	bundle = Path(release) / "chat-web"
+	return (
+		not bundle.is_symlink()
+		and (bundle / "index.html").is_file()
+		and (bundle / "assets").is_dir()
+	)
+
+
 class UnsafeContainerError(RuntimeError):
 	"""A maintenance process could still be changing persistent data."""
 
@@ -258,6 +267,10 @@ class Compose:
 		self.env.update(self.config, APP_IMAGE=image)
 		if self.config["AI_ENABLED"] != "1" or self.config.get("AI_CHAT_ENABLED") != "true":
 			self.env["AI_CHAT_WEB_DIR"] = "/dev/null"
+		elif bundled_chat_web(self.release):
+			# The release ships the chat UI built from its own revision; it replaces
+			# the manually installed fallback bundle so UI and API always match.
+			self.env["AI_CHAT_WEB_DIR"] = str(self.release / "chat-web")
 		api_cloud = self.config.get("AI_CHAT_ENABLED") == self.config.get("AI_MISTRAL_ENABLED") == "true"
 		self.env["AI_API_MODEL_PROFILE"] = "mistral" if api_cloud else "synthetic"
 		self.env["AI_API_MISTRAL_ENABLED"] = "true" if api_cloud else "false"
