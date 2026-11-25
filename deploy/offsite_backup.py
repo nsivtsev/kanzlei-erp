@@ -141,14 +141,9 @@ class OffsiteBackup:
 		return previous, compose
 
 	def space_required(self):
-		# At peak either Docker export + host copy, or local snapshot + remote readback.
-		for candidate in sorted((self.root / "backups").glob("*"), reverse=True):
-			try:
-				manifest = manage.read_json(candidate / "manifest.json")
-				size = sum((candidate / name).stat().st_size for name in manifest["checksums"])
-				return max(2 * size + 512 * 1024**2, 2 * 1024**3)
-			except (OSError, ValueError, KeyError, TypeError):
-				continue
+		required = manage.backup_space_required(self.root)
+		if required is not None:
+			return required
 		raise RuntimeError("A completed deployment snapshot is required to estimate staging space")
 
 	def reopen(self, previous, compose):
@@ -280,6 +275,14 @@ class OffsiteBackup:
 		print("Verified external snapshot: " + snapshot, flush=True)
 		return snapshot
 
+	def discard_incomplete_staging(self):
+		# The manifest is written last, so a capture without one was never publishable.
+		if self.staging.is_symlink():
+			raise ValueError("Staging directory must not be a symlink")
+		if self.staging.is_dir() and not (self.staging / "manifest.json").exists():
+			shutil.rmtree(self.staging)
+			print("Discarded an incomplete earlier capture", flush=True)
+
 	def run(self):
 		with self.lock():
 			self.status(last_attempt=time.time(), phase="preflight")
@@ -287,6 +290,7 @@ class OffsiteBackup:
 				self.restic("cat", "config")  # Access/password failures must not interrupt ERP.
 				if self.pending.exists():
 					raise RuntimeError("Unfinished maintenance; explicit recovery required")
+				self.discard_incomplete_staging()
 				if self.staging.exists():
 					self.publish()  # Retry a failed transfer before creating today's snapshot.
 				self.capture()

@@ -14,9 +14,10 @@ backup credentials to delete copies.
 
 ## Contents and retention
 
-The existing [S3 snapshot/restore format](s3-backups.md) includes the database,
-site encryption key/config, remaining local files, complete managed S3 namespace,
-production environment and release restore bundle. A deployment lock and durable
+A snapshot includes the database, site encryption key/config, local files, production
+environment and release restore bundle. It does **not** include [S3 objects](s3-backups.md);
+snapshots made before that change do. Retention eventually removes those older copies.
+A deployment lock and durable
 maintenance marker prevent overlap with deploy/restore during capture. The tool
 refuses an already stopped or maintained site. ERP is stopped only during capture;
 remote upload, full download/readback and retention happen after ERP resumes.
@@ -29,7 +30,8 @@ deployment snapshots and protected pre-migration originals are independent.
 
 Only one unpublished snapshot is staged in `/opt/kanzlei-erp/offsite/snapshot`.
 A failed transfer preserves it; the next run publishes it before taking a fresh
-snapshot. Incomplete captures need operator inspection. Space preflight estimates
+snapshot. A failed capture removes its incomplete staging; one left by a crash is
+discarded by the next run once maintenance recovery is finished. Space preflight estimates
 two full copies plus 512 MiB from the latest deployment snapshot. Unexpected
 growth can still exhaust space; capture then fails rather than producing a
 successful incomplete backup.
@@ -91,8 +93,10 @@ python3 -B /opt/kanzlei-erp/backup-tools/offsite_backup.py list
 `status` exits nonzero if no verified copy exists within 36 hours or if the latest
 operation needs attention. `/opt/kanzlei-erp/offsite/status.json` contains stage,
 timestamps and snapshot ID, without secrets. Service failures remain visible in
-systemd/journal. **No email/chat alert recipient is configured**; integrate the
-status command into the chosen external monitoring system for unattended alerts.
+systemd/journal. The daily **Offsite backup status** GitHub workflow runs `status` over
+SSH and fails without a verified copy in the last 36 hours; GitHub emails that failure.
+Deployments do not update `backup-tools/`: rerun `install-offsite-backup.sh` as root
+after a release that changes `deploy/manage.py` or `deploy/offsite_backup.py`.
 Third-party command errors are deliberately summarized to prevent key leakage.
 
 If the server/process died during capture, inspect `shared/pending.json`, the
@@ -104,8 +108,7 @@ python3 -B /opt/kanzlei-erp/backup-tools/offsite_backup.py recover
 ```
 
 Recovery first terminates leftover maintenance containers, then resumes and
-checks the site. It cannot clear a deploy/restore marker. Inspect incomplete
-staging before moving it aside; never delete retained originals or unrelated
+checks the site. It cannot clear a deploy/restore marker. Never delete retained originals or unrelated
 deployment snapshots to force a run.
 
 ## Disaster recovery

@@ -243,6 +243,39 @@ class OffsiteTests(unittest.TestCase):
 			runner.run()
 		self.assertEqual(self.events, ["publish", "capture", "publish"])
 
+	def test_incomplete_capture_is_discarded_instead_of_blocking_every_later_run(self):
+		runner = self.runner()
+		runner.staging.mkdir()
+		(runner.staging / "database.sql.gz").write_bytes(b"partial")
+		with (
+			patch.object(runner, "restic", return_value="{}"),
+			patch.object(runner, "publish", side_effect=lambda: self.events.append("publish")),
+			patch.object(runner, "capture", side_effect=lambda: self.events.append(("capture", runner.staging.exists()))),
+		):
+			runner.run()
+		self.assertEqual(self.events, [("capture", False), "publish"])
+
+	def test_incomplete_capture_is_kept_while_maintenance_is_unfinished(self):
+		runner = self.runner()
+		runner.staging.mkdir()
+		offsite.manage.atomic_json(runner.pending, {"operation": "offsite-backup"})
+		with patch.object(runner, "restic", return_value="{}"):
+			with self.assertRaisesRegex(RuntimeError, "Unfinished"):
+				runner.run()
+		self.assertTrue(runner.staging.exists())
+
+	def test_space_estimate_requires_a_completed_deployment_snapshot(self):
+		with self.assertRaisesRegex(RuntimeError, "completed deployment snapshot"):
+			self.runner().space_required()
+
+	def test_space_estimate_excludes_s3_objects_that_are_no_longer_copied(self):
+		backup = self.root / "backups/20261125T080206Z-3d76aefe"
+		(backup / "s3").mkdir(parents=True)
+		with (backup / "s3/object").open("wb") as handle:
+			handle.truncate(8 * 1024**3)  # Sparse: no disk is used.
+		offsite.manage.atomic_json(backup / "manifest.json", {"checksums": {"s3/object": ""}})
+		self.assertEqual(self.runner().space_required(), 2 * 1024**3)
+
 	def test_recovery_cannot_reopen_a_deployment_or_restore_operation(self):
 		runner, compose, _ = self.prepare_capture()
 		offsite.manage.atomic_json(runner.pending, {"operation": "restore"})

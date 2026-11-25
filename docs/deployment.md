@@ -244,7 +244,9 @@ The same check can be run on the server with
 `python3 /opt/kanzlei-erp/current/deploy/verify_drive.py --root /opt/kanzlei-erp`.
 
 The server pulls the digest and verifies its commit label, then enables maintenance,
-stops the web, workers and scheduler, and makes a complete pre-update backup. Each
+checks free space for the backup before any interruption, stops the web, workers and
+scheduler, and makes a complete pre-update database/files backup. S3 objects are not
+copied; see [backups with S3 storage](s3-backups.md). Each
 snapshot under `/opt/kanzlei-erp/backups/` contains:
 
 - `database.sql.gz`, `public.tgz`, `private.tgz` and `site_config.json`, including the
@@ -258,7 +260,10 @@ until backup and checksum verification succeed. A backup failure resumes the old
 application when its maintenance process has been stopped safely. After migrations,
 the pipeline checks login, API, built JS assets and service stability before recording
 the new current release. Last seven verified complete snapshots are retained after
-a successful deploy; incomplete snapshots do not count toward that limit.
+a successful deploy. A failed backup removes its own host and volume copies; a
+deployment snapshot interrupted before its manifest was written is removed after the
+next successful deploy. Directories with other names are never removed automatically
+unless they are complete snapshots beyond that limit.
 
 Backups are **local pre-update snapshots only**. They do not protect against losing
 the server/disk or cover changes between deployments. Off-server copies and scheduled
