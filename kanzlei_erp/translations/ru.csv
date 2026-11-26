@@ -715,6 +715,9 @@ The tasks could not be created. Nothing was confirmed.,Не удалось со�
 An administrator must resolve every task of the original letter before confirmation.,До подтверждения администратор должен разобрать каждую задачу исходного письма.
 A replacement already exists for this letter.,Для этого письма уже создана замена.
 This letter was already confirmed with different decisions.,Это письмо уже подтверждено с другими решениями.
+Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.,Укажите дату срока из письма для каждой выбранной задачи с относительным или неточным сроком.
+A created task was already changed. Use Create correction instead of undo.,Созданная задача уже была изменена. Вместо отмены используйте «Создать исправление».
+Undo is no longer available for this letter.,Отмена для этого письма больше недоступна.
 The review operation could not finish. Reload and try again.,Не удалось завершить операцию проверки. Перечитайте форму и повторите попытку.
 Human review,Проверка сотрудником
 Review incoming letter,Проверить входящее письмо

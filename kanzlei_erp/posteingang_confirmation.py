@@ -22,7 +22,7 @@ ACTION_FIELDS = ("action_id", "source_index", "title", "description", "decision"
 	"assignment_decision", "assignment_reason", "external_date", "external_date_basis", "internal_date",
 	"scheduling_decision", "scheduling_reason", "rejection_reason", "needs_planning")
 WRITABLE = set(DOCUMENT_FIELDS) | {"applied_run", "fact_evidence_json", "no_actions_reason", "clarification_reason",
-	"status", "confirmed_customer", "confirmed_by", "confirmed_at", "review_outcome", "confirmation_receipt_json",
+	"status", "selected_customer", "customer_reason", "confirmed_customer", "confirmed_by", "confirmed_at", "review_outcome", "confirmation_receipt_json",
 	"replacement_letter", "replaces_letter", "correction_reason", "correction_quarantined", "cancellation_reason"}
 
 
@@ -220,7 +220,9 @@ def _write_actions(doc, actions, *, replace=False, run=None, proposals=None):
 		else:
 			values.update(parent=doc.name, parenttype="Incoming Letter", parentfield="actions")
 			if run:
-				values.update(source_run=run, original_proposal_json=canonical(proposals[item["source_index"]]))
+				values["source_run"] = run
+				if item["source_index"] is not None:
+					values["original_proposal_json"] = canonical(proposals[item["source_index"]])
 			workflow._insert("Incoming Letter Action", values)
 
 
@@ -319,6 +321,8 @@ def _receipt_projection(result):
 	result = copy.deepcopy(result)
 	if "actions" in result:
 		result["actions"] = [{**row, "task": row["task"] if frappe.has_permission("Task", "read", doc=row["task"]) else None} for row in result["actions"]]
+	if "tasks_modified" in result:
+		result["tasks_modified"] = {task: value for task, value in result["tasks_modified"].items() if frappe.has_permission("Task", "read", doc=task)}
 	return result
 
 
@@ -351,6 +355,47 @@ def confirm(letter=None, review=None, document_fields=None, request_key=None, re
 	elif retained is not None:
 		workflow.fail("INVALID_REQUEST")
 	return _complete(doc, review, fields, receipt, payload, "confirm")
+
+
+def _set(doc, changes):
+	if set(changes) - WRITABLE:
+		raise ValueError("INVALID_SERVER_OPERATION")
+	# Frappe appends modified/modified_by to a supplied mapping in place.
+	frappe.db.set_value("Incoming Letter", doc.name, dict(changes))
+	doc.update(changes)
+
+
+@frappe.whitelist(methods=["POST"])
+def confirm_simple(letter=None, expected_revision=None, request_key=None, origin=None, customer=None, tasks=None, **extra):
+	"""One click: the server builds the full confirm review from the card choice and applies it atomically."""
+	from kanzlei_erp import posteingang_simple as simple
+
+	_boundary("confirm_simple", extra)
+	if origin not in ("proposal", "manual") or not workflow._text(customer, 140):
+		workflow.fail("INVALID_REQUEST")
+	tasks = simple.simple_tasks(tasks, min(30, frappe.db.get_single_value("Posteingang Settings", "max_actions")))
+	payload = {"origin": origin, "customer": customer, "tasks": tasks}
+	doc, receipt, replay = _begin("confirm_simple", letter, expected_revision, request_key, payload)
+	if replay:
+		return _receipt_projection(replay)
+	_check_revision(doc, expected_revision)
+	statuses = DRAFT_STATES | ({"Received", "Error"} if origin == "manual" else set())
+	if doc.status not in statuses or not frappe.db.get_single_value("Posteingang Settings", "enabled"):
+		workflow.fail("INVALID_TRANSITION")
+	if not (matching._customer(customer) or {}).get("can_select"):
+		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
+	plan = simple.simple_review(doc, origin, customer, tasks)
+	before = {"review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run}
+	with _atomic():
+		# validate_review compares against the stored rows, the Letter's customer and the applied Run's OCR.
+		changes = {"selected_customer": customer, "customer_reason": plan["review"]["customer_reason"]}
+		if plan["run"]:
+			changes.update(applied_run=plan["run"], fact_evidence_json=plan["fact_evidence_json"])
+		_set(doc, changes)
+		_write_actions(doc, plan["review"]["actions"], replace=True, run=plan["run"], proposals=plan["proposals"])
+		review, fields = _validated(doc, plan["review"], plan["document_fields"], confirm=True)
+		payload = {"before": before, **payload, "review": review}
+		return _receipt_projection(_complete(doc, review, fields, receipt, payload, "confirm_simple"))
 
 
 def _complete(doc, review, fields, receipt, payload, operation):

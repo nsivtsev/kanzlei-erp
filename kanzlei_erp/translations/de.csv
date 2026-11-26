@@ -695,6 +695,9 @@ The tasks could not be created. Nothing was confirmed.,Die Aufgaben konnten nich
 An administrator must resolve every task of the original letter before confirmation.,Vor der Bestätigung muss ein Administrator jede Aufgabe des ursprünglichen Schreibens prüfen.
 A replacement already exists for this letter.,Für dieses Schreiben besteht bereits ein Ersatz.
 This letter was already confirmed with different decisions.,Dieses Schreiben wurde bereits mit anderen Entscheidungen bestätigt.
+Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.,Tragen Sie für jede ausgewählte Aufgabe mit relativer oder unsicherer Frist das Fristdatum aus dem Schreiben ein.
+A created task was already changed. Use Create correction instead of undo.,Eine erstellte Aufgabe wurde bereits geändert. Verwenden Sie „Korrektur anlegen“ statt Rückgängig.
+Undo is no longer available for this letter.,Rückgängig ist für dieses Schreiben nicht mehr möglich.
 The review operation could not finish. Reload and try again.,Die Prüfung konnte nicht abgeschlossen werden. Laden Sie neu und versuchen Sie es erneut.
 Human review,Manuelle Prüfung
 Review incoming letter,Eingangsschreiben prüfen
