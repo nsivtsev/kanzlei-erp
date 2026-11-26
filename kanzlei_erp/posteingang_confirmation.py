@@ -596,19 +596,27 @@ def review_projection(doc):
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def search_assignees(letter=None, text="", **extra):
+def search_assignees(letter=None, text="", customer=None, **extra):
+	"""Staff who can read the Mandant: the given candidate (the card's choice before confirm) or the stored one."""
 	_boundary("search_assignees", extra)
 	doc = _read_letter(letter)
 	_authorized(doc)
 	if not isinstance(text, str) or len(text) > 140:
 		workflow.fail("INVALID_REQUEST")
-	if not doc.selected_customer:
+	if customer is not None:
+		if not workflow._text(customer, 140):
+			workflow.fail("INVALID_REQUEST")
+		# The same gate confirm_simple applies: only a Mandant the caller may select.
+		if not (matching._customer(customer) or {}).get("can_select"):
+			frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
+	customer = customer or doc.selected_customer
+	if not customer:
 		return {"rows": []}
 	rows = []
 	for user in frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, fields=["name", "full_name"], order_by="name asc"):
 		if text.casefold() not in (user.name + " " + (user.full_name or "")).casefold():
 			continue
-		if staff(user.name) and frappe.has_permission("Customer", "read", doc=doc.selected_customer, user=user.name):
+		if staff(user.name) and frappe.has_permission("Customer", "read", doc=customer, user=user.name):
 			rows.append({"user": user.name, "full_name": user.full_name})
 	return {"rows": rows[:20]}
 

@@ -84,12 +84,41 @@ class PosteingangWorkspace {
   if(!this.visible)return;
   const code=error?.message;
   if(code==='PERMISSION'){
-   this.client.clear();this.letters.clear();this.history=[];this.cursor=null;this.clearMain();this.clearPdf();this.lists.replaceChildren();this.railSignature=null;this.hideToast();
+   this.client.clear();this.letters.clear();this.history=[];this.cursor=null;this.openPages=1;this.clearMain();this.clearPdf();this.lists.replaceChildren();this.railSignature=null;this.hideToast();
    for(const d of this.dialogs)d.hide();
   }
   this.notice.replaceChildren();this.node(this.notice,'p',this.message(error));
   if(this.client.intent)this.button(this.notice,'Check and retry the same request',()=>this.retry());
   if(PosteingangWorkspace.CONFLICTS.includes(code))this.reload();
+  if(code==='ASSIGNEE_NOT_ALLOWED')this.assigneeRejected();
+ }
+ // The server refused an assignee for the chosen Mandant: mark the unverified ones and open the picker.
+ assigneeRejected(){
+  const state=this.client.state;if(!state || !this.visible)return;
+  const ui=this.ui(state),message='This person has no access to the selected Mandant.';
+  if(state.card.state==='draft' || ui.mode==='manual'){
+   const form=this.manualForm(state,ui),customer=form.customer?.customer;
+   let rows=form.rows.map((row,i)=>row.verifiedFor===customer ? null : i).filter(i=>i!==null);if(!rows.length)rows=form.rows.map((_row,i)=>i);
+   for(const i of rows)form.errors['assignee-'+i]=message;
+   this.draw();this.pickAssignee(rows[0]);
+  }else{
+   let rows=state.card.tasks.map((_task,i)=>ui.choice.selected[i] && ui.assignees[i]?.verifiedFor!==ui.choice.customer ? i : null).filter(i=>i!==null);
+   if(!rows.length)rows=state.card.tasks.map((_task,i)=>ui.choice.selected[i] ? i : null).filter(i=>i!==null);
+   ui.assigneeErrors={};for(const i of rows)ui.assigneeErrors[i]=message;
+   this.draw();if(rows.length)this.pickAssignee(rows[0]);
+  }
+ }
+ // Assignee search is scoped to the Mandant currently chosen on the card or in the form.
+ pickAssignee(index){
+  const state=this.client.state;if(!state)return;
+  const ui=this.ui(state),manual=state.card.state==='draft' || ui.mode==='manual',form=manual ? this.manualForm(state,ui) : null;
+  const customer=manual ? form.customer?.customer : ui.choice.customer;
+  this.search('assignees',person=>{
+   const picked={assigned_to:person.user,assigned_to_name:person.full_name || person.user,verifiedFor:customer || null};
+   if(manual){Object.assign(form.rows[index],picked);delete form.errors['assignee-'+index];form.dirty=true;}
+   else{ui.assignees[index]=picked;delete ui.assigneeErrors[index];}
+   this.draw();
+  },customer);
  }
  // A definitive conflict blocks every mutation until the letter is loaded again.
  async reload(){
@@ -144,21 +173,34 @@ class PosteingangWorkspace {
   this.scheduleStatus();
  },5000);}
  async loadQueue(more=false){
-  if(!this.visible)return;if(this.queueBusy){this.queueAgain=true;return;}
+  if(!this.visible)return;
+  // A request made while a load runs is replayed afterwards, "More" included.
+  if(this.queueBusy){this.queueAgain=true;if(more)this.queueMore=true;return;}
   this.queueBusy=true;
   try{
    // One rows buffer per client: the open and done lists load one after the other.
-   const open=await this.client.queue({state:'open',uploaded_by:'all',query:'',sort:'oldest'},more ? this.cursor : null);
-   if(!open || !this.visible)return;this.cursor=open.next_cursor;
-   if(!more){
+   const filters={state:'open',uploaded_by:'all',query:'',sort:'oldest'};
+   if(more){
+    if(!this.cursor)return;
+    const page=await this.client.queue(filters,this.cursor);if(!page || !this.visible)return;
+    this.cursor=page.next_cursor;this.openPages=(this.openPages || 1)+1;
+   }else{
+    // A refresh keeps every page already loaded: the rail is the only way to reach a letter.
+    const extent=this.openPages || 1;let page=await this.client.queue(filters,null),loaded=1;
+    if(!page || !this.visible)return;
+    while(page.next_cursor && loaded<extent){page=await this.client.queue(filters,page.next_cursor);if(!page || !this.visible)return;loaded++;}
+    this.cursor=page.next_cursor;this.openPages=loaded;
     const sequence=this.client.queueSequence;
     const done=await this.transport('get_queue',{filters:{state:'history',uploaded_by:'all',query:'',sort:'newest'},cursor:null});
     if(sequence!==this.client.queueSequence || !this.client.active || !this.visible)return;
     this.client.check(done);this.history=done.items;
    }
    this.drawRail();
+   // The uploader comes from the queue rows; draw the card again once it is known.
+   const state=this.client.state;
+   if(state && frappe.get_route()[1]===state.letter && this.uploader(state)!==this.drawnUploader)this.draw();
   }catch(error){if(error.message==='PERMISSION')this.client.clear();this.failure(error);}
-  finally{this.queueBusy=false;if(this.queueAgain){this.queueAgain=false;this.loadQueue();}}
+  finally{this.queueBusy=false;if(this.queueAgain){const more=!!this.queueMore;this.queueAgain=this.queueMore=false;this.loadQueue(more);}}
  }
  drawDrop(){
   const drop=this.node(this.rail,'div');drop.className='pe-drop';
@@ -250,12 +292,12 @@ class PosteingangWorkspace {
  capture(){const sequence=this.client.sequence,name=this.client.state?.letter,owner=this.client.owner;return ()=>this.visible && this.client.active && !this.client.busy && !this.client.intent && !this.client.conflict && this.client.sequence===sequence && this.client.state?.letter===name && frappe.session.user===owner && this.onRoute() && frappe.get_route()[1]===name;}
  track(dialog){if(dialog){this.dialogs.add(dialog);const old=dialog.onhide;dialog.onhide=()=>{this.dialogs.delete(dialog);old?.();};}return dialog;}
  promptFields(fields,callback,title){const valid=this.capture();return this.track(frappe.prompt(fields,values=>{if(valid())return callback(values);},__(title)));}
- async search(kind,choose){
+ async search(kind,choose,customer=null){
   const name=this.client.state.letter,sequence=this.client.sequence,valid=this.capture();let start=0;
   const dialog=new frappe.ui.Dialog({title:__(kind==='customers' ? 'Find another Mandant' : 'Select assignee'),fields:[{fieldname:'text',fieldtype:'Data',label:__('Search')},{fieldname:'results',fieldtype:'HTML'}]});this.dialogs.add(dialog);
   const root=dialog.fields_dict.results.$wrapper[0];let request=0;
   const load=async more=>{const stamp=++request;try{
-   const result=await this.transport(kind==='customers' ? 'matching.search_customers' : 'review.search_assignees',{letter:name,text:dialog.get_value('text') || '',...(kind==='customers' ? {start:more ? start : 0} : {})});
+   const result=await this.transport(kind==='customers' ? 'matching.search_customers' : 'review.search_assignees',{letter:name,text:dialog.get_value('text') || '',...(kind==='customers' ? {start:more ? start : 0} : customer ? {customer} : {})});
    if(!valid() || stamp!==request || !dialog.$wrapper.is(':visible'))return;
    if(!more)root.replaceChildren();
    if(!result.rows.length)this.node(root,'p',__('No entries'));
@@ -268,7 +310,7 @@ class PosteingangWorkspace {
  ui(state){
   const card=state.card,signature=card.state+'|'+(card.run || '');let ui=this.letters.get(state.letter);
   if(!ui || ui.signature!==signature){
-   ui={signature,choice:this.api.cardChoice(card),customerName:null,extra:null,showMissing:false,dateErrors:{},mode:ui?.form ? ui.mode : null,form:ui?.form || null};
+   ui={signature,choice:this.api.cardChoice(card),customerName:null,extra:null,showMissing:false,dateErrors:{},assignees:{},assigneeErrors:{},mode:ui?.form ? ui.mode : null,form:ui?.form || null};
    this.letters.set(state.letter,ui);
   }
   return ui;
@@ -292,7 +334,7 @@ class PosteingangWorkspace {
  draw(){
   const state=this.client.state;if(!state || !this.visible)return;
   const active=document.activeElement,focus=active && this.main.contains?.(active) ? active.id : null;
-  const ui=this.ui(state),card=state.card;
+  const ui=this.ui(state),card=state.card;this.drawnUploader=this.uploader(state);
   this.clearMain();this.root.dataset.view='card';
   this.button(this.main,'All documents',()=>frappe.set_route('posteingang'),{icon:'back'}).classList.add('pe-back-list');
   const box=this.node(this.main,'section');box.className='pe-card';
@@ -425,7 +467,10 @@ class PosteingangWorkspace {
   }else this.fact(facts,'flag','Deadline in the letter',__('none'),'not stated');
   const planned=deadline.kind==='explicit_date' ? '5 working days before the deadline' : deadline.kind==='not_found' ? 'No deadline: in 7 days' : 'Calculated from the deadline you enter';
   this.fact(facts,'cal','Work date',task.internal_date ? frappe.datetime.str_to_user(task.internal_date) : '–',planned);
-  this.fact(facts,'user','Responsible',this.person(task.assigned_to,task.assigned_to_name),null);
+  const who={...task,...ui.assignees[i]},responsible=this.fact(facts,'user','Responsible',this.person(who.assigned_to,who.assigned_to_name),who.assigned_to && who.assigned_to===this.uploader(state) ? 'uploaded the document' : null);
+  responsible.hint.append(responsible.hint.textContent ? ' · ' : '');this.lockable(this.button(responsible.hint,'Change',()=>this.pickAssignee(i),{link:true}));
+  if(ui.assigneeErrors[i]){responsible.fact.classList.add('pe-need');this.node(responsible.fact,'div',__(ui.assigneeErrors[i])).className='pe-error';}
+  this.targets['assignee:'+i]={box:responsible.fact,input:null};
   const quote=deadline.quote || deadline.wording;
   if(quote){
    const line=this.node(box,'p');line.className='pe-quote';line.append(__('In the letter:')+' ');this.node(line,'q',quote);
@@ -466,16 +511,22 @@ class PosteingangWorkspace {
   card.tasks.forEach((task,i)=>{if(ui.choice.selected[i] && ['relative','uncertain'].includes(task.deadline.kind) && PosteingangWorkspace.date(ui.choice.deadlines[i])===false)ui.dateErrors[i]=true;});
   const missing=this.api.missingFields(card,ui.choice),invalid=Object.keys(ui.dateErrors);
   let payload=null;
-  if(!missing.length && !invalid.length){try{payload=this.api.simplePayload(card,ui.choice);}catch{payload=null;}}
+  if(!missing.length && !invalid.length){try{payload=this.api.simplePayload(this.withAssignees(card,ui),ui.choice);}catch{payload=null;}}
   if(!payload){ui.showMissing=true;this.draw();this.jump(missing[0]?.key || 'deadline:'+invalid[0]);return null;}
   ui.showMissing=false;return this.confirm(payload);
  }
+ withAssignees(card,ui){return {...card,tasks:card.tasks.map((task,i)=>ui.assignees[i] ? {...task,...ui.assignees[i]} : task)};}
+ uploader(state){return [...this.client.rows,...this.history].find(row=>row.letter===state.letter)?.received_by || null;}
  confirm(payload){const state=this.client.state;return this.run('review.confirm_simple',{letter:state.letter,expected_revision:state.revision,...payload});}
  manualForm(state,ui){
   if(ui.form)return ui.form;
   const card=state.card,choice=ui.choice,picked=card.tasks.filter((_task,i)=>choice.selected[i]!==false);
   const rows=(picked.length ? picked : [null]).map(task=>this.formRow(task,task && ['relative','uncertain'].includes(task.deadline.kind) ? choice.deadlines[card.tasks.indexOf(task)] : null));
-  ui.form={customer:choice.customer ? {customer:choice.customer,customer_name:this.customerName(card,ui)} : null,rows,errors:{},dirty:false};
+  // A legacy draft already names its Mandant on the letter; that wins over the analysis suggestion.
+  const stored=card.state==='draft' && state.matching?.selected_customer?.can_select !== false ? state.matching?.selected_customer : null;
+  const customer=stored ? {customer:stored.customer,customer_name:stored.customer_name} : choice.customer ? {customer:choice.customer,customer_name:this.customerName(card,ui)} : null;
+  card.tasks.forEach((_task,i)=>{if(ui.assignees[i]){const row=rows[picked.indexOf(card.tasks[i])];if(row)Object.assign(row,ui.assignees[i]);}});
+  ui.form={customer,rows,errors:{},dirty:false};
   return ui.form;
  }
  formRow(task=null,entered=null){
@@ -520,8 +571,10 @@ class PosteingangWorkspace {
    this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:edit('internal_date'),error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
    const who=this.formField(inner,state,'assignee-'+i,'Responsible',{control:null}),value=this.node(who.wrap,'div');value.className='pe-picked';
    this.node(value,'span',this.person(row.assigned_to,row.assigned_to_name));
-   const change=this.button(value,'Change',()=>this.search('assignees',person=>{row.assigned_to=person.user;row.assigned_to_name=person.full_name || person.user;form.dirty=true;this.draw();}),{link:true});
+   if(row.assigned_to && row.assigned_to===this.uploader(state))this.node(value,'span',__('uploaded the document')).className='pe-muted';
+   const change=this.button(value,'Change',()=>this.pickAssignee(i),{link:true});
    change.id=who.id;this.lockable(change);
+   if(errors['assignee-'+i]){const e=this.node(who.wrap,'p',__(errors['assignee-'+i]));e.className='pe-error';e.id=who.id+'-error';change.setAttribute('aria-describedby',e.id);}
    if(form.rows.length>1)this.lockable(this.button(group,'Remove task',()=>{form.rows.splice(i,1);form.errors={};form.dirty=true;this.draw();},{link:true}));
   });
   this.lockable(this.button(section,'+ Another task',()=>{form.rows.push(this.formRow());form.dirty=true;this.draw();this.targets['title-'+(form.rows.length-1)]?.input?.focus?.();},{link:true}));

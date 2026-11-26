@@ -536,6 +536,31 @@ class TestConfirmSimple(SimpleCase):
 		self.assertEqual(self.written(doc), before)
 
 
+class TestSearchAssignees(SimpleCase):
+	def search(self, doc, **kwargs):
+		frappe.set_user(self.operator.name)
+		return {row["user"] for row in self.review.search_assignees(doc.name, "", **kwargs)["rows"]}
+
+	def test_candidate_customer_lists_staff_who_can_read_it(self):
+		doc = self.successful()
+		self.assertFalse(frappe.db.get_value("Incoming Letter", doc.name, "selected_customer"))
+		self.assertEqual(self.search(doc), set())
+		users = self.search(doc, customer=self.customer.name)
+		self.assertTrue({self.operator.name, self.reader.name, self.manager.name} <= users)
+		self.assertNotIn(self.stranger.name, users)
+		self.assertNotIn(self.website.name, users)
+
+	def test_candidate_customer_must_be_selectable(self):
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		frappe.share.add("Customer", self.customer.name, self.operator.name, read=1)
+		with self.assertRaises(frappe.PermissionError):
+			self.search(doc, customer=self.customer.name)
+		with self.assertRaises(frappe.PermissionError):
+			self.search(doc, customer="SYN-NO-SUCH-CUSTOMER")
+
+
 class TestReceiptProjection(unittest.TestCase):
 	def test_hides_tasks_the_reader_cannot_read(self):
 		from kanzlei_erp.posteingang_confirmation import _receipt_projection

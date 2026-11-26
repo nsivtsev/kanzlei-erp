@@ -61,12 +61,13 @@ function workspace(letter='one',over={}){
 }
 
 function harness({letters={one:workspace('one')},route=['posteingang','one'],handler}={}){
- const document=makeDocument(),calls=[],routes=[],prompts=[],opened=[],timers=[];
+ const document=makeDocument(),calls=[],routes=[],prompts=[],opened=[],timers=[],dialogs=[];
  let current=route;
  const frappe={pages:{posteingang:{}},session:{user:'operator'},csrf_token:'t',
   get_route:()=>current,set_route:(...args)=>{routes.push(args);current=args;},router:{on(){}},
   ui:{make_app_page:({parent})=>{const main=document.createElement('div');parent.append(main);return {main:[main],set_title(){},clear_primary_action(){},set_primary_action(){}};},
-   Dialog:class{constructor(opts){this.opts=opts;this.fields_dict={};}show(){}hide(){this.onhide?.();}set_primary_action(){}}},
+   Dialog:class{constructor(opts){this.opts=opts;this.visible=false;this.fields_dict={results:{$wrapper:[document.createElement('div')]},upload:{$wrapper:[document.createElement('div')]}};this.$wrapper={is:()=>this.visible};}
+    show(){this.visible=true;dialogs.push(this);}hide(){this.visible=false;this.onhide?.();}set_primary_action(){}get_value(){return '';}}},
   prompt:(fields,callback,title)=>{const dialog={fields,callback,title,hide(){}};prompts.push(dialog);return dialog;},
   confirm:(message,callback)=>({message,callback}),show_alert(){},msgprint(){},
   datetime:{str_to_user:value=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');return m ? `${m[3]}.${m[2]}.${m[1]}` : value;}},
@@ -91,7 +92,7 @@ function harness({letters={one:workspace('one')},route=['posteingang','one'],han
   return {letter:args.letter,revision:2,status:'Completed'};
  };
  page.transport=transport;page.client.transport=transport;
- return {page,document,context,frappe,calls,routes,prompts,opened,letters,queue,timers,root:page.root,
+ return {page,document,context,frappe,calls,routes,prompts,opened,letters,queue,timers,dialogs,root:page.root,
   writes:()=>calls.filter(c=>c.operation.includes('.')),
   go:async(...next)=>{current=['posteingang',...next];await page.show();await settle();},
   main:()=>page.main};
@@ -349,6 +350,69 @@ test('status polling never draws a letter card over the list view',async()=>{
  const poll=h.timers.filter(t=>t.ms===5000).at(-1);await poll.fn();await settle();
  assert.equal(h.root.dataset.view,'list');assert.ok(text(h.main()).includes('Choose a document from the list or upload a PDF.'));
  assert.equal(h.page.client.state.revision,2,'the polled letter itself is refreshed');
+});
+
+const queueRow=n=>({letter:'L'+n,status:'Needs Review',sender:'Sender '+n,letter_type:'Typ',file_name:n+'.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}});
+const pagedQueue=(open,gate)=>async(operation,args)=>{
+ if(operation!=='get_queue')return undefined;
+ if(args.filters.state==='history')return {user:'operator',items:[],next_cursor:null};
+ if(gate && !args.cursor)await gate();
+ return args.cursor==='p2' ? {user:'operator',items:open.slice(20),next_cursor:null} : {user:'operator',items:open.slice(0,20),next_cursor:'p2'};
+};
+
+test('a refresh keeps the open letters loaded with More',async()=>{
+ const open=Array.from({length:25},(_v,i)=>queueRow(i+1));
+ const h=await shown({handler:pagedQueue(open)});
+ assert.ok(text(h.page.rail).includes('Open · 20+'));assert.ok(!text(h.page.rail).includes('Sender 25'));
+ button(h.page.rail,'More').click();await settle();
+ assert.ok(text(h.page.rail).includes('Sender 25'));assert.ok(text(h.page.rail).includes('Open · 25'));
+ await h.page.loadQueue();await settle();
+ assert.ok(text(h.page.rail).includes('Sender 25'),'the 15 s refresh and every mutation reload the loaded extent');
+ const cursors=h.calls.filter(c=>c.operation==='get_queue' && c.args.filters.state==='open').map(c=>c.args.cursor);
+ assert.deepEqual(cursors,[null,'p2',null,'p2']);
+});
+
+test('More pressed during a running refresh still loads the next page',async()=>{
+ const open=Array.from({length:25},(_v,i)=>queueRow(i+1));let release=null;
+ const h=await shown({handler:pagedQueue(open,()=>release ? new Promise(r=>{release=r;}) : null)});
+ release=true;const refresh=h.page.loadQueue();await settle();
+ button(h.page.rail,'More').click();release();await refresh;await settle();await settle();
+ assert.ok(text(h.page.rail).includes('Sender 25'));
+});
+
+test('an assignee refused for the Mandant opens the picker scoped to that Mandant',async()=>{
+ let refuse=true;
+ const h=await shown({handler:(operation,args)=>{
+  if(operation==='review.confirm_simple' && refuse){refuse=false;throw Error('ASSIGNEE_NOT_ALLOWED');}
+  if(operation==='review.search_assignees')return {rows:[{user:'colleague',full_name:'Colleague'}]};
+ }});
+ button(h.main(),'Accept').click();await settle();
+ assert.ok(text(h.main()).includes('This person has no access to the selected Mandant.'));
+ const dialog=h.dialogs.at(-1);assert.equal(dialog.opts.title,'Select assignee');
+ await dialog.on_page_show();
+ const search=h.calls.find(c=>c.operation==='review.search_assignees');assert.equal(search.args.customer,'C1');assert.equal(search.args.letter,'one');
+ button(dialog.fields_dict.results.$wrapper[0],'Select').click();
+ assert.ok(!text(h.main()).includes('This person has no access'));assert.ok(text(h.main()).includes('Colleague'));
+ button(h.main(),'Accept').click();await settle();
+ const writes=h.writes().filter(c=>c.operation==='review.confirm_simple');assert.equal(writes.length,2);assert.equal(writes[1].args.tasks[0].assigned_to,'colleague');
+});
+
+test('the manual form searches assignees for its Mandant and marks a refused one',async()=>{
+ const h=await shown({handler:operation=>{if(operation==='review.confirm_simple')throw Error('ASSIGNEE_NOT_ALLOWED');if(operation==='review.search_assignees')return {rows:[]};}});
+ button(h.main(),'Create manually').click();
+ button(h.main(),'Create task').click();await settle();
+ assert.ok(text(h.main()).includes('This person has no access to the selected Mandant.'));
+ await h.dialogs.at(-1).on_page_show();assert.equal(h.calls.find(c=>c.operation==='review.search_assignees').args.customer,'C1');
+});
+
+test('the responsible fact names the uploader and a legacy draft keeps its stored Mandant',async()=>{
+ const one=workspace('one',{card:{state:'draft',customer:{suggested:{customer:'C1',customer_name:'Muster GmbH',why:'x',page:1},candidates:[],ambiguity:'none'},tasks:[task({source_index:null})]}});
+ one.matching.selected_customer={customer:'C9',customer_name:'Stored GmbH',can_select:true};
+ const h=harness({letters:{one}});h.queue.open=[{...queueRow(1),letter:'one',received_by:'operator'}];await h.page.show();await settle();
+ assert.ok(text(h.main()).includes('Stored GmbH'));assert.ok(text(h.main()).includes('uploaded the document'));
+ button(h.main(),'Create task').click();await settle();assert.equal(h.writes()[0].args.customer,'C9');
+ const p=harness();p.queue.open=[{...queueRow(1),letter:'one',received_by:'operator'}];await p.page.show();await settle();
+ assert.ok(text(p.main()).includes('uploaded the document'));
 });
 
 test('page search waits for the shown dialog before reading a fast result',async()=>{
