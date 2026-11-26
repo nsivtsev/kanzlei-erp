@@ -144,6 +144,25 @@ class TestKanzleiNavigation(FrappeTestCase):
 			frappe.set_user("Administrator")
 			frappe.delete_doc("Email Account", email_account.name, ignore_permissions=True, force=True)
 
+	def test_saved_legacy_inbox_link_opens_mail_client(self):
+		boot = frappe._dict(
+			workspace_sidebar_item={
+				"kanzlei": {
+					"items": [
+						{"label": "E-Mail", "type": "Link", "link_type": "URL", "url": "/desk/communication/view/inbox"}
+					]
+				}
+			},
+			desktop_icons=[],
+			app_data=[],
+			workspaces={"pages": []},
+		)
+		with patch("kanzlei_erp.navigation._has_assigned_email_account", return_value=True):
+			configure_desk(boot)
+		urls = [item.get("url") for item in boot.workspace_sidebar_item["kanzlei"]["items"]]
+		self.assertIn("/desk/kanzlei-mail", urls)
+		self.assertNotIn("/desk/communication/view/inbox", urls)
+
 	def test_staff_has_kanzlei_without_administration(self):
 		user = frappe.get_doc(
 			{
