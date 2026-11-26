@@ -12,6 +12,7 @@ WORKING_DAYS_BEFORE_DEADLINE = 5
 DAYS_WITHOUT_DEADLINE = 7
 IDENTIFIER_LABELS = {"de_steuernummer": "Steuernummer", "de_tax_id": "Steuer-ID", "de_vat_id": "USt-IdNr.", "other": "Referenz"}
 NO_TASK_REASON = "Im Schreiben wurde keine Aufgabe gefunden."
+DEFAULT_ASSIGNEE = object()
 
 
 def working_date(deadline: date | None, today: date, holidays: frozenset[date]) -> date:
@@ -70,25 +71,43 @@ def _assignee(doc, customer):
 	return frappe.session.user
 
 
-def _proposed(index, action, today, holidays):
-	deadline = action["deadline"]
+def _deadline(deadline):
 	proof = deadline["evidence"][0] if deadline["evidence"] else {}
-	internal = None
-	if deadline["kind"] in ("explicit_date", "not_found"):
-		internal = working_date(frappe.utils.getdate(deadline["date"]) if deadline["date"] else None, today, holidays)
+	return {"kind": deadline["kind"], "date": deadline["date"], "wording": deadline["wording"],
+		"page": proof.get("page"), "quote": proof.get("quote")}
+
+
+def _internal(deadline, today, holidays):
+	"""Relative and uncertain deadlines are never turned into a date by code."""
+	if deadline["kind"] not in ("explicit_date", "not_found"):
+		return None
+	return str(working_date(frappe.utils.getdate(deadline["date"]) if deadline["date"] else None, today, holidays))
+
+
+def _proposed(index, action, today, holidays):
+	deadline = _deadline(action["deadline"])
 	return {"source_index": index, "title": action["title"], "description": action["description"],
-		"deadline": {"kind": deadline["kind"], "date": deadline["date"], "wording": deadline["wording"],
-			"page": proof.get("page"), "quote": proof.get("quote")},
-		"internal_date": str(internal) if internal else None, "assigned_to": None}
+		"deadline": deadline, "internal_date": _internal(deadline, today, holidays), "assigned_to": DEFAULT_ASSIGNEE}
 
 
 def _stored(row, today, holidays):
-	external = frappe.utils.getdate(row.external_date) if row.external_date else None
-	internal = frappe.utils.getdate(row.internal_date) if row.internal_date else working_date(external, today, holidays)
+	proposal = review._object(row.original_proposal_json) if row.original_proposal_json else None
+	deadline = _deadline(proposal["deadline"]) if proposal else {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None}
+	if row.external_date and str(row.external_date) != deadline["date"]:
+		# A date a human entered from the letter wins over the proposal.
+		deadline = {"kind": "explicit_date", "date": str(row.external_date), "wording": None, "page": None, "quote": None}
+	if row.internal_date:
+		internal = str(row.internal_date)
+	elif row.scheduling_decision == "unscheduled":
+		internal = None
+	else:
+		internal = _internal(deadline, today, holidays)
+	if row.assignment_decision == "unassigned":
+		assigned = None
+	else:
+		assigned = row.assigned_to or DEFAULT_ASSIGNEE
 	return {"source_index": row.source_index, "title": row.title, "description": row.description or "",
-		"deadline": {"kind": "explicit_date" if external else "not_found", "date": str(external) if external else None,
-			"wording": None, "page": None, "quote": None},
-		"internal_date": str(internal), "assigned_to": row.assigned_to}
+		"deadline": deadline, "internal_date": internal, "assigned_to": assigned}
 
 
 def _state(doc, rows, extraction):
@@ -115,15 +134,16 @@ def simple_card(doc):
 	customer = _customer_block(extraction)
 	today, holidays = frappe.utils.getdate(), company_holidays()
 	if state == "draft":
-		tasks = [_stored(row, today, holidays) for row in rows]
+		tasks = [_stored(row, today, holidays) for row in rows if row.decision != "reject"]
 	elif state == "proposal":
 		tasks = [_proposed(index, action, today, holidays) for index, action in enumerate(extraction["actions"])]
 	else:
 		tasks = []
 	default = _assignee(doc, doc.selected_customer or (customer["suggested"] or {}).get("customer")) if tasks else None
-	names = {}
+	names = {None: None}
 	for task in tasks:
-		task["assigned_to"] = task["assigned_to"] or default
+		if task["assigned_to"] is DEFAULT_ASSIGNEE:
+			task["assigned_to"] = default
 		if task["assigned_to"] not in names:
 			names[task["assigned_to"]] = frappe.db.get_value("User", task["assigned_to"], "full_name") or task["assigned_to"]
 		task["assigned_to_name"] = names[task["assigned_to"]]

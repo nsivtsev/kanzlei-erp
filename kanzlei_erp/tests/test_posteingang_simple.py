@@ -74,11 +74,14 @@ class TestSimpleCard(PosteingangTestCase):
 		delivery = patch("kanzlei_erp.drive_realtime._deliver")
 		delivery.start()
 		self.addCleanup(delivery.stop)
+		from kanzlei_erp.posteingang_setup import DEFAULTS
+
+		self.settings = {key: frappe.db.get_single_value("Posteingang Settings", key) for key in DEFAULTS}
 		super().setUp()
 		from kanzlei_erp import posteingang_confirmation, posteingang_jobs, posteingang_workspace
 
 		self.review, self.jobs, self.workspace = posteingang_confirmation, posteingang_jobs, posteingang_workspace
-		self.committed = []
+		self.committed, self.customers = [], [self.customer.name]
 		self.customer.append("kanzlei_identifiers", SYN_0007)
 		self.customer.save()
 		self.share_and_verify(self.customer)
@@ -101,16 +104,24 @@ class TestSimpleCard(PosteingangTestCase):
 		return doc
 
 	def tearDown(self):
-		# process_run commits; remove those Letters so they do not crowd other modules' queues.
+		# process_run commits everything setUp created; remove it so verified SYN-0007
+		# Customers and open Letters do not pile up for later runs and other modules.
 		frappe.set_user("Administrator")
 		frappe.db.rollback()
-		for name in self.committed:
-			frappe.db.delete("File", {"attached_to_doctype": "Incoming Letter", "attached_to_name": name})
-			for kind in ("Incoming Letter Intake Receipt", "Incoming Letter Event", "Incoming Letter Run"):
-				frappe.db.delete(kind, {"letter": name})
-			frappe.db.delete("Incoming Letter Action", {"parent": name})
-			frappe.db.delete("Incoming Letter", {"name": name})
-		frappe.db.commit()
+		if self.committed:
+			for name in self.committed:
+				frappe.db.delete("File", {"attached_to_doctype": "Incoming Letter", "attached_to_name": name})
+				for kind in ("Incoming Letter Intake Receipt", "Incoming Letter Event", "Incoming Letter Run"):
+					frappe.db.delete(kind, {"letter": name})
+				frappe.db.delete("Incoming Letter Action", {"parent": name})
+				frappe.db.delete("Incoming Letter", {"name": name})
+			for name in self.customers:
+				frappe.db.delete("DocShare", {"share_doctype": "Customer", "share_name": name})
+				frappe.delete_doc("Customer", name, force=True, ignore_permissions=True)
+			for user in (self.operator, self.reader, self.stranger, self.manager, self.website):
+				frappe.delete_doc("User", user.name, force=True, ignore_permissions=True)
+			frappe.db.set_single_value("Posteingang Settings", self.settings)
+			frappe.db.commit()
 		super().tearDown()
 
 	def card(self, doc, user=None):
@@ -211,6 +222,7 @@ class TestSimpleCard(PosteingangTestCase):
 		other = frappe.copy_doc(self.customer)
 		other.customer_name += " other"
 		other.insert()
+		self.customers.append(other.name)
 		self.share_and_verify(other)
 		card = self.card(self.successful())
 		self.assertEqual(card["customer"]["ambiguity"], "multiple_matches")
@@ -243,6 +255,56 @@ class TestSimpleCard(PosteingangTestCase):
 		task = self.card(doc, self.manager.name)["tasks"][0]
 		self.assertEqual(task["assigned_to"], self.manager.name)
 		self.assertEqual(task["assigned_to_name"], self.manager.full_name)
+
+	def apply(self, doc):
+		frappe.set_user(self.operator.name)
+		state = self.review.get_review_state(doc.name)
+		self.review.apply_result(doc.name, state["proposal"]["run"], state["revision"], frappe.generate_hash(), False)
+
+	def test_applied_run_keeps_proposed_deadlines_in_the_draft(self):
+		doc = self.successful("AP01-40")
+		self.apply(doc)
+		card = self.card(doc)
+		self.assertEqual(card["state"], "draft")
+		explicit, relative = card["tasks"]
+		self.assertEqual(explicit["source_index"], 0)
+		self.assertEqual(explicit["deadline"], {"kind": "explicit_date", "date": "2026-12-22", "wording": "Spätester Eingang: 22.12.2026.",
+			"page": 2, "quote": "Spätester Eingang: 22.12.2026."})
+		self.assertEqual(explicit["internal_date"], str(working_date(date(2026, 12, 22), frappe.utils.getdate(), company_holidays())))
+		self.assertEqual(relative["deadline"]["kind"], "relative")
+		self.assertEqual(relative["deadline"]["wording"], "Antwort innerhalb von sieben Tagen nach der Musterfreigabe.")
+		self.assertIsNone(relative["deadline"]["date"])
+		self.assertIsNone(relative["internal_date"])
+
+	def test_draft_keeps_human_decisions_and_drops_rejected_rows(self):
+		doc = self.successful("AP01-40")
+		self.apply(doc)
+		frappe.set_user("Administrator")
+		first, second = self.review._actions(doc.name)
+		# Test-side state: decisions a human saved earlier in the multi-step review.
+		frappe.db.set_value("Incoming Letter Action", first.name, {"scheduling_decision": "unscheduled", "assignment_decision": "unassigned"})
+		frappe.db.set_value("Incoming Letter Action", second.name, "decision", "reject")
+		card = self.card(doc)
+		self.assertEqual([task["title"] for task in card["tasks"]], [first.title])
+		task = card["tasks"][0]
+		self.assertIsNone(task["internal_date"])
+		self.assertIsNone(task["assigned_to"])
+		self.assertIsNone(task["assigned_to_name"])
+
+	def test_uploader_without_mandant_access_falls_back_to_current_user(self):
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		card = self.card(doc, self.manager.name)
+		self.assertEqual(card["customer"]["suggested"]["customer"], self.customer.name)
+		self.assertEqual(card["tasks"][0]["assigned_to"], self.manager.name)
+
+	def test_cancelled_is_done(self):
+		doc = self.letter()
+		self.status(doc, "Cancelled")
+		card = self.card(doc)
+		self.assertEqual(card["state"], "done")
+		self.assertEqual(card["tasks"], [])
 
 
 SYN_0007 = {"identifier_type": "other", "raw_value": "SYN-0007", "jurisdiction": "SYNTHETIC",
