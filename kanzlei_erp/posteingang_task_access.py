@@ -16,6 +16,7 @@ PROVENANCE = ("kanzlei_incoming_letter", "kanzlei_incoming_action_id", "kanzlei_
 IMMUTABLE = (*PROVENANCE, "kanzlei_customer")
 _creation = ContextVar("posteingang_task_creation", default=None)
 _checking = ContextVar("posteingang_task_permission_graph", default=None)
+_undoing = ContextVar("posteingang_task_undo", default=None)
 REFERENCES = {
 	"ToDo": ("reference_type", "reference_name"),
 	"Notification Log": ("document_type", "document_name"),
@@ -46,6 +47,16 @@ def creating_task(letter_name, action_id):
 		yield
 	finally:
 		_creation.reset(token)
+
+
+@contextmanager
+def undoing_confirmation(letter_name, tasks):
+	"""Only undo_confirm deletes Posteingang Tasks: exactly these names of this Letter."""
+	token = _undoing.set((letter_name, frozenset(tasks)))
+	try:
+		yield
+	finally:
+		_undoing.reset(token)
 
 
 def _row(name):
@@ -288,8 +299,13 @@ class TaskGuard:
 
 
 def protect_task(doc, method=None, **kwargs):
-	if source(_row(doc.name)) is not None:
-		deny()
+	row = _row(doc.name)
+	if source(row) is None:
+		return
+	undo = _undoing.get()
+	if undo and row.name in undo[1] and row.kanzlei_incoming_letter == undo[0]:
+		return
+	deny()
 
 
 def _todo_check(doc):

@@ -1,13 +1,15 @@
 """Human review and atomic confirmation. No AI, enqueue or generic CRUD bypass."""
 
 import copy
+import re
 from collections import deque
 from contextlib import contextmanager
+from datetime import timedelta
 from hashlib import sha256
 from uuid import uuid4
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from kanzlei_erp import posteingang_jobs as workflow
 from kanzlei_erp import posteingang_matching as matching
@@ -17,6 +19,7 @@ from kanzlei_erp.posteingang_permissions import letter_access, staff
 from kanzlei_erp.posteingang_review_validation import validate_review
 
 DRAFT_STATES = {"Needs Review", "Needs Clarification"}
+UNDO_SECONDS = 600
 DOCUMENT_FIELDS = ("sender", "document_date", "letter_type", "summary")
 ACTION_FIELDS = ("action_id", "source_index", "title", "description", "decision", "assigned_to",
 	"assignment_decision", "assignment_reason", "external_date", "external_date_basis", "internal_date",
@@ -396,6 +399,89 @@ def confirm_simple(letter=None, expected_revision=None, request_key=None, origin
 		review, fields = _validated(doc, plan["review"], plan["document_fields"], confirm=True)
 		payload = {"before": before, **payload, "review": review}
 		return _receipt_projection(_complete(doc, review, fields, receipt, payload, "confirm_simple"))
+
+
+def _undo_refusal(doc, *, lock=False):
+	"""None while the session user may undo this confirm_simple; otherwise the refusal code."""
+	if not frappe.db.get_single_value("Posteingang Settings", "enabled"):
+		return "INVALID_TRANSITION"
+	if (doc.status != "Completed" or doc.replaces_letter or doc.replacement_letter or not doc.confirmed_at
+		or doc.confirmed_by != frappe.session.user or not doc.confirmation_receipt_json):
+		return "UNDO_EXPIRED"
+	if (now_datetime() - get_datetime(doc.confirmed_at)).total_seconds() > UNDO_SECONDS:
+		return "UNDO_EXPIRED"
+	events = frappe.get_all("Incoming Letter Event", filters={"letter": doc.name, "event_type": ["in", ["confirm", "confirm_simple"]]},
+		fields=["name", "event_type", "occurred_at"], order_by="revision_after desc", limit=1)
+	receipt = _object(doc.confirmation_receipt_json)
+	if not events or events[0].event_type != "confirm_simple" or receipt.get("event") != events[0].name:
+		return "UNDO_EXPIRED"
+	tasks = receipt["tasks_modified"]
+	linked = {row.created_task for row in _actions(doc.name) if row.created_task}
+	if linked != set(tasks) or {row["task"] for row in receipt["actions"]} != set(tasks):
+		return "TASK_CHANGED"
+	for name in sorted(tasks):
+		modified = frappe.db.get_value("Task", name, "modified", for_update=lock)
+		if modified is None or str(modified) != tasks[name]:
+			return "TASK_CHANGED"
+	# Assignment changes write the Task's _assign without touching its modified.
+	if tasks and frappe.db.exists("ToDo", {"reference_type": "Task", "reference_name": ["in", list(tasks)], "modified": [">", events[0].occurred_at]}):
+		return "TASK_CHANGED"
+	return None
+
+
+def _keep_series(name):
+	# delete_doc hands the last series number out again, but its Comment/ToDo/Version
+	# cleanup for that name runs after commit and would hit a re-created Task.
+	if match := re.fullmatch(r"(.*?)([0-9]+)", name):
+		frappe.db.sql("UPDATE `tabSeries` SET `current`=GREATEST(`current`, %s) WHERE `name`=%s", (int(match[2]), match[1]))
+
+
+def undo_until(doc):
+	"""ISO end of the undo window when the session user may undo now; otherwise None."""
+	try:
+		_authorized(doc)
+	except frappe.PermissionError:
+		return None
+	if _undo_refusal(doc) is not None:
+		return None
+	return (get_datetime(doc.confirmed_at) + timedelta(seconds=UNDO_SECONDS)).isoformat()
+
+
+@frappe.whitelist(methods=["POST"])
+def undo_confirm(letter=None, expected_revision=None, request_key=None, **extra):
+	"""Delete the untouched Tasks of the session user's own recent confirm_simple and reopen the Letter."""
+	from kanzlei_erp.posteingang_task_access import undoing_confirmation
+
+	_boundary("undo_confirm", extra)
+	doc, receipt, replay = _begin("undo_confirm", letter, expected_revision, request_key, {})
+	if replay:
+		return replay
+	_check_revision(doc, expected_revision)
+	if code := _undo_refusal(doc, lock=True):
+		workflow.fail(code)
+	confirmation = _object(doc.confirmation_receipt_json)
+	previous = _object(frappe.db.get_value("Incoming Letter Event", confirmation["event"], "payload_json"))["before"]
+	tasks = sorted(confirmation["tasks_modified"])
+	before = {"status": doc.status, "review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run,
+		"fact_evidence_json": doc.fact_evidence_json, "review_outcome": doc.review_outcome, "confirmed_customer": doc.confirmed_customer,
+		"confirmed_by": doc.confirmed_by, "confirmed_at": str(doc.confirmed_at), "receipt": confirmation}
+	with _atomic():
+		# Deleting the rows removes the created_task Links that would block Task deletion.
+		frappe.db.delete("Incoming Letter Action", {"parent": doc.name, "parenttype": "Incoming Letter"})
+		with undoing_confirmation(doc.name, tasks):
+			try:
+				for name in frappe.get_all("ToDo", filters={"reference_type": "Task", "reference_name": ["in", tasks]}, pluck="name", order_by="name asc") if tasks else []:
+					frappe.delete_doc("ToDo", name)
+				for name in tasks:
+					frappe.delete_doc("Task", name)
+					_keep_series(name)
+			except frappe.LinkExistsError:
+				workflow.fail("TASK_CHANGED")
+		# The Letter keeps its confirmed Customer until the Task guards have run.
+		changes = {**previous["document_fields"], "applied_run": previous["applied_run"], "fact_evidence_json": previous["fact_evidence_json"],
+			"selected_customer": None, "customer_reason": None, "confirmed_customer": None, "confirmed_by": None, "confirmed_at": None,
+			"confirmation_receipt_json": None, "no_actions_reason": None, "review_outcome": "pending", "status": "Needs Review"}
+		return _finish(doc, "undo_confirm", changes, {"before": before, "confirm_event": confirmation["event"], "tasks": tasks}, receipt)
 
 
 def _complete(doc, review, fields, receipt, payload, operation):

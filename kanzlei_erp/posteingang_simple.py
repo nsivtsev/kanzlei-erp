@@ -168,7 +168,8 @@ def simple_card(doc):
 	no_task_reason = None
 	if state == "proposal" and extraction["action_assessment"] == "none_found":
 		no_task_reason = extraction["summary"]["value"] or NO_TASK_REASON
-	return {"state": state, "run": run, "customer": customer, "tasks": tasks, "no_task_reason": no_task_reason, "undo_until": None}
+	undo_until = review.undo_until(doc) if state == "done" else None
+	return {"state": state, "run": run, "customer": customer, "tasks": tasks, "no_task_reason": no_task_reason, "undo_until": undo_until}
 
 
 def _iso(value):

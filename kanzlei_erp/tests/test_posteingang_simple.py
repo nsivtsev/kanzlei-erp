@@ -547,3 +547,151 @@ class TestReceiptProjection(unittest.TestCase):
 		self.assertEqual([row["task"] for row in projected["actions"]], ["TASK-OPEN", None])
 		self.assertEqual(projected["tasks_modified"], {"TASK-OPEN": "2026-11-26 10:00:00"})
 		self.assertEqual(len(result["tasks_modified"]), 2)
+
+
+class TestUndoConfirm(SimpleCase):
+	run_confirm = TestConfirmSimple.run_confirm
+	proposal_tasks = TestConfirmSimple.proposal_tasks
+	letter_row = TestConfirmSimple.letter_row
+
+	def undo(self, doc, key=None, user=None):
+		frappe.set_user(user or self.operator.name)
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		return self.review.undo_confirm(doc.name, revision, key or frappe.generate_hash())
+
+	def later(self, doc, seconds):
+		from datetime import timedelta
+
+		moment = frappe.utils.get_datetime(self.letter_row(doc).confirmed_at) + timedelta(seconds=seconds)
+		return patch("kanzlei_erp.posteingang_confirmation.now_datetime", return_value=moment)
+
+	def confirmed(self, case="AP01-01"):
+		doc = self.successful(case)
+		result = self.run_confirm(doc, self.proposal_tasks(doc))
+		return doc, result["actions"][0]["task"]
+
+	def assert_refused(self, doc, task, code, user=None):
+		revision = self.letter_row(doc).revision
+		with self.assertRaisesRegex(frappe.ValidationError, code):
+			self.undo(doc, user=user)
+		frappe.set_user("Administrator")
+		self.assertEqual((self.letter_row(doc).status, self.letter_row(doc).revision), ("Completed", revision))
+		self.assertTrue(frappe.db.exists("Task", task))
+
+	def test_undo_within_window_reopens_the_proposal(self):
+		import json
+		from datetime import timedelta
+
+		doc = self.successful()
+		fields = ("sender", "document_date", "letter_type", "summary", "fact_evidence_json", "applied_run")
+		before = {key: self.letter_row(doc)[key] for key in fields}
+		result = self.run_confirm(doc, self.proposal_tasks(doc))
+		task = result["actions"][0]["task"]
+		confirmed = self.letter_row(doc)
+		self.assertNotEqual(confirmed.sender, before["sender"])
+		self.assertNotEqual(confirmed.fact_evidence_json, before["fact_evidence_json"])
+		self.assertEqual(self.card(doc)["undo_until"], (frappe.utils.get_datetime(confirmed.confirmed_at) + timedelta(seconds=600)).isoformat())
+		with patch("frappe.delete_doc", wraps=frappe.delete_doc) as deleted:
+			undone = self.undo(doc, key="undo-once")
+		self.assertEqual({call.args[0] for call in deleted.call_args_list}, {"ToDo", "Task"})
+		self.assertEqual((undone["status"], undone["replayed"]), ("Needs Review", False))
+		frappe.set_user("Administrator")
+		self.assertFalse(frappe.db.exists("Task", task))
+		self.assertEqual(frappe.db.count("ToDo", {"reference_type": "Task", "reference_name": task}), 0)
+		self.assertTrue(frappe.db.exists("Deleted Document", {"deleted_doctype": "Task", "deleted_name": task}))
+		self.assertEqual(self.review._actions(doc.name), [])
+		letter = self.letter_row(doc)
+		self.assertEqual({key: letter[key] for key in fields}, before)
+		self.assertEqual((letter.status, letter.review_outcome, letter.revision), ("Needs Review", "pending", confirmed.revision + 1))
+		for key in ("selected_customer", "customer_reason", "confirmed_customer", "confirmed_by", "confirmed_at", "confirmation_receipt_json", "no_actions_reason"):
+			self.assertFalse(letter[key], key)
+		event = frappe.db.get_value("Incoming Letter Event", {"letter": doc.name, "event_type": "undo_confirm"}, ["actor", "payload_json"], as_dict=True)
+		payload = json.loads(event.payload_json)
+		self.assertEqual((event.actor, payload["tasks"], payload["before"]["status"]), (self.operator.name, [task], "Completed"))
+		card = self.card(doc)
+		self.assertEqual((card["state"], card["undo_until"]), ("proposal", None))
+		self.assertTrue(self.undo_replay(doc, "undo-once")["replayed"])
+		again = self.run_confirm(doc, self.proposal_tasks(doc))
+		# A deleted Task name is never handed out again (its after-commit link cleanup would hit it).
+		self.assertNotEqual(again["actions"][0]["task"], task)
+		self.assertEqual(frappe.db.get_value("Task", again["actions"][0]["task"], "kanzlei_incoming_action_id"), again["actions"][0]["action_id"])
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 1)
+
+	def undo_replay(self, doc, key):
+		frappe.set_user(self.operator.name)
+		event = frappe.db.get_value("Incoming Letter Event", {"letter": doc.name, "event_type": "undo_confirm"}, "revision_before")
+		return self.review.undo_confirm(doc.name, event, key)
+
+	def test_undo_expires_after_ten_minutes(self):
+		doc, task = self.confirmed()
+		with self.later(doc, 601):
+			self.assertIsNone(self.card(doc)["undo_until"])
+			self.assert_refused(doc, task, "UNDO_EXPIRED")
+		with self.later(doc, 600):
+			self.assertIsNotNone(self.card(doc)["undo_until"])
+			self.assertEqual(self.undo(doc)["status"], "Needs Review")
+
+	def test_changed_task_cannot_be_undone(self):
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		item = frappe.get_doc("Task", task)
+		item.status = "Working"
+		item.save()
+		self.assertIsNone(self.card(doc)["undo_until"])
+		self.assert_refused(doc, task, "TASK_CHANGED")
+
+	def test_reassigned_task_cannot_be_undone(self):
+		from frappe.desk.form import assign_to
+
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		assign_to.add({"doctype": "Task", "name": task, "assign_to": [self.manager.name]})
+		self.assertIsNone(self.card(doc)["undo_until"])
+		self.assert_refused(doc, task, "TASK_CHANGED")
+
+	def test_other_operator_cannot_undo(self):
+		doc, task = self.confirmed()
+		self.assertIsNone(self.card(doc, self.manager.name)["undo_until"])
+		self.assert_refused(doc, task, "UNDO_EXPIRED", user=self.manager.name)
+		self.assertIsNotNone(self.card(doc)["undo_until"])
+
+	def test_task_delete_outside_undo_is_still_denied(self):
+		from kanzlei_erp.posteingang_task_access import undoing_confirmation
+
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		for context in (None, (doc.name, {"TASK-OTHER"}), ("OTHER-LETTER", {task})):
+			with self.subTest(context=context), self.assertRaises(frappe.PermissionError):
+				if context:
+					with undoing_confirmation(*context):
+						frappe.delete_doc("Task", task)
+				else:
+					frappe.delete_doc("Task", task)
+		self.assertTrue(frappe.db.exists("Task", task))
+		self.assertEqual(self.undo(doc)["status"], "Needs Review")
+
+	def test_legacy_confirm_cannot_be_undone(self):
+		from kanzlei_erp import posteingang_matching as matching
+
+		doc = self.letter()
+		frappe.set_user(self.operator.name)
+		matching.select_customer(doc.name, self.customer.name, "Synthetic legacy review", 1, frappe.generate_hash())
+		self.jobs.manual_review(doc.name, 2, frappe.generate_hash())
+		state = self.review.get_review_state(doc.name)
+		review = state["review"]
+		review.update(mode="confirm", human_verified=True, no_actions_reason="Synthetic legacy archive")
+		self.assertEqual(self.review.confirm(doc.name, review, state["document_fields"], frappe.generate_hash())["status"], "Completed")
+		self.assertIsNone(self.card(doc)["undo_until"])
+		revision = self.letter_row(doc).revision
+		with self.assertRaisesRegex(frappe.ValidationError, "UNDO_EXPIRED"):
+			self.undo(doc)
+		self.assertEqual((self.letter_row(doc).status, self.letter_row(doc).revision), ("Completed", revision))
+
+	def test_archive_without_tasks_can_be_undone(self):
+		doc = self.successful("AP01-03")
+		self.run_confirm(doc, [])
+		self.assertIsNotNone(self.card(doc)["undo_until"])
+		self.assertEqual(self.undo(doc)["status"], "Needs Review")
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.review_outcome, letter.no_actions_reason), ("pending", None))
+		self.assertEqual(self.card(doc)["state"], "proposal")
