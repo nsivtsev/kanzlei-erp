@@ -51,11 +51,15 @@ test('queue rejects older filter replies and exposes no cross-user response',asy
  calls[1]({user:'operator',items:[{letter:'new'}]});await b;calls[0]({user:'operator',items:[{letter:'old'}]});await a;
  assert.equal(client.rows[0].letter,'new');
 });
-test('page is operator scoped and includes an accessible three-panel layout',()=>{
+test('page is operator scoped and lays out rail, card and original with Desk variables',()=>{
  const root='kanzlei_erp/kanzlei_erp/page/posteingang/';
  assert.ok(fs.existsSync(root+'posteingang.json'),'AP-09 Page missing');
  assert.deepEqual(JSON.parse(fs.readFileSync(root+'posteingang.json')).roles,[{role:'Posteingang Operator'}]);
- const css=fs.readFileSync(root+'posteingang.css','utf8');assert.match(css,/@media/);assert.match(css,/focus-visible/);assert.match(css,/var\(--/);
+ const css=fs.readFileSync(root+'posteingang.css','utf8');
+ assert.match(css,/container-type:\s*inline-size/);assert.match(css,/@container \(max-width:\s*1099px\)/);assert.match(css,/@container \(max-width:\s*679px\)/);
+ assert.match(css,/prefers-reduced-motion/);assert.match(css,/focus-visible/);
+ for(const name of ['--card-bg','--border-color','--primary','--text-muted'])assert.ok(css.includes('var('+name),name);
+ assert.doesNotMatch(css.replace(/var\([^)]*\)/g,''),/#[0-9a-f]{3,6}\b/i,'fixed mockup colours must come from Desk variables');
 });
 test('a loaded letter does not inherit remote status from the previous letter',async()=>{
  const client=harness(async(op,args)=>state(args.letter));await client.load('one');client.remote=state('one',8);
@@ -99,18 +103,9 @@ test('a late nested visibility fetch cannot change the next letter status',async
  assert.equal(client.state.letter,'two');assert.equal(client.state.capabilities.enabled,true);
 });
 test('a superseded post-mutation load cannot navigate back to a correction',async()=>{
- const routes=[];const context={frappe:{pages:{posteingang:{}},set_route:(...args)=>routes.push(args)}};
+ const routes=[];const context={frappe:{pages:{posteingang:{}},set_route:(...args)=>routes.push(args),get_route:()=>['posteingang','one']}};
  vm.createContext(context);vm.runInContext(fs.readFileSync('kanzlei_erp/kanzlei_erp/page/posteingang/posteingang.js','utf8'),context);
  const prototype=vm.runInContext('PosteingangWorkspace.prototype',context);
- const page={visible:true,client:{state:{letter:'one'},mutate:async()=>({replacement:'replacement'}),load:async()=>null},syncControls(){},draw(){assert.fail('must not draw superseded state');},loadQueue:async()=>{},failure:()=>{}};
+ const page={visible:true,notice:{replaceChildren(){}},client:{state:{letter:'one'},mutate:async()=>({replacement:'replacement'}),load:async()=>null},settle:prototype.settle,label:()=>'',syncControls(){},draw(){assert.fail('must not draw superseded state');},loadQueue:async()=>{},failure:()=>{}};
  assert.equal(await prototype.run.call(page,'review.create_correction',{}),null);assert.equal(routes.length,0);
-});
-test('terminal analysis does not display a scheduled retry',()=>{
- const context={frappe:{pages:{posteingang:{}},datetime:{str_to_user:()=> '25.10.2026 12:00'}},__:(s)=>s};
- vm.createContext(context);vm.runInContext(fs.readFileSync('kanzlei_erp/kanzlei_erp/page/posteingang/posteingang.js','utf8'),context);
- const prototype=vm.runInContext('PosteingangWorkspace.prototype',context);const rendered=[];
- const run={status:'Succeeded',next_attempt_at:'2026-10-25 12:00:00.000001'};
- const page={client:{state:{status:'Completed',capabilities:{enabled:true},analysis:{run}},review:{dirty:false}},notice:{replaceChildren:()=>{rendered.length=0;}},node:(_parent,_tag,text)=>rendered.push(text),syncControls(){}};
- prototype.statusNotice.call(page);assert.deepEqual(rendered,['Completed']);
- run.status='Queued';prototype.statusNotice.call(page);assert.equal(rendered[1],'Next attempt no earlier than 25.10.2026 12:00');
 });

@@ -1,77 +1,67 @@
 frappe.pages['posteingang'].on_page_load = wrapper => {
- wrapper.ap09Ready=frappe.require('posteingang_workspace.bundle.js').then(()=>{wrapper.ap09=new PosteingangWorkspace(wrapper);return wrapper.ap09;});
+ wrapper.ap09Ready=frappe.require(['posteingang_workspace.bundle.js','posteingang_simple.bundle.js']).then(()=>{wrapper.ap09=new PosteingangWorkspace(wrapper);return wrapper.ap09;});
 };
 frappe.pages['posteingang'].on_page_show = async wrapper => {await wrapper.ap09Ready;wrapper.ap09?.show();};
 
+/* One-click Posteingang: a rail of letters, one proposal card, the original PDF. The server stays authoritative. */
 class PosteingangWorkspace {
- assessment(value){return __(({readable:'Readable',partial:'Partly readable',unreadable:'Unreadable',actions_found:'Actions proposed',none_found:'No actions proposed by AI',unknown:'Action assessment unknown',none:'Review the proposed Mandant before selecting it.',not_found:'No Mandant candidates found.',multiple_matches:'Several Mandant candidates match. An explicit decision is required.',multiple_addressees:'Several addressees require clarification before selecting one Mandant.'})[value] || 'Unknown');}
- deadlineLabel(deadline){return deadline.wording || __(({explicit_date:'Explicit date',relative:'Relative deadline',not_found:'No deadline stated',uncertain:'Uncertain deadline'})[deadline.kind] || 'Unknown');}
+ static ICONS={
+  up:'<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/>',file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',alert:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  flag:'<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  back:'<path d="M15 18l-6-6 6-6"/>',spin:'<path d="M21 12a9 9 0 1 1-6.2-8.6"/>',edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
+  redo:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',link:'<path d="M7 17 17 7M8 7h9v9"/>'
+ };
+ static CHIPS={ready:'check',need:'alert',busy:'spin',fail:'alert',done:'check'};
+ static AMBIGUITY={multiple_matches:'Several Mandants match the letter. Please choose one.',multiple_addressees:'The letter is addressed to several recipients. Please choose one Mandant.',not_found:'No Mandant was found in the letter. Please search for it.'};
+ static CONFLICTS=['REVISION_CONFLICT','CUSTOMER_CHANGED','STALE_RUN'];
+ // TT.MM.JJJJ (ISO only when allowed) -> ISO; null when empty; false when invalid.
+ static date(text,iso=false){
+  const value=String(text ?? '').trim();if(!value)return null;
+  let m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value),y,mo,d;
+  if(m)[,d,mo,y]=m;else if(iso && (m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(value)))[,y,mo,d]=m;else return false;
+  const t=new Date(Date.UTC(+y,+mo-1,+d));
+  return t.getUTCFullYear()===+y && t.getUTCMonth()===+mo-1 && t.getUTCDate()===+d ? `${y}-${mo}-${d}` : false;
+ }
+ static german(iso){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');return m ? `${m[3]}.${m[2]}.${m[1]}` : '';}
  constructor(wrapper) {
   this.page=frappe.ui.make_app_page({parent:wrapper,title:__('PDF inbox'),single_column:true});
   this.api=frappe.posteingang;this.client=new this.api.WorkspaceClient(this.transport.bind(this),()=>frappe.session.user);
-  this.filters={state:'review',uploaded_by:'all',query:'',sort:'oldest'};this.visible=false;this.dialogs=new Set();this.step=0;this.fieldIndex=0;
-  this.root=this.node(this.page.main[0],'div');this.root.className='posteingang-workspace';this.root.dataset.panel='queue';
-  this.documentHeader=this.node(this.root,'div');this.documentHeader.className='ap09-document-header';
-  this.button(this.documentHeader,'Back to inbox',async()=>{if(this.client.intent){this.failure(Error('UNKNOWN_OUTCOME'));return;}if(await this.clean())frappe.set_route('posteingang');});
-  this.documentTitle=this.node(this.documentHeader,'h2');
-  const tabs=this.node(this.documentHeader,'div');tabs.className='ap09-mobile-tabs';
-  this.button(tabs,'Original PDF',()=>this.panel('pdf'));this.button(tabs,'Back to review',()=>this.panel('review'));
-  this.steps=this.node(this.root,'nav');this.steps.className='ap09-steps';this.steps.setAttribute('aria-label',__('Review steps'));
-  this.notice=this.node(this.root,'div');this.notice.setAttribute('role','status');this.notice.className='ap09-notice';
-  const layout=this.node(this.root,'div');layout.className='ap09-layout';
-  this.queuePanel=this.node(layout,'section');this.queuePanel.className='ap09-panel ap09-queue';
-  this.pdfPanel=this.node(layout,'section');this.pdfPanel.className='ap09-panel ap09-pdf';
-  this.editor=this.node(layout,'section');this.editor.className='ap09-panel ap09-review';
-  this.node(this.queuePanel,'h2',__('Review incoming documents'));
-  this.node(this.queuePanel,'p',__('Check the original, select the Mandant and prepare the next steps.')).className='text-muted';
-  this.views=this.node(this.queuePanel,'nav');this.views.className='ap09-views';this.views.setAttribute('aria-label',__('Inbox views'));
-  for(const [value,label] of [['review','To review'],['processing','In progress'],['Needs Clarification','Needs clarification'],['history','Completed documents']]){
-   const button=this.button(this.views,label,()=>{this.filters.state=value;this.loadQueue();});button.dataset.view=value;
-  }
-  const filters=this.node(this.queuePanel,'div');filters.className='ap09-filters';
-  this.control(filters,'Search letters','',v=>{this.filters.query=v || '';clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>this.loadQueue(),300);},{max:140});
-  this.control(filters,'Sort','oldest',v=>{this.filters.sort=v;this.loadQueue();},{options:[['oldest','Oldest first'],['newest','Newest first']]});
-  this.button(filters,'Refresh',()=>this.loadQueue());
-  const advanced=this.node(this.queuePanel,'details');this.node(advanced,'summary',__('More filters'));
-  const extra=this.node(advanced,'div');extra.className='ap09-filters';
-  this.control(extra,'Uploaded by','all',v=>{this.filters.uploaded_by=v;this.loadQueue();},{options:[['all','All'],['me','Me']]});
-  this.stateFilter=this.control(extra,'Queue state','review',v=>{this.filters.state=v;this.loadQueue();},{options:[['review','To review'],['processing','In progress'],['open','Unfinished letters'],['history','History'],['all','All'],...['Received','Queued','Processing','Needs Review','Needs Clarification','Error','Completed','Cancelled'].map(s=>[s,s])]});
-  this.rows=this.node(this.queuePanel,'div');this.more=this.button(this.queuePanel,'More',()=>this.loadQueue(true));this.more.hidden=true;
-  this.node(this.queuePanel,'p',__('Tasks are created only after your final confirmation.')).className='ap09-queue-note text-muted';
-  this.panel('queue');
+  this.visible=false;this.stale=false;this.dialogs=new Set();this.letters=new Map();this.history=[];this.controls=[];this.targets={};this.pdfOpen=false;this.pdfPage=null;
+  this.root=this.node(this.page.main[0],'div');this.root.className='posteingang-workspace';this.root.dataset.view='list';this.root.dataset.pdf='false';
+  this.node(this.root,'p',__('Upload a PDF, check the proposal, accept it.')).className='pe-sub';
+  this.notice=this.node(this.root,'div');this.notice.className='pe-notice';this.notice.setAttribute('role','status');
+  // The query container; the fixed toast stays outside it.
+  const shell=this.node(this.root,'div');shell.className='pe-shell';
+  const body=this.node(shell,'div');body.className='pe-body';
+  this.rail=this.node(body,'aside');this.rail.className='pe-rail';this.rail.setAttribute('aria-label',__('Documents'));
+  this.drawDrop();this.lists=this.node(this.rail,'div');
+  this.main=this.node(body,'div');this.main.className='pe-main';
+  this.pdf=this.node(body,'aside');this.pdf.className='pe-pdf';this.pdf.setAttribute('aria-label',__('Original PDF'));
+  // Created once: a live region announces only content added to it later.
+  this.toast=this.node(this.root,'div');this.toast.className='pe-toast-region';this.toast.setAttribute('role','status');this.toast.setAttribute('aria-live','polite');
   this.routeHandler=()=>{if(this.onRoute())this.show();else this.hide();};
   frappe.router.on('change',this.routeHandler);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pause();else if(this.onRoute())this.show();});
-  window.addEventListener('beforeunload',event=>{if(this.client.review.dirty || this.client.intent){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(this.client.intent || [...this.letters.values()].some(ui=>ui.form?.dirty)){event.preventDefault();event.returnValue='';}});
  }
  node(parent,tag,value='') {const element=document.createElement(tag);element.textContent=value;parent.append(element);return element;}
- button(parent,label,handler,{mutation=false,disabled=false,requiresEnabled=true,primary=false}={}) {
-  const button=this.node(parent,'button',__(label));button.type='button';button.className='btn btn-default btn-sm';button.disabled=disabled;
-  if(primary)button.className='btn btn-primary btn-sm';
-  if(mutation){button.dataset.mutation='1';button.dataset.requiresEnabled=String(requiresEnabled);button.dataset.originalDisabled=disabled ? 'yes' : 'no';}button.addEventListener('click',handler);return button;
+ icon(parent,name){const span=this.node(parent,'span');span.className='pe-icon';span.setAttribute('aria-hidden','true');span.innerHTML=`<svg viewBox="0 0 24 24"${name==='spin' ? ' class="pe-spin"' : ''}>${PosteingangWorkspace.ICONS[name]}</svg>`;return span;}
+ button(parent,label,handler,{primary=false,link=false,large=false,icon=null,args=null,mutation=false,requiresEnabled=true}={}) {
+  const button=this.node(parent,'button');button.type='button';
+  button.className=link ? 'btn btn-link pe-link' : 'btn '+(primary ? 'btn-primary' : 'btn-default')+(large ? ' pe-btn-lg' : '');
+  if(icon)this.icon(button,icon);button.append(args ? __(label,args) : __(label));
+  if(mutation){button.dataset.mutation='1';button.dataset.requiresEnabled=String(requiresEnabled);this.controls.push(button);}
+  button.addEventListener('click',handler);return button;
  }
- control(parent,label,value,onchange,{type='text',options=null,disabled=false,max=null}={}) {
-  const wrap=this.node(parent,'div');wrap.className='ap09-field';
-  const fieldname='inbox_'+(++this.fieldIndex),initial=type==='checkbox' ? Number(!!value) : value ?? '';
-  // Like Frappe Layout, supply a document before constructing the control.
-  // A second initialization after Date's picker is mounted queues stale changes.
-  const field=frappe.ui.form.make_control({parent:wrap,doc:{[fieldname]:initial},df:{fieldname,label:__(label),fieldtype:options ? 'Select' : ({textarea:'Small Text',date:'Date',checkbox:'Check'}[type] || 'Data'),options:options?.map(([value,label])=>({value,label:__(label)})),onchange:()=>{if(!wrap.isConnected || field.$input?.prop('disabled'))return;onchange(type==='checkbox' ? !!field.get_value() : field.get_value() || null);}},render_input:true});
-  const input=field.$input[0];input.disabled=disabled;input.dataset.originalDisabled=disabled ? 'yes' : 'no';input.setAttribute('aria-label',__(label));if(max)input.maxLength=max;
-  if(!options && ['text','textarea'].includes(type))input.addEventListener('input',()=>{if(wrap.isConnected && !input.disabled)onchange(input.value || null);});
-  // A blur/change can be followed immediately by Save; do not wait for
-  // Frappe's asynchronous model callback before updating our review buffer.
-  if(type==='date')input.addEventListener('change',()=>{if(!wrap.isConnected || input.disabled)return;const date=field.get_value();onchange(date && frappe.datetime.validate(date) ? date : null);});
-  input.ap09Control=field;return input;
- }
- setValue(input,value){const field=input?.ap09Control;if(field){field.doc[field.df.fieldname]=value ?? '';field.set_input(value ?? '');}}
- disposeFields(parent){for(const element of parent.querySelectorAll('.frappe-control'))element.fieldobj?.datepicker?.destroy();}
- clearEditor(){this.disposeFields(this.editor);this.editor.replaceChildren();this.human=null;}
- panel(name){
-  this.root.dataset.panel=name;
-  this.documentHeader.hidden=name==='queue';this.steps.hidden=name==='queue';
-  if(name==='queue')this.page.set_primary_action(__('Upload PDF'),()=>this.api.open({onUploaded:()=>this.loadQueue(),onOpen:name=>this.select(name)}),'add').attr('aria-label',__('Upload PDF'));
-  else this.page.clear_primary_action();
- }
+ lockable(control){this.controls.push(control);return control;}
+ section(parent,title){const section=this.node(parent,'section');section.className='pe-sec';this.node(section,'h3',title).className='pe-sec-h';return section;}
+ id(state,key){return 'pe-'+String(state.letter).replace(/[^A-Za-z0-9_-]/g,'_')+'-'+key;}
+ person(user,name){return user===frappe.session.user ? __('Me') : name || user || __('Not assigned');}
+ clearMain(){this.main.replaceChildren();this.controls=[];this.targets={};}
+ clearPdf(){this.pdf.replaceChildren();this.frame=null;}
  onRoute(){return frappe.get_route()[0]==='posteingang';}
  async transport(operation,args) {
   const [module,method]=operation.split('.');
@@ -87,35 +77,54 @@ class PosteingangWorkspace {
  }
  message(error) {
   const messages={...this.api.analysis_messages,...this.api.matching_messages,...this.api.review_messages,
-   UNKNOWN_OUTCOME:'Resolve the unknown request before another operation.',DIRTY_REVIEW:'Save or discard the current review before continuing.'};
+   UNKNOWN_OUTCOME:'Resolve the unknown request before another operation.'};
   return __(messages[error.message] || 'The operation could not finish. Refresh and try again.');
  }
  failure(error){
   if(!this.visible)return;
-  if(error.message==='PERMISSION'){this.client.clear();this.pdfPanel.replaceChildren();this.clearEditor();this.rows.replaceChildren();this.queueSignature=null;this.documentTitle.textContent='';this.steps.replaceChildren();this.page.clear_primary_action();for(const d of this.dialogs)d.hide();}
-  this.notice.textContent=this.message(error);
+  const code=error?.message;
+  if(code==='PERMISSION'){
+   this.client.clear();this.letters.clear();this.history=[];this.cursor=null;this.clearMain();this.clearPdf();this.lists.replaceChildren();this.railSignature=null;this.hideToast();
+   for(const d of this.dialogs)d.hide();
+  }
+  this.notice.replaceChildren();this.node(this.notice,'p',this.message(error));
   if(this.client.intent)this.button(this.notice,'Check and retry the same request',()=>this.retry());
+  if(PosteingangWorkspace.CONFLICTS.includes(code))this.reload();
  }
- pause(){clearTimeout(this.queueTimer);clearTimeout(this.statusTimer);clearTimeout(this.searchTimer);}
- hide(){this.visible=false;this.pause();this.client.suspend();this.pdfPanel.replaceChildren();this.clearEditor();this.rows.replaceChildren();this.queueSignature=null;this.documentTitle.textContent='';this.steps.replaceChildren();for(const d of this.dialogs)d.hide();}
+ // A definitive conflict blocks every mutation until the letter is loaded again.
+ async reload(){
+  const letter=this.client.state?.letter;if(!letter)return;
+  try{
+   if(!await this.client.load(letter) || !this.visible)return;
+   this.draw();this.notice.replaceChildren();this.node(this.notice,'p',__('The letter changed. It was reloaded; check the card and try again.'));
+  }catch(error){this.failure(error);}
+ }
+ pause(){clearTimeout(this.queueTimer);clearTimeout(this.statusTimer);}
+ hide(){
+  this.visible=false;this.stale=true;this.pause();this.client.suspend();for(const d of this.dialogs)d.hide();
+  this.hideToast();this.clearMain();this.clearPdf();this.lists.replaceChildren();this.railSignature=null;this.notice.replaceChildren();
+ }
  async show(){
   if(!this.onRoute() || document.hidden)return;
   const name=frappe.get_route()[1] || null;
-  if(this.navigationPending)return;
-  if(this.client.state && this.client.state.letter!==name && this.client.review.dirty){
-   const previous=this.client.state.letter;this.visible=true;this.client.active=true;this.navigationPending=true;
-   try{await this.client.status();if(!this.client.state)return;const proceed=await this.clean();if(!proceed){frappe.set_route('posteingang',previous);return;}}catch(error){this.failure(error);return;}finally{this.navigationPending=false;}
-   return this.show();
-  }
   if(this.showing===name && this.visible)return;
   this.showing=name;this.visible=true;this.client.active=true;this.pause();
   try{
    if(name){
-    if(this.client.state?.letter===name && (this.client.review.dirty || this.client.intent))await this.client.status();
-    else if(!this.client.intent){for(const dialog of this.dialogs)dialog.hide();this.clearEditor();this.pdfPanel.replaceChildren();this.documentTitle.textContent='';this.steps.replaceChildren();await this.client.load(name);}
+    const same=this.client.state?.letter===name;
+    if(this.client.intent){if(same)await this.client.status();}
+    else if(!same || this.stale){
+     if(!same){this.notice.replaceChildren();this.pdfPage=null;for(const dialog of this.dialogs)dialog.hide();}
+     await this.client.load(name);
+    }
+    this.stale=false;
     if(!this.visible || !this.onRoute() || frappe.get_route()[1]!==name)return;
-    if(this.client.state?.letter===name)this.draw();else{this.pdfPanel.replaceChildren();this.clearEditor();this.failure(Error('UNKNOWN_OUTCOME'));}this.panel('review');
-   }else{this.pdfPanel.replaceChildren();this.clearEditor();this.node(this.editor,'p',__('Choose a letter from the queue.'));this.panel('queue');}
+    if(this.client.state?.letter===name)this.draw();else{this.clearMain();this.clearPdf();this.failure(Error('UNKNOWN_OUTCOME'));}
+   }else{
+    // The list view polls nothing new for the letter; reload it when it is opened again.
+    this.stale=true;this.root.dataset.view='list';this.root.dataset.pdf='false';this.clearMain();this.clearPdf();
+    this.node(this.main,'p',__('Choose a document from the list or upload a PDF.')).className='pe-empty';
+   }
    await this.loadQueue();this.schedule();
   }catch(error){this.failure(error);}finally{this.showing=undefined;}
  }
@@ -125,144 +134,120 @@ class PosteingangWorkspace {
  }
  scheduleQueue(){if(this.visible && !document.hidden)this.queueTimer=setTimeout(async()=>{await this.loadQueue();this.scheduleQueue();},15000);}
  scheduleStatus(){if(this.visible && !document.hidden)this.statusTimer=setTimeout(async()=>{
-  if(!this.statusBusy && !this.client.busy && this.client.state){this.statusBusy=true;const before=this.client.state;try{await this.client.status();if(!this.client.state){this.pdfPanel.replaceChildren();this.clearEditor();}else if(this.client.state!==before)this.draw();else {if(this.client.referencesChanged){this.client.referencesChanged=false;this.draw();}this.statusNotice();}}catch(error){this.failure(error);}finally{this.statusBusy=false;}}
+  if(!this.statusBusy && !this.client.busy && !this.operationBusy && this.client.state){
+   this.statusBusy=true;const before=this.client.state;
+   try{await this.client.status();if(!this.client.state){this.clearMain();this.clearPdf();}else if(this.client.state!==before || this.client.referencesChanged){this.client.referencesChanged=false;this.draw();}}
+   catch(error){this.failure(error);}finally{this.statusBusy=false;}
+  }
   this.scheduleStatus();
  },5000);}
  async loadQueue(more=false){
   if(!this.visible)return;if(this.queueBusy){this.queueAgain=true;return;}
   this.queueBusy=true;
-  try{const result=await this.client.queue({...this.filters},more ? this.cursor : null);if(!result || !this.visible)return;this.cursor=result.next_cursor;this.drawRows();this.more.hidden=!this.cursor;}
-  catch(error){this.failure(error);}finally{this.queueBusy=false;if(this.queueAgain){this.queueAgain=false;this.loadQueue();}}
+  try{
+   // One rows buffer per client: the open and done lists load one after the other.
+   const open=await this.client.queue({state:'open',uploaded_by:'all',query:'',sort:'oldest'},more ? this.cursor : null);
+   if(!open || !this.visible)return;this.cursor=open.next_cursor;
+   if(!more){
+    const sequence=this.client.queueSequence;
+    const done=await this.transport('get_queue',{filters:{state:'history',uploaded_by:'all',query:'',sort:'newest'},cursor:null});
+    if(sequence!==this.client.queueSequence || !this.client.active || !this.visible)return;
+    this.client.check(done);this.history=done.items;
+   }
+   this.drawRail();
+  }catch(error){if(error.message==='PERMISSION')this.client.clear();this.failure(error);}
+  finally{this.queueBusy=false;if(this.queueAgain){this.queueAgain=false;this.loadQueue();}}
  }
- drawRows(){
-  for(const button of this.views.querySelectorAll('[data-view]'))button.setAttribute('aria-pressed',String(button.dataset.view===this.filters.state));
-  this.setValue(this.stateFilter,this.filters.state);
-  const signature=JSON.stringify(this.client.rows);if(signature===this.queueSignature)return;this.queueSignature=signature;
-  this.rows.replaceChildren();if(!this.client.rows.length)this.node(this.rows,'p',__(this.filters.query ? 'No matching documents.' : 'No documents in this view.')).className='ap09-empty text-muted';
-  for(const row of this.client.rows){
-   const button=this.button(this.rows,row.file_name,()=>this.select(row.letter));button.className='ap09-letter';button.setAttribute('aria-current',String(this.client.state?.letter===row.letter));
-   button.textContent='';const identity=this.node(button,'span');identity.className='ap09-letter-identity';this.node(identity,'strong',row.letter_type || row.file_name);
-   this.node(identity,'span',[row.sender,row.file_name,frappe.datetime.str_to_user(row.received_at)].filter(Boolean).join(' · ')).className='text-muted small';
-   const customer=this.node(button,'span',row.customer?.customer_name || row.matching?.candidates?.map(c=>c.customer_name).join(' / ') || __('Not assigned to a Mandant'));
-   if(!row.customer)this.node(customer,'span',__('Not yet confirmed')).className='text-muted small';
-   const detail=this.node(button,'span');this.node(detail,'span',__(row.status)).className='indicator-pill '+({Completed:'green',Error:'red','Needs Clarification':'orange',Processing:'blue',Queued:'blue'}[row.status] || 'gray');
-   if(row.deadline?.proposed_date)this.node(detail,'span',__('Unverified proposed deadline')+': '+frappe.datetime.str_to_user(row.deadline.proposed_date)).className='text-muted small';
-   if(row.result_error || row.analysis.run?.error_code)this.node(detail,'span',this.message(Error(row.result_error || row.analysis.run.error_code))).className='text-danger small';
-   this.node(button,'span',__(row.status==='Completed' ? 'View result' : 'Open review')).className='ap09-open text-primary';
-  }
+ drawDrop(){
+  const drop=this.node(this.rail,'div');drop.className='pe-drop';
+  this.node(drop,'strong',__('Drop PDF here'));this.node(drop,'span',__('or'));
+  this.button(drop,'Choose PDF',()=>this.upload(),{primary:true,icon:'up'});
+  drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('pe-over');});
+  drop.addEventListener('dragleave',()=>drop.classList.remove('pe-over'));
+  drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('pe-over');this.upload([...(event.dataTransfer?.files || [])]);});
  }
- async clean(){
-  if(!this.client.review.dirty)return true;
-  return new Promise(resolve=>{
-   const dialog=new frappe.ui.Dialog({title:__('Unsaved review'),fields:[{fieldtype:'HTML',fieldname:'choices'}]});this.dialogs.add(dialog);let settled=false;
-   const end=value=>{settled=true;dialog.hide();resolve(value);};const root=dialog.fields_dict.choices.$wrapper[0];
-   this.button(root,'Save and continue',async()=>{if(await this.submit('save_review'))end(true);});
-   this.button(root,'Discard',()=>{this.client.review.dirty=false;end(true);});this.button(root,'Stay',()=>end(false));
-   dialog.onhide=()=>{this.dialogs.delete(dialog);if(!settled)resolve(false);};dialog.show();
-  });
+ upload(files=[]){this.api.open({files,onUploaded:()=>this.loadQueue(),onOpen:name=>this.select(name)});}
+ drawRail(){
+  const current=this.client.state?.letter,signature=JSON.stringify([this.client.rows,this.history,this.cursor,current]);
+  if(signature===this.railSignature)return;this.railSignature=signature;
+  this.lists.replaceChildren();
+  this.node(this.lists,'h3',__('Open · {0}',[this.client.rows.length+(this.cursor ? '+' : '')])).className='pe-rail-h';
+  if(!this.client.rows.length)this.node(this.lists,'p',__('No open documents.')).className='pe-rail-empty';
+  for(const row of this.client.rows)this.railItem(row,current);
+  if(this.cursor)this.button(this.lists,'More',()=>this.loadQueue(true),{link:true});
+  this.node(this.lists,'h3',__('Done')).className='pe-rail-h';
+  for(const row of this.history)this.railItem(row,current);
  }
- async select(name){if(this.operationBusy || this.client.busy)return;if(this.client.intent){this.failure(Error('UNKNOWN_OUTCOME'));return;}if(await this.clean())frappe.set_route('posteingang',name);}
+ railItem(row,current){
+  const item=this.node(this.lists,'button');item.type='button';item.className='pe-item';item.setAttribute('aria-current',String(row.letter===current));
+  item.addEventListener('click',()=>this.select(row.letter));
+  this.node(item,'span',row.sender || row.file_name).className='pe-item-t';
+  this.node(item,'span',row.letter_type || (row.received_at ? frappe.datetime.str_to_user(row.received_at) : row.file_name)).className='pe-item-s';
+  const chip=this.api.listChip(row),badge=this.node(item,'span');badge.className='pe-chip pe-chip-'+chip.tone;
+  this.icon(badge,PosteingangWorkspace.CHIPS[chip.tone]);this.node(badge,'span',__(chip.text));
+ }
+ select(name){
+  if(this.operationBusy || this.client.busy)return;
+  if(this.client.intent){this.failure(Error('UNKNOWN_OUTCOME'));return;}
+  frappe.set_route('posteingang',name);
+ }
  async run(operation,args){
   if(this.operationBusy)return null;
-  this.operationBusy=true;
-  try{
-   const pending=this.client.mutate(operation,args);this.syncControls();const result=await pending;
-   if(!result || !this.visible)return null;
-   const loaded=await this.client.load(result.replacement || this.client.state.letter);
-   if(!loaded || !this.visible)return null;
-   if(result.replacement)frappe.set_route('posteingang',result.replacement);
-   this.draw();await this.loadQueue();return result;
-  }catch(error){this.failure(error);return null;}finally{this.operationBusy=false;this.syncControls();}
+  this.operationBusy=true;this.notice.replaceChildren();
+  try{return await this.settle(operation,args,this.client.mutate(operation,args));}
+  catch(error){this.failure(error);return null;}finally{this.operationBusy=false;this.syncControls();}
  }
+ // Retries the frozen intent: same operation, same arguments, same request_key.
  async retry(){
-  if(this.operationBusy)return;
-  this.operationBusy=true;
-  try{
-   const result=await this.client.retry();if(!result || !this.visible)return;
-   const name=result.replacement || this.client.state.letter,loaded=await this.client.load(name);
-   if(!loaded || !this.visible)return;
-   frappe.set_route('posteingang',name);this.draw();await this.loadQueue();
-  }catch(error){this.failure(error);}finally{this.operationBusy=false;this.syncControls();}
+  if(this.operationBusy || !this.client.intent)return null;
+  const {operation,args}=this.client.intent;this.operationBusy=true;this.notice.replaceChildren();
+  try{return await this.settle(operation,args,this.client.retry());}
+  catch(error){this.failure(error);return null;}finally{this.operationBusy=false;this.syncControls();}
  }
- statusNotice(){
-  if(!this.client.state)return;
-  this.notice.replaceChildren();const state=this.client.remote || this.client.state;
-  this.node(this.notice,'span',__(state.status)+(this.client.review.dirty ? ' · '+__('Unsaved review') : ''));
-  if(this.human)this.setValue(this.human,Number(this.client.review.humanVerified));
-  if(!state.capabilities.enabled)this.node(this.notice,'p',__('New PDF intake is disabled'));
-  if(this.client.conflict){this.node(this.notice,'p',__('The letter changed. Your local review has been preserved.'));
-   this.button(this.notice,'Compare with saved review',()=>this.compare());}
-  const run=state.analysis?.run;
-  if(run?.error_code)this.node(this.notice,'p',this.message(Error(run.error_code)));
-  if(run?.status==='Queued' && run.next_attempt_at)this.node(this.notice,'p',__('Next attempt no earlier than')+' '+frappe.datetime.str_to_user(run.next_attempt_at));
-  if(this.client.intent)this.button(this.notice,'Check and retry the same request',()=>this.retry());
-  this.syncControls();
+ async settle(operation,args,pending){
+  const label=this.label(this.client.state);this.syncControls();
+  const result=await pending;
+  if(!result || !this.visible)return null;
+  const name=result.replacement || args.letter || this.client.state?.letter;
+  const loaded=await this.client.load(name);
+  if(!loaded || !this.visible)return null;
+  if(result.replacement || frappe.get_route()[1]!==name)frappe.set_route('posteingang',name);
+  if(operation==='review.confirm_simple'){this.letters.delete(name);this.showToast(args.tasks.length,label,name);}
+  if(operation==='review.undo_confirm'){this.letters.delete(name);this.hideToast();}
+  this.draw();await this.loadQueue();return result;
  }
  syncControls(){
   const locked=this.operationBusy || this.client.busy || !!this.client.intent || this.client.conflict;
-  for(const control of this.editor.querySelectorAll('input,select,textarea')){if(!control.dataset.originalDisabled)control.dataset.originalDisabled=control.disabled ? 'yes' : 'no';control.disabled=locked || control.dataset.originalDisabled==='yes';}
   const caps=this.client.remote?.capabilities || this.client.state?.capabilities;
-  for(const button of this.editor.querySelectorAll('[data-mutation]'))button.disabled=locked || button.dataset.originalDisabled==='yes' || !caps?.customer_write || (!caps?.enabled && button.dataset.requiresEnabled==='true');
-  for(const button of this.root.querySelectorAll('[data-navigation]'))button.disabled=locked;
- }
- async compare(){
-  const sequence=this.client.sequence,name=this.client.state.letter;
-  try{const current=await this.transport('get_letter_workspace',{letter:name});if(sequence!==this.client.sequence || !this.visible)return;this.client.check(current);
-   const dialog=new frappe.ui.Dialog({title:__('Compare with saved review'),size:'extra-large',fields:[{fieldtype:'HTML',fieldname:'versions'}]});this.dialogs.add(dialog);const box=dialog.fields_dict.versions.$wrapper[0];
-   const version=(label,fields,review)=>{this.node(box,'h3',__(label));for(const [key,title] of [['sender','Sender'],['document_date','Document date'],['letter_type','Letter type'],['summary','Summary']])this.node(box,'p',__(title)+': '+(fields[key] || __('Unknown')));
-    for(const action of review.actions){this.node(box,'h4',action.title);for(const [key,title] of [['description','Action description'],['decision','Decision'],['assigned_to','Responsible'],['internal_date','Internal work date'],['external_date','Confirmed external deadline'],['external_date_basis','External deadline basis'],['assignment_reason','Reason for no assignee'],['scheduling_reason','Reason for no internal date'],['rejection_reason','Rejection reason']])this.node(box,'p',__(title)+': '+(action[key] || __('Unknown')));}
-    this.node(box,'p',__('Reason for no actions')+': '+(review.no_actions_reason || __('Unknown')));this.node(box,'p',__('Clarification reason')+': '+(review.clarification_reason || __('Unknown')));};
-   version('Local review',this.client.review.documentFields,this.client.review.review);version('Saved review',current.review.document_fields,current.review.review);
-   const valid=()=>sequence===this.client.sequence && this.visible && !this.client.busy && !this.client.intent && this.onRoute() && frappe.get_route()[1]===name && frappe.session.user===this.client.owner && this.client.state?.letter===name;this.button(box,'Discard local review and load saved version',async()=>{if(!valid())return;dialog.hide();await this.client.load(name);this.draw();});dialog.onhide=()=>this.dialogs.delete(dialog);dialog.show();
-  }catch(error){this.failure(error);}
- }
- edited(){this.client.review.edited();if(this.human)this.human.checked=false;this.statusNotice();}
- evidence(parent,items){
-  for(const item of items || []){this.node(parent,'p',__(item.verification)+': '+(item.quote || ''));
-   if(Number.isInteger(item.page) && item.page>=1 && item.page<=this.client.state.original.page_count)this.button(parent,__('Page {0}',[item.page]),()=>{this.pdfPage=item.page;this.frame.src=this.client.state.original.preview_url+'#page='+item.page;this.panel('pdf');});}
- }
- draw(){
-  const state=this.client.state;if(!state || !this.visible)return;
-  if(this.activeLetter!==state.letter){this.activeLetter=state.letter;this.step=0;this.pdfPage=null;}
-  this.human=null;this.clearEditor();this.steps.replaceChildren();
-  this.documentTitle.textContent=state.original.file_name;
-  const finished=['Completed','Cancelled'].includes(state.status);
-  if(!finished)for(const [index,label] of ['Document and Mandant','Tasks and deadlines','Final review'].entries()){
-   const button=this.button(this.steps,(index+1)+'. '+__(label),()=>{if(index<this.step){this.step=index;this.client.review.humanVerified=false;this.draw();}},{disabled:index>this.step});
-   button.classList.add('ap09-step');button.setAttribute('aria-current',index===this.step ? 'step' : 'false');if(index<=this.step)button.dataset.navigation='1';
+  for(const control of this.controls){
+   if(control.dataset.originalDisabled===undefined)control.dataset.originalDisabled=control.disabled ? 'yes' : 'no';
+   control.disabled=locked || control.dataset.originalDisabled==='yes' || (control.dataset.mutation==='1' && (!caps?.customer_write || (!caps?.enabled && control.dataset.requiresEnabled==='true')));
   }
-  if(!this.frame?.isConnected || this.frame.dataset.original!==state.original.preview_url){
-  this.pdfPanel.replaceChildren();const pdfTools=this.node(this.pdfPanel,'div');pdfTools.className='ap09-pdf-tools';this.node(pdfTools,'h3',__('Original PDF'));
-  for(const [label,url] of [['Open original PDF',state.original.preview_url],['Download',state.original.download_url]]){const a=this.node(this.pdfPanel,'a',__(label));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.className='btn btn-default btn-sm mr-2';}
-  this.frame=this.node(this.pdfPanel,'iframe');this.frame.dataset.original=state.original.preview_url;this.frame.src=state.original.preview_url+(this.pdfPage ? '#page='+this.pdfPage : '');this.frame.title=__('Original PDF');
-  }
-  if(finished){this.drawResult();this.statusNotice();return;}
-  this.node(this.editor,'div',__('Step {0} of 3',[this.step+1])).className='text-muted small';
-  this.node(this.editor,'h3',__([ 'Document and Mandant','Tasks and deadlines','Final review'][this.step]));
-  this.node(this.editor,'p',__([ 'Check the original and explicitly select the Mandant.','Decide what needs to be done and plan the work.','Check exactly what will be created before confirming.'][this.step])).className='text-muted';
-  if(this.step===0)this.drawAnalysis();
-  this.matchingBox=this.node(this.editor,'section');this.matchingBox.hidden=this.step!==0;
-  if(this.step===0){this.drawMatching();this.drawProposal();}
-  this.drawReview();
-  this.receiptsBox=this.node(this.editor,'section');this.drawReceipt();this.correctionBox=this.node(this.editor,'section');this.drawCorrection();this.statusNotice();
  }
- drawAnalysis(){
-  const state=this.client.state,editable=state.review.allowed_operations.includes('save_review'),preparing=!editable || ['Received','Error'].includes(state.status);
-  const actions=this.node(this.editor,preparing ? 'div' : 'details');actions.className='ap09-analysis';
-  if(!preparing)this.node(actions,'summary',__('Analysis and document options'));
-  for(const op of state.analysis.allowed_operations)this.button(actions,({queue_analysis:'Start analysis',manual_review:'Switch to human review',cancel:'Cancel letter'})[op],async()=>{
-   if(!await this.clean())return;
-   const perform=reason=>this.run('analysis.'+op,{letter:state.letter,expected_revision:this.client.state.revision,...(reason ? {reason} : {})});
-   if(op==='cancel')this.prompt('Reason',values=>perform(values.value));
-   else if(op==='queue_analysis' && state.status==='Needs Review')this.ask(__('Analyze this letter again? Your current review edits will be preserved.'),()=>perform());else perform();
-  },{mutation:true,requiresEnabled:op!=='cancel',primary:preparing && op==='queue_analysis'});
-  if(preparing)this.node(actions,'p',__('Start the analysis or switch to human review to prepare a draft.')).className='text-muted small';
+ showToast(count,label,letter){
+  clearTimeout(this.toastTimer);this.toast.replaceChildren();
+  const toast=this.node(this.toast,'div');toast.className='pe-toast';
+  this.node(toast,'span',count ? (count===1 ? __('1 task created: {0}',[label]) : __('{0} tasks created: {1}',[count,label])) : __('Filed without task: {0}',[label]));
+  // Bound to the confirmed letter, not to whichever letter is open when it is clicked.
+  this.button(toast,'Undo',()=>this.undo(letter),{link:true});
+  this.toastTimer=setTimeout(()=>this.hideToast(),5000);
+ }
+ hideToast(){clearTimeout(this.toastTimer);this.toast.replaceChildren();}
+ async undo(letter){
+  if(this.operationBusy || this.client.busy)return null;
+  if(this.client.intent){this.failure(Error('UNKNOWN_OUTCOME'));return null;}
+  this.hideToast();
+  if(this.client.state?.letter!==letter){
+   this.operationBusy=true;
+   try{if(!await this.client.load(letter) || !this.visible)return null;}catch(error){this.failure(error);return null;}finally{this.operationBusy=false;}
+   this.stale=false;this.notice.replaceChildren();frappe.set_route('posteingang',letter);this.draw();
+  }
+  // No client countdown: the server answers UNDO_EXPIRED.
+  return this.run('review.undo_confirm',{letter,expected_revision:this.client.state.revision});
  }
  capture(){const sequence=this.client.sequence,name=this.client.state?.letter,owner=this.client.owner;return ()=>this.visible && this.client.active && !this.client.busy && !this.client.intent && !this.client.conflict && this.client.sequence===sequence && this.client.state?.letter===name && frappe.session.user===owner && this.onRoute() && frappe.get_route()[1]===name;}
  track(dialog){if(dialog){this.dialogs.add(dialog);const old=dialog.onhide;dialog.onhide=()=>{this.dialogs.delete(dialog);old?.();};}return dialog;}
  promptFields(fields,callback,title){const valid=this.capture();return this.track(frappe.prompt(fields,values=>{if(valid())return callback(values);},__(title)));}
- prompt(label,callback){return this.promptFields({fieldname:'value',fieldtype:'Small Text',label:__(label),reqd:1},callback,label);}
- ask(message,callback){const valid=this.capture();return this.track(frappe.confirm(message,()=>{if(valid())return callback();}));}
  async search(kind,choose){
   const name=this.client.state.letter,sequence=this.client.sequence,valid=this.capture();let start=0;
   const dialog=new frappe.ui.Dialog({title:__(kind==='customers' ? 'Find another Mandant' : 'Select assignee'),fields:[{fieldname:'text',fieldtype:'Data',label:__('Search')},{fieldname:'results',fieldtype:'HTML'}]});this.dialogs.add(dialog);
@@ -277,205 +262,355 @@ class PosteingangWorkspace {
   }catch(error){if(sequence===this.client.sequence){root.replaceChildren();this.failure(error);}}};
   dialog.set_primary_action(__('Search'),()=>load(false));dialog.onhide=()=>this.dialogs.delete(dialog);dialog.on_page_show=()=>load(false);dialog.show();
  }
- drawMatching(){
-  this.matchingBox.replaceChildren();const state=this.client.state,matching=state.matching;this.node(this.matchingBox,'h3',__('Mandant selection'));
-  this.button(this.matchingBox,'Refresh Mandant candidates',async()=>{try{await this.client.references();this.drawMatching();this.drawReceipt();this.drawCorrection();this.statusNotice();}catch(error){this.failure(error);}});
-  if(matching.selected_customer)this.node(this.matchingBox,'p',matching.selected_customer.customer_name+' · '+matching.customer_reason);
-  const select=async customer=>{if(!await this.clean())return;this.prompt('Reason',values=>this.run('matching.select_customer',{letter:state.letter,customer,reason:values.value,expected_revision:this.client.state.revision}));};
-  if(!matching.matching)this.node(this.matchingBox,'p',__('No completed analysis is available. You can search for a Mandant manually.'));
-  else{this.node(this.matchingBox,'p',this.assessment(matching.matching.ambiguity));for(const candidate of matching.matching.candidates){
-   this.node(this.matchingBox,'strong',candidate.customer_name);for(const reason of candidate.reasons){this.node(this.matchingBox,'p',__(reason.kind==='exact_identifier' ? 'Verified identifier match' : 'Matching name'));this.evidence(this.matchingBox,reason.evidence);}
-   for(const conflict of candidate.conflicts)this.node(this.matchingBox,'p',__(conflict.code==='identifier_conflict' ? 'Conflicting identifiers require review.' : 'The extracted name differs from this Customer.'));
-   if(candidate.can_select && matching.allowed_operations.includes('select_customer'))this.button(this.matchingBox,'Select Mandant',()=>select(candidate.customer),{mutation:true});
-  }}
-  if(matching.allowed_operations.includes('select_customer'))this.button(this.matchingBox,'Find another Mandant',async()=>{if(await this.clean())this.search('customers',row=>select(row.customer));},{mutation:true});
-  if(matching.allowed_operations.includes('clear_customer'))this.button(this.matchingBox,'Clear Mandant selection',()=>select(null),{mutation:true});
+ // Per-letter page state survives re-renders; the choice is rebuilt when the card itself changes.
+ ui(state){
+  const card=state.card,signature=card.state+'|'+(card.run || '');let ui=this.letters.get(state.letter);
+  if(!ui || ui.signature!==signature){
+   ui={signature,choice:this.api.cardChoice(card),customerName:null,extra:null,showMissing:false,dateErrors:{},mode:ui?.form ? ui.mode : null,form:ui?.form || null};
+   this.letters.set(state.letter,ui);
+  }
+  return ui;
  }
- drawProposal(){
-  const state=this.client.state,proposal=state.review.proposal;if(!proposal)return;
-  const box=this.node(this.editor,'details');this.node(box,'summary',__('Latest analysis proposal'));this.node(box,'p',this.assessment(proposal.extraction.readability)+' · '+this.assessment(proposal.extraction.action_assessment));
-  for(const warning of proposal.extraction.warnings || [])this.node(box,'p',warning.message);
-  for(const key of ['sender','document_date','letter_type','summary']){this.node(box,'p',proposal.extraction[key].value || __('Unknown'));this.evidence(box,proposal.extraction[key].evidence);}
-  for(const action of proposal.extraction.actions){this.node(box,'strong',action.title);this.node(box,'p',action.description);this.node(box,'p',this.deadlineLabel(action.deadline));this.evidence(box,action.evidence);}
-  if(state.review.allowed_operations.includes('apply_result'))this.button(this.editor,'Apply latest analysis result',async()=>{
-   if(!await this.clean())return;const replace=!!state.review.applied_run || !!this.client.review.review.actions.length || Object.values(this.client.review.documentFields).some(Boolean);
-   const apply=()=>this.run('review.apply_result',{letter:state.letter,expected_run:proposal.run,expected_revision:this.client.state.revision,acknowledge_replace:replace});
-   if(replace)this.ask(__('Replace the current review? Its previous version will be preserved in history.'),apply);else apply();
-  },{mutation:true});
+ docFields(state){
+  const saved=state.review?.document_fields || {},proposal=state.review?.proposal?.extraction;
+  const value=key=>saved[key] || proposal?.[key]?.value || null;
+  return {sender:value('sender'),letter_type:value('letter_type'),summary:value('summary')};
  }
- drawReview(){
-  const client=this.client.review,state=this.client.state,editable=state.review.allowed_operations.includes('save_review');
-  if(this.step===0){
-   const facts=this.node(this.editor,'section');facts.className='ap09-section';
-   this.node(facts,'h4',__('Document details'));
-   this.receiptDates(facts);
-   for(const [key,label,type,max] of [['sender','Sender','text',255],['document_date','Document date','date'],['letter_type','Letter type','text',255],['summary','Summary','textarea',4000]])this.control(facts,label,client.documentFields[key],value=>{client.editFields({[key]:value});this.edited();},{type,max,disabled:!editable});
-  }else if(this.step===1){
-   for(const action of client.review.actions)this.drawAction(action,editable);
-   if(state.review.allowed_operations.includes('add_manual_action'))this.button(this.editor,'Add manual action',async()=>{
-    if(!await this.clean())return;this.promptFields([{fieldname:'title',fieldtype:'Data',label:__('Action title'),reqd:1},{fieldname:'description',fieldtype:'Small Text',label:__('Action description'),reqd:1}],values=>this.run('review.add_manual_action',{letter:state.letter,...values,expected_revision:this.client.state.revision}),'Add manual action');
-   },{mutation:true});
-   if(client.review.actions.every(a=>a.decision==='reject')){
-    const section=this.node(this.editor,'section');section.className='ap09-section';this.node(section,'h4',__('Finish without tasks'));
-    this.node(section,'p',__('No tasks will be created. Explain your decision after checking the original.')).className='text-muted small';
-    this.control(section,'Reason for no actions',client.review.no_actions_reason,value=>{client.review.no_actions_reason=value;this.edited();},{type:'textarea',max:1000,disabled:!editable});
-   }
-  }else this.drawSummary();
-  if(editable){
-   if(this.step===2){
-    const proposal=state.review.proposal;
-    if(proposal && proposal.run!==state.review.applied_run){
-     this.node(this.editor,'p',__('A newer analysis is available. Apply it or explain why you are keeping this review.')).className='text-warning';
-     this.control(this.editor,'Reason for keeping the current review',client.retainedResult?.reason,value=>{this.edited();client.retainedResult=value ? {run:proposal.run,reason:value} : null;},{type:'textarea',max:1000});
-    }
-    this.human=this.control(this.editor,'I checked the original and all final decisions',client.humanVerified,value=>{client.humanVerified=value;},{type:'checkbox'});
-   }
-   this.errors=this.node(this.editor,'div');this.errors.className='ap09-errors text-danger';this.errors.setAttribute('role','alert');this.errors.tabIndex=-1;
-   const footer=this.node(this.editor,'div');footer.className='ap09-footer';
-   if(this.step>0){const back=this.button(footer,'Previous step',()=>{this.step--;client.humanVerified=false;this.draw();});back.dataset.navigation='1';}
-   this.button(footer,'Save review',async()=>{if(await this.submit('save_review'))frappe.show_alert({message:__('Review saved. No tasks have been created.'),indicator:'green'});},{mutation:true});
-   if(this.step<2)this.button(footer,this.step===0 ? 'Save and continue' : 'Save and review result',()=>this.nextStep(),{mutation:true,primary:true});
-   else if(state.review.allowed_operations.includes('confirm')){
-    const accepted=client.review.actions.filter(a=>a.decision==='accept').length;
-    this.button(footer,accepted===0 ? 'Finish without tasks' : accepted===1 ? 'Confirm and create one task' : __('Confirm and create {0} tasks',[accepted]),()=>this.confirm(),{mutation:true,primary:true});
-   }
-   this.button(this.editor,'Needs clarification',()=>this.prompt('Clarification reason',async values=>{client.review.clarification_reason=values.value;this.edited();await this.submit('save_review','clarification');}),{mutation:true});
+ label(state){return state ? this.docFields(state).sender || state.original?.file_name || state.letter : '';}
+ cardTitle(state){
+  const tasks=state.card.tasks;
+  if(tasks.length===1)return tasks[0].title;
+  if(tasks.length>1)return __('{0} tasks found',[tasks.length]);
+  return this.docFields(state).letter_type || state.original.file_name;
+ }
+ customerName(card,ui){
+  const id=ui.choice.customer;if(!id)return null;
+  return ui.customerName || (card.customer.suggested?.customer===id ? card.customer.suggested.customer_name : card.customer.candidates.find(c=>c.customer===id)?.customer_name) || id;
+ }
+ draw(){
+  const state=this.client.state;if(!state || !this.visible)return;
+  const active=document.activeElement,focus=active && this.main.contains?.(active) ? active.id : null;
+  const ui=this.ui(state),card=state.card;
+  this.clearMain();this.root.dataset.view='card';
+  this.button(this.main,'All documents',()=>frappe.set_route('posteingang'),{icon:'back'}).classList.add('pe-back-list');
+  const box=this.node(this.main,'section');box.className='pe-card';
+  if(card.state==='done')this.drawDone(box,state);
+  else if(card.state==='analyzing')this.drawAnalyzing(box,state);
+  else if(card.state==='draft' || ui.mode==='manual')this.drawManual(box,state,ui);
+  else if(card.state==='failed')this.drawFailed(box,state,ui);
+  else if(card.state==='not_started')this.drawNotStarted(box,state,ui);
+  else this.drawProposal(box,state,ui);
+  this.drawCorrection(box,state);
+  this.drawPdf(state);this.drawRail();this.syncControls();
+  if(focus)document.getElementById(focus)?.focus();
+ }
+ drawHead(box,state,{title,summary}={}){
+  const fields=this.docFields(state),original=state.original,head=this.node(box,'header');head.className='pe-card-head';
+  const row=this.node(head,'div');row.className='pe-head-row';const grow=this.node(row,'div');grow.className='pe-grow';
+  const meta=this.node(grow,'div');meta.className='pe-meta';
+  for(const part of [fields.sender || original.file_name,fields.letter_type])if(part)this.node(meta,'span',part);
+  // Read-only: the receipt date is set in the upload dialog; no operation changes it later.
+  this.node(meta,'span',original.received_date_known && original.received_date ? __('Received: {0}',[frappe.datetime.str_to_user(original.received_date)]) : __('Received: unknown'));
+  this.node(grow,'h2',title ?? this.cardTitle(state));
+  const text=summary===undefined ? fields.summary : summary;if(text)this.node(grow,'p',text).className='pe-summary';
+  const actions=this.node(row,'div');actions.className='pe-head-actions';
+  const toggle=this.button(actions,this.pdfOpen ? 'Hide original' : 'Original',()=>{this.pdfOpen=!this.pdfOpen;if(!this.pdfOpen)this.pdfPage=null;this.draw();},{icon:'eye'});
+  toggle.setAttribute('aria-pressed',String(this.pdfOpen));
+  if(state.card.state!=='done' && state.analysis.allowed_operations.includes('cancel'))this.moreMenu(actions,state);
+ }
+ // The only exit for mail that belongs to no Mandant: confirm_simple requires one.
+ moreMenu(parent){
+  const menu=this.node(parent,'details');menu.className='pe-more';
+  const summary=this.node(menu,'summary','…');summary.setAttribute('aria-label',__('More actions'));summary.title=__('More actions');
+  const list=this.node(menu,'div');list.className='pe-more-menu';
+  this.button(list,'Discard document',()=>{menu.open=false;this.discard();},{mutation:true,requiresEnabled:false});
+ }
+ discard(){
+  const state=this.client.state;if(!state)return;
+  this.promptFields({fieldname:'value',fieldtype:'Small Text',label:__('Reason'),reqd:1,description:__('For example advertising, misdirected mail or a wrong upload. No task is created.')},
+   values=>this.run('analysis.cancel',{letter:state.letter,expected_revision:this.client.state.revision,reason:values.value}),'Discard document');
+ }
+ startAnalysis(){const state=this.client.state;return this.run('analysis.queue_analysis',{letter:state.letter,expected_revision:state.revision});}
+ pageLink(parent,page){
+  const count=this.client.state?.original.page_count;
+  if(!Number.isInteger(page) || page<1 || (count && page>count))return null;
+  const link=this.button(parent,'p. {0}',()=>this.openPage(page),{link:true,args:[page]});link.setAttribute('aria-label',__('Show page {0} of the original',[page]));return link;
+ }
+ openPage(page){this.pdfOpen=true;this.pdfPage=page;this.draw();}
+ drawPdf(state){
+  this.root.dataset.pdf=String(this.pdfOpen);
+  if(!this.pdfOpen){this.clearPdf();return;}
+  const original=state.original,src=original.preview_url+(this.pdfPage ? '#page='+this.pdfPage : '');
+  if(this.frame?.isConnected && this.frame.dataset.original===original.preview_url){if(this.frame.dataset.src!==src){this.frame.dataset.src=src;this.frame.src=src;}return;}
+  this.clearPdf();
+  const bar=this.node(this.pdf,'div');bar.className='pe-pdf-bar';
+  this.button(bar,'Back to proposal',()=>{this.pdfOpen=false;this.pdfPage=null;this.draw();},{icon:'back'}).classList.add('pe-back-pdf');
+  const pages=original.page_count;
+  this.node(bar,'span',[original.file_name,pages ? (pages===1 ? __('1 page') : __('{0} pages',[pages])) : null].filter(Boolean).join(' · ')).className='pe-grow';
+  for(const [label,url] of [['Open original PDF',original.preview_url],['Download',original.download_url]]){const a=this.node(bar,'a',__(label));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.className='btn btn-default btn-sm';}
+  this.frame=this.node(this.pdf,'iframe');this.frame.dataset.original=original.preview_url;this.frame.dataset.src=src;this.frame.src=src;this.frame.title=__('Original PDF');
+ }
+ drawProposal(box,state,ui){
+  this.drawHead(box,state);
+  this.node(box,'p',__("Assistant's proposal · please compare briefly with the original")).className='pe-strip';
+  this.drawCustomer(box,state,ui);this.drawTasks(box,state,ui);this.drawFooter(box,state,ui);
+ }
+ drawCustomer(box,state,ui){
+  const card=state.card,section=this.section(box,__('Mandant')),suggested=card.customer.suggested;
+  if(suggested){
+   const who=this.node(section,'div');who.className='pe-who';this.node(who,'strong',suggested.customer_name);
+   const why=this.node(who,'span',suggested.why);why.className='pe-why';if(suggested.page){why.append(' · ');this.pageLink(why,suggested.page);}
+   return;
+  }
+  const missing=ui.showMissing && !ui.choice.customer,need=this.node(section,'div');need.className='pe-need';
+  this.node(need,'p',__(PosteingangWorkspace.AMBIGUITY[card.customer.ambiguity] || 'Please choose the Mandant.')).className='pe-need-label';
+  const group=this.node(need,'div');group.setAttribute('role','radiogroup');group.setAttribute('aria-label',__('Mandant'));
+  const options=[...card.customer.candidates];
+  if(ui.extra && !options.some(c=>c.customer===ui.extra.customer))options.push({...ui.extra,why:__('Chosen by search'),can_select:true});
+  let first=null;
+  for(const candidate of options){
+   const option=this.node(group,'label');option.className='pe-opt'+(ui.choice.customer===candidate.customer ? ' pe-selected' : '')+(candidate.can_select ? '' : ' pe-disabled');
+   const input=this.node(option,'input');input.type='radio';input.name=this.id(state,'customer');input.value=candidate.customer;input.checked=ui.choice.customer===candidate.customer;input.disabled=!candidate.can_select;
+   input.addEventListener('change',()=>{if(!input.checked)return;ui.choice.customer=candidate.customer;ui.customerName=candidate.customer_name;this.draw();});
+   this.lockable(input);if(candidate.can_select)first||=input;
+   const text=this.node(option,'span');this.node(text,'strong',candidate.customer_name);this.node(text,'span',candidate.why).className='pe-why';
+   if(!candidate.can_select)this.node(text,'span',__('Read-only Mandant; selection requires write access.')).className='pe-why';
+  }
+  const search=this.button(need,'Search other Mandant',()=>this.search('customers',row=>{ui.choice.customer=row.customer;ui.customerName=row.customer_name;ui.extra={customer:row.customer,customer_name:row.customer_name};this.draw();}),{link:true});
+  if(missing){const error=this.node(need,'p',__('Select the Mandant.'));error.className='pe-error';error.id=this.id(state,'customer-error');group.setAttribute('aria-describedby',error.id);}
+  this.targets.customer={box:need,input:first || search};
+ }
+ drawTasks(box,state,ui){
+  const card=state.card,tasks=card.tasks;
+  if(!tasks.length){
+   const section=this.section(box,__('Tasks')),item=this.node(section,'div');item.className='pe-task';
+   this.node(item,'strong',__('No task needed'));this.node(item,'p',card.no_task_reason || __('The assistant found no task in the letter.'));return;
+  }
+  const multi=tasks.length>1,count=ui.choice.selected.filter(Boolean).length;
+  const section=this.section(box,multi ? __('Tasks · {0} of {1} selected',[count,tasks.length]) : __('Task'));
+  const missing=new Set(ui.showMissing ? this.api.missingFields(card,ui.choice).map(m=>m.key) : []);
+  tasks.forEach((task,i)=>this.drawTask(section,state,ui,task,i,multi,missing));
+ }
+ fact(parent,icon,key,value,hint){
+  const fact=this.node(parent,'div');fact.className='pe-fact';const k=this.node(fact,'div');k.className='pe-fact-k';this.icon(k,icon);k.append(__(key));
+  if(value!==null)this.node(fact,'div',value).className='pe-fact-v';
+  const h=this.node(fact,'div',hint ? __(hint) : '');h.className='pe-fact-h';return {fact,hint:h};
+ }
+ drawTask(section,state,ui,task,i,multi,missing){
+  const box=this.node(section,'div');box.className='pe-task'+(ui.choice.selected[i] ? '' : ' pe-off');
+  const top=this.node(box,'div');top.className='pe-task-top';
+  if(multi){
+   const check=this.node(top,'input');check.type='checkbox';check.checked=!!ui.choice.selected[i];check.setAttribute('aria-label',__('Accept {0}',[task.title]));
+   check.addEventListener('change',()=>{ui.choice.selected[i]=check.checked;this.draw();});this.lockable(check);
+  }
+  const head=this.node(top,'div');this.node(head,'strong',task.title);if(task.description)this.node(head,'p',task.description);
+  const facts=this.node(box,'div');facts.className='pe-facts';
+  const deadline=task.deadline,entered=['relative','uncertain'].includes(deadline.kind);
+  if(deadline.kind==='explicit_date'){
+   const {fact,hint}=this.fact(facts,'flag','Deadline in the letter',frappe.datetime.str_to_user(deadline.date),null);fact.classList.add('pe-legal');
+   if(deadline.verified && deadline.page)this.pageLink(hint,deadline.page);
+  }else if(entered){
+   const id=this.id(state,'deadline-'+i),value=ui.choice.deadlines[i] || '',fact=this.node(facts,'div');
+   fact.className='pe-fact '+(PosteingangWorkspace.date(value) ? 'pe-legal' : 'pe-need');
+   const label=this.node(fact,'label');label.className='pe-fact-k';label.setAttribute('for',id);this.icon(label,'flag');label.append(__('Enter deadline'));
+   const input=this.node(fact,'input');input.type='text';input.id=id;input.inputMode='numeric';input.autocomplete='off';input.placeholder=__('DD.MM.YYYY');input.value=value;
+   input.addEventListener('input',()=>{ui.choice.deadlines[i]=input.value;});this.lockable(input);
+   const hint=this.node(fact,'div',__('Not computed'));hint.className='pe-fact-h';hint.id=id+'-hint';
+   const error=ui.dateErrors[i] ? 'Enter the date as DD.MM.YYYY.' : missing.has('deadline:'+i) ? 'Enter the deadline date from the letter.' : null;
+   if(error){const e=this.node(fact,'div',__(error));e.className='pe-error';e.id=id+'-error';input.setAttribute('aria-invalid','true');}
+   input.setAttribute('aria-describedby',[hint.id,error && id+'-error'].filter(Boolean).join(' '));
+   this.targets['deadline:'+i]={box:fact,input};
+  }else this.fact(facts,'flag','Deadline in the letter',__('none'),'not stated');
+  const planned=deadline.kind==='explicit_date' ? '5 working days before the deadline' : deadline.kind==='not_found' ? 'No deadline: in 7 days' : 'Calculated from the deadline you enter';
+  this.fact(facts,'cal','Work date',task.internal_date ? frappe.datetime.str_to_user(task.internal_date) : '–',planned);
+  this.fact(facts,'user','Responsible',this.person(task.assigned_to,task.assigned_to_name),null);
+  const quote=deadline.quote || deadline.wording;
+  if(quote){
+   const line=this.node(box,'p');line.className='pe-quote';line.append(__('In the letter:')+' ');this.node(line,'q',quote);
+   if(!deadline.verified)this.node(line,'span',__('unverified')).className='pe-unverified';
+   else if(entered && deadline.page){line.append(' · ');this.pageLink(line,deadline.page);}
   }
  }
- drawAction(action,editable){
-  const section=this.node(this.editor,'section');section.className='ap09-action';section.dataset.actionId=action.action_id;
-  const render=()=>{
-   this.disposeFields(section);section.replaceChildren();const client=this.client.review;
-   const edit=(key,value)=>{client.editAction(action.action_id,{[key]:value});this.edited();};
-   const change=(key,value)=>{edit(key,value);render();this.syncControls();};
-   this.node(section,'h4',action.title || __('Action title'));
-   this.control(section,'Decision',action.decision,value=>{edit('decision',value);if(value==='accept')client.review.no_actions_reason=null;this.draw();},{options:[['pending','Pending'],['accept','Accept action'],['reject','Reject action']],disabled:!editable});
-   if(action.decision==='reject'){
-    this.control(section,'Rejection reason',action.rejection_reason,value=>edit('rejection_reason',value),{type:'textarea',max:1000,disabled:!editable});return;
+ drawFooter(box,state,ui){
+  const card=state.card,action=this.api.primaryAction(card,ui.choice),foot=this.node(box,'footer');foot.className='pe-foot';
+  const row=this.node(foot,'div');row.className='pe-foot-row';
+  this.button(row,action.label,()=>this.accept(),{primary:true,large:true,mutation:true,args:[action.count],icon:action.kind==='archive' ? 'archive' : 'check'});
+  this.button(row,'Create manually',()=>{ui.mode='manual';this.draw();},{large:true,icon:'edit'});
+  if(ui.showMissing)this.missingLine(foot,state,ui);
+  const name=this.customerName(card,ui) || __('the selected Mandant');
+  let note;
+  if(action.kind==='accept')note=action.count===1 ? __('Creates 1 task for {0}. With “Accept” you confirm Mandant, deadline and task.',[name]) : __('Creates {0} tasks for {1}. With “Accept {0} tasks” you confirm Mandant, deadlines and tasks.',[action.count,name]);
+  else note=card.tasks.length ? __('No task selected. The letter is only filed.') : __('The letter is filed with {0} without a task.',[name]);
+  this.node(foot,'p',note).className='pe-foot-note';
+  if(!state.capabilities.enabled)this.node(foot,'p',__('New PDF intake is disabled')).className='pe-foot-note';
+ }
+ missingLine(foot,state,ui){
+  const items=this.api.missingFields(state.card,ui.choice).map(m=>({key:m.key,text:m.text}));
+  for(const index of Object.keys(ui.dateErrors))if(!items.some(m=>m.key==='deadline:'+index))items.push({key:'deadline:'+index,text:'Enter the date as DD.MM.YYYY.'});
+  if(!items.length)return;
+  const line=this.node(foot,'div');line.className='pe-foot-err';line.setAttribute('role','alert');this.icon(line,'alert');line.append(__('Still missing:')+' ');
+  items.forEach((item,index)=>{if(index)line.append(', ');this.button(line,item.text,()=>this.jump(item.key),{link:true});});
+ }
+ jump(key){
+  const target=this.targets[key];if(!target)return;
+  const smooth=!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  target.box.scrollIntoView?.({block:'center',behavior:smooth ? 'smooth' : 'auto'});
+  target.box.classList.remove('pe-flash');void target.box.offsetWidth;target.box.classList.add('pe-flash');target.input?.focus?.();
+ }
+ // Never blocked in advance: a click on a card with a gap points at the gap instead.
+ accept(){
+  const state=this.client.state;if(!state)return null;
+  const card=state.card,ui=this.ui(state);ui.dateErrors={};
+  card.tasks.forEach((task,i)=>{if(ui.choice.selected[i] && ['relative','uncertain'].includes(task.deadline.kind) && PosteingangWorkspace.date(ui.choice.deadlines[i])===false)ui.dateErrors[i]=true;});
+  const missing=this.api.missingFields(card,ui.choice),invalid=Object.keys(ui.dateErrors);
+  let payload=null;
+  if(!missing.length && !invalid.length){try{payload=this.api.simplePayload(card,ui.choice);}catch{payload=null;}}
+  if(!payload){ui.showMissing=true;this.draw();this.jump(missing[0]?.key || 'deadline:'+invalid[0]);return null;}
+  ui.showMissing=false;return this.confirm(payload);
+ }
+ confirm(payload){const state=this.client.state;return this.run('review.confirm_simple',{letter:state.letter,expected_revision:state.revision,...payload});}
+ manualForm(state,ui){
+  if(ui.form)return ui.form;
+  const card=state.card,choice=ui.choice,picked=card.tasks.filter((_task,i)=>choice.selected[i]!==false);
+  const rows=(picked.length ? picked : [null]).map(task=>this.formRow(task,task && ['relative','uncertain'].includes(task.deadline.kind) ? choice.deadlines[card.tasks.indexOf(task)] : null));
+  ui.form={customer:choice.customer ? {customer:choice.customer,customer_name:this.customerName(card,ui)} : null,rows,errors:{},dirty:false};
+  return ui.form;
+ }
+ formRow(task=null,entered=null){
+  const deadline=task?.deadline;
+  return {title:task?.title || '',description:task?.description || '',
+   external_date:entered || (deadline?.kind==='explicit_date' ? PosteingangWorkspace.german(deadline.date) : ''),
+   internal_date:PosteingangWorkspace.german(task?.internal_date),
+   // The server requires an assignee; without one the current user is responsible.
+   assigned_to:task?.assigned_to || frappe.session.user,assigned_to_name:task?.assigned_to ? task.assigned_to_name : null};
+ }
+ formField(parent,state,key,label,{full=false,optional=false,hint=null,error=null,control='input',value='',placeholder=null,onInput=null}={}){
+  const id=this.id(state,key),wrap=this.node(parent,'div');wrap.className='pe-field'+(full ? ' pe-full' : '');
+  const caption=this.node(wrap,'label',__(label));caption.setAttribute('for',id);if(optional)this.node(caption,'span',' '+__('(optional)')).className='pe-muted';
+  let input=null;
+  if(control){
+   input=this.node(wrap,control);input.id=id;if(control==='input'){input.type='text';input.autocomplete='off';}
+   if(placeholder)input.placeholder=__(placeholder);input.value=value ?? '';input.addEventListener('input',()=>onInput(input.value));this.lockable(input);
+  }
+  if(hint){const h=this.node(wrap,'p',__(hint));h.className='pe-hint';h.id=id+'-hint';}
+  if(error){const e=this.node(wrap,'p',__(error));e.className='pe-error';e.id=id+'-error';input?.setAttribute('aria-invalid','true');}
+  const described=[hint && id+'-hint',error && id+'-error'].filter(Boolean).join(' ');if(input && described)input.setAttribute('aria-describedby',described);
+  this.targets[key]={box:wrap,input};
+  return {wrap,input,id};
+ }
+ drawManual(box,state,ui){
+  const card=state.card,form=this.manualForm(state,ui),draft=card.state==='draft',errors=form.errors;
+  this.drawHead(box,state);
+  const section=this.section(box,card.tasks.length ? __(draft ? 'Create task manually · prefilled from the saved draft' : 'Create task manually · prefilled from the proposal') : __('Create task manually'));
+  const grid=this.node(section,'div');grid.className='pe-form';
+  const customer=this.formField(grid,state,'customer','Mandant',{full:true,control:null,error:errors.customer});
+  const picked=this.node(customer.wrap,'div');picked.className='pe-picked';this.node(picked,'span',form.customer?.customer_name || __('Not selected'));
+  const search=this.button(picked,form.customer ? 'Change' : 'Search Mandant',()=>this.search('customers',row=>{form.customer={customer:row.customer,customer_name:row.customer_name};form.dirty=true;delete form.errors.customer;this.draw();}),{link:!!form.customer});
+  search.id=customer.id;if(errors.customer)search.setAttribute('aria-describedby',customer.id+'-error');this.lockable(search);this.targets.customer.input=search;
+  form.rows.forEach((row,i)=>{
+   const group=this.node(grid,'fieldset');group.className='pe-full pe-task-form';
+   if(form.rows.length>1)this.node(group,'legend',__('Task {0}',[i+1]));
+   const inner=this.node(group,'div');inner.className='pe-form';
+   const edit=key=>value=>{row[key]=value;form.dirty=true;};
+   this.formField(inner,state,'title-'+i,'Task title',{full:true,value:row.title,onInput:edit('title'),error:errors['title-'+i],placeholder:'e.g. Check the notice'});
+   this.formField(inner,state,'description-'+i,'Description',{full:true,optional:true,control:'textarea',value:row.description,onInput:edit('description')});
+   this.formField(inner,state,'external-'+i,'Deadline from the letter',{optional:true,hint:'Only a date stated in the letter',value:row.external_date,onInput:edit('external_date'),error:errors['external-'+i],placeholder:'DD.MM.YYYY'});
+   this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:edit('internal_date'),error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
+   const who=this.formField(inner,state,'assignee-'+i,'Responsible',{control:null}),value=this.node(who.wrap,'div');value.className='pe-picked';
+   this.node(value,'span',this.person(row.assigned_to,row.assigned_to_name));
+   const change=this.button(value,'Change',()=>this.search('assignees',person=>{row.assigned_to=person.user;row.assigned_to_name=person.full_name || person.user;form.dirty=true;this.draw();}),{link:true});
+   change.id=who.id;this.lockable(change);
+   if(form.rows.length>1)this.lockable(this.button(group,'Remove task',()=>{form.rows.splice(i,1);form.errors={};form.dirty=true;this.draw();},{link:true}));
+  });
+  this.lockable(this.button(section,'+ Another task',()=>{form.rows.push(this.formRow());form.dirty=true;this.draw();this.targets['title-'+(form.rows.length-1)]?.input?.focus?.();},{link:true}));
+  const foot=this.node(box,'footer');foot.className='pe-foot';const row=this.node(foot,'div');row.className='pe-foot-row';
+  this.button(row,form.rows.length>1 ? 'Create {0} tasks' : 'Create task',()=>this.submitManual(true),{primary:true,large:true,mutation:true,args:[form.rows.length],icon:'check'});
+  if(!draft)this.button(row,'Cancel',()=>{ui.mode=null;ui.form=null;this.draw();},{large:true});
+  this.node(row,'span').className='pe-grow';
+  this.button(row,'File without task',()=>this.submitManual(false),{link:true,mutation:true});
+  if(Object.keys(errors).length){const line=this.node(foot,'div');line.className='pe-foot-err';line.setAttribute('role','alert');this.icon(line,'alert');line.append(__('Please check the marked fields.'));}
+  if(!state.capabilities.enabled)this.node(foot,'p',__('New PDF intake is disabled')).className='pe-foot-note';
+ }
+ submitManual(withTasks){
+  const state=this.client.state;if(!state)return null;
+  const ui=this.ui(state),form=this.manualForm(state,ui),errors={};
+  if(!form.customer)errors.customer='Select the Mandant.';
+  if(withTasks)form.rows.forEach((row,i)=>{
+   if(!row.title.trim())errors['title-'+i]='Enter the task title.';
+   if(PosteingangWorkspace.date(row.external_date,true)===false)errors['external-'+i]='Enter the date as DD.MM.YYYY.';
+   if(PosteingangWorkspace.date(row.internal_date,true)===false)errors['internal-'+i]='Enter the date as DD.MM.YYYY.';
+  });
+  form.errors=errors;const first=Object.keys(errors)[0];
+  if(first){this.draw();this.jump(first);return null;}
+  return this.confirm(this.api.manualPayload({customer:form.customer.customer,rows:withTasks ? form.rows.map(row=>({...row,title:row.title.trim()})) : []}));
+ }
+ stateBlock(box,tone,icon,title,text){
+  const block=this.node(box,'div');block.className='pe-state pe-'+tone;const mark=this.node(block,'div');mark.className='pe-state-icon';this.icon(mark,icon);
+  this.node(block,'h3',__(title));if(text)this.node(block,'p',__(text));return block;
+ }
+ drawAnalyzing(box,state){
+  box.setAttribute('aria-busy','true');
+  this.drawHead(box,state,{title:state.original.file_name,summary:__('The assistant is reading the letter …')});
+  for(const [title,widths] of [['Mandant',[45,30]],['Task',[70,90,60]]]){const section=this.section(box,__(title));for(const width of widths){const bar=this.node(section,'div');bar.className='pe-sk';bar.style.width=width+'%';}}
+  const foot=this.node(box,'footer');foot.className='pe-foot';const line=this.node(foot,'p');line.className='pe-foot-note';
+  this.icon(line,'spin');line.append(__('Usually under a minute. You can work on other documents meanwhile.'));
+  const run=state.analysis.run;
+  if(run?.status==='Queued' && run.next_attempt_at)this.node(foot,'p',__('Next attempt no earlier than')+' '+frappe.datetime.str_to_user(run.next_attempt_at)).className='pe-foot-note';
+ }
+ drawFailed(box,state,ui){
+  this.drawHead(box,state,{summary:null});
+  const block=this.stateBlock(box,'bad','alert','Automatic analysis failed','The letter could not be read reliably. Please check the original and create the task yourself. This does not mean that no task is needed.');
+  const code=state.analysis.run?.error_code;if(code)this.node(block,'p',this.message(Error(code))).className='pe-muted';
+  const row=this.node(block,'div');row.className='pe-foot-row pe-center';
+  this.button(row,'Create manually',()=>{ui.mode='manual';this.draw();},{primary:true,large:true,icon:'edit'});
+  if(state.analysis.allowed_operations.includes('queue_analysis'))this.button(row,'Analyse again',()=>this.startAnalysis(),{large:true,icon:'redo',mutation:true});
+ }
+ drawNotStarted(box,state,ui){
+  this.drawHead(box,state,{summary:null});
+  const can=state.analysis.allowed_operations.includes('queue_analysis');
+  const block=this.stateBlock(box,'neutral','file','Not analysed yet',can ? 'Start the analysis or create the task yourself.' : 'Automatic analysis is not available. Please check the original and create the task yourself.');
+  const row=this.node(block,'div');row.className='pe-foot-row pe-center';
+  if(can)this.button(row,'Start analysis',()=>this.startAnalysis(),{primary:true,large:true,icon:'redo',mutation:true});
+  this.button(row,'Create manually',()=>{ui.mode='manual';this.draw();},{primary:!can,large:true,icon:'edit'});
+ }
+ drawDone(box,state){
+  this.drawHead(box,state,{summary:null});
+  const cancelled=state.status==='Cancelled',receipt=state.review.receipt?.actions || [],count=receipt.length,customer=state.matching.selected_customer?.customer_name;
+  // The count comes from the receipt: a Task hidden by permissions was still created.
+  const title=cancelled ? 'Discarded' : count ? (count===1 ? '1 task created' : '{0} tasks created') : 'Filed without task';
+  const block=this.node(box,'div');block.className='pe-state '+(cancelled ? 'pe-neutral' : 'pe-ok');const mark=this.node(block,'div');mark.className='pe-state-icon';this.icon(mark,cancelled ? 'archive' : 'check');
+  this.node(block,'h3',__(title,[count]));
+  this.node(block,'p',cancelled ? __('The document was discarded. No task was created.') : customer ? __('The original is filed with {0} under Documents.',[customer]) : __('The original is filed under Documents.'));
+  if(receipt.some(action=>action.task)){
+   const list=this.node(block,'div');list.className='pe-created';
+   for(const action of receipt)if(action.task){
+    const link=this.node(list,'a');link.href=frappe.utils.get_form_link('Task',action.task);this.icon(link,'link');
+    const text=this.node(link,'span');this.node(text,'strong',state.review.review?.actions?.find(a=>a.action_id===action.action_id)?.title || action.task);if(customer)this.node(text,'small',customer);
    }
-   const details=this.node(section,'details');this.node(details,'summary',__('Action details'));
-   this.control(details,'Action title',action.title,value=>edit('title',value),{max:140,disabled:!editable});
-   this.control(details,'Action description',action.description,value=>edit('description',value),{type:'textarea',max:4000,disabled:!editable});
-   this.evidence(section,action.evidence);
-   if(action.decision!=='accept')return;
-   const internal=this.node(section,'div');internal.className='ap09-section';this.node(internal,'h4',__('Internal planning'));
-   this.node(internal,'p',action.assigned_to || __('Unassigned')).className='ap09-assignee';
-   if(editable)this.button(internal,'Select assignee',()=>this.search('assignees',row=>{client.editAction(action.action_id,{assigned_to:row.user,assignment_decision:'assigned',assignment_reason:null});this.edited();render();this.syncControls();}),{mutation:true});
-   this.control(internal,'Leave assignment for later',action.assignment_decision==='unassigned',value=>{
-    client.editAction(action.action_id,{assigned_to:null,assignment_decision:value ? 'unassigned' : 'pending',assignment_reason:null});this.edited();render();this.syncControls();
-   },{type:'checkbox',disabled:!editable});
-   if(action.assignment_decision==='unassigned')this.control(internal,'Reason for no assignee',action.assignment_reason,value=>edit('assignment_reason',value),{type:'textarea',max:1000,disabled:!editable});
-   this.control(internal,'Internal work date',action.internal_date,value=>{client.editAction(action.action_id,{internal_date:value,scheduling_decision:value ? 'scheduled' : 'pending',scheduling_reason:null});this.edited();},{type:'date',disabled:!editable || action.scheduling_decision==='unscheduled'});
-   this.node(internal,'p',__('When should the firm work on this task?')).className='text-muted small';
-   this.control(internal,'Plan the work date later',action.scheduling_decision==='unscheduled',value=>{
-    client.editAction(action.action_id,{internal_date:null,scheduling_decision:value ? 'unscheduled' : 'pending',scheduling_reason:null});this.edited();render();this.syncControls();
-   },{type:'checkbox',disabled:!editable});
-   if(action.scheduling_decision==='unscheduled')this.control(internal,'Reason for no internal date',action.scheduling_reason,value=>edit('scheduling_reason',value),{type:'textarea',max:1000,disabled:!editable});
-   const external=this.node(section,'div');external.className='ap09-section';this.node(external,'h4',__('Deadline in the letter'));
-   const proposal=client.proposalFor(action.action_id)?.deadline;
-   if(proposal){
-    this.node(external,'p',__('Proposed deadline')+': '+(proposal.kind==='explicit_date' ? frappe.datetime.str_to_user(proposal.date) : this.deadlineLabel(proposal))).className='text-warning';
-    this.node(external,'p',__('The proposed date is unverified until you explicitly confirm it.')).className='text-muted small';
-    if(editable && proposal.kind==='explicit_date')this.button(external,'Accept proposed external date',()=>this.prompt('External deadline basis',values=>{client.acceptDate(action.action_id,proposal.date,values.value);this.edited();render();this.syncControls();}),{mutation:true});
-   }
-   this.control(external,'Confirmed external deadline',action.external_date,value=>change('external_date',value),{type:'date',disabled:!editable});
-   if(action.external_date)this.control(external,'External deadline basis',action.external_date_basis,value=>edit('external_date_basis',value),{type:'textarea',max:1000,disabled:!editable});
-   else this.node(external,'p',__('No confirmed external deadline.')).className='text-muted small';
-  };render();
- }
- drawSummary(){
-  const state=this.client.state,client=this.client.review,accepted=client.review.actions.filter(a=>a.decision==='accept');
-  this.node(this.editor,'p',__('No tasks have been created yet.')).className='text-muted';
-  const document=this.node(this.editor,'section');document.className='ap09-section';
-  this.node(document,'h4',state.matching.selected_customer?.customer_name || __('Unknown'));
-  this.node(document,'p',state.matching.customer_reason || '');
-  this.receiptDates(document);
-  for(const [key,label] of [['sender','Sender'],['document_date','Document date'],['letter_type','Letter type'],['summary','Summary']])this.node(document,'p',__(label)+': '+(client.documentFields[key] || __('Unknown')));
-  this.button(document,'Change document or Mandant',()=>{this.step=0;client.humanVerified=false;this.draw();}).dataset.navigation='1';
-  for(const action of client.review.actions){
-   const section=this.node(this.editor,'section');section.className='ap09-section';this.node(section,'h4',action.title);
-   this.node(section,'p',__(action.decision==='accept' ? 'Accept action' : action.decision==='reject' ? 'Reject action' : 'Pending'));
-   if(action.decision==='accept'){
-    for(const [key,label] of [['description','Action description'],['assigned_to','Responsible'],['internal_date','Internal work date'],['external_date','Confirmed external deadline']])this.node(section,'p',__(label)+': '+(action[key] || __(key==='external_date' ? 'No confirmed external deadline.' : 'Date requires planning')));
-    for(const [key,label] of [['external_date_basis','External deadline basis'],['assignment_reason','Reason for no assignee'],['scheduling_reason','Reason for no internal date']])if(action[key])this.node(section,'p',__(label)+': '+action[key]);
-   }else if(action.rejection_reason)this.node(section,'p',__('Rejection reason')+': '+action.rejection_reason);
   }
-  if(!accepted.length)this.node(this.editor,'p',__('No tasks will be created.')+' '+(client.review.no_actions_reason || ''));
-  this.button(this.editor,'Change tasks and dates',()=>{this.step=1;client.humanVerified=false;this.draw();}).dataset.navigation='1';
+  const row=this.node(block,'div');row.className='pe-foot-row pe-center';
+  const others=this.client.rows.filter(r=>r.letter!==state.letter),next=others.find(r=>this.api.listChip(r).tone!=='busy') || others[0];
+  if(next)this.button(row,'Next document',()=>this.select(next.letter),{primary:true,large:true});
+  if(!cancelled && state.card.undo_until)this.button(row,'Undo',()=>this.undo(state.letter),{large:true,mutation:true});
  }
- drawReceipt(){
-  this.receiptsBox.replaceChildren();for(const action of this.client.state.review.receipt?.actions || [])if(action.task){
-   const row=this.node(this.receiptsBox,'div');row.className='ap09-result-task';
-   const confirmed=this.client.review.review.actions.find(a=>a.action_id===action.action_id);
-   const link=this.node(row,'a',confirmed?.title || action.task);link.href=frappe.utils.get_form_link('Task',action.task);
-   for(const [key,label] of [['assigned_to','Responsible'],['internal_date','Internal work date'],['external_date','Confirmed external deadline']])if(confirmed?.[key])this.node(row,'p',__(label)+': '+confirmed[key]);
-  }
- }
- receiptDates(parent){
-  const original=this.client.state.original;
-  this.node(parent,'p',__('Received on')+': '+(original.received_date_known && original.received_date ? frappe.datetime.str_to_user(original.received_date) : __('Unknown'))).className='text-muted small';
-  if(original.uploaded_at)this.node(parent,'p',__('Uploaded at')+': '+frappe.datetime.str_to_user(original.uploaded_at)).className='text-muted small';
- }
- drawResult(){
-  const state=this.client.state;this.node(this.editor,'h3',__(state.status==='Completed' ? 'Letter completed' : 'Cancelled'));
-  this.node(this.editor,'p',state.matching.selected_customer?.customer_name || '');
-  this.receiptsBox=this.node(this.editor,'section');this.drawReceipt();
-  const count=state.review.receipt?.actions?.length || 0;
-  if(state.status==='Completed' && count)this.node(this.editor,'p',__('Tasks created: {0}',[count]));
-  if(state.status==='Completed' && !count)this.node(this.editor,'p',__('No tasks will be created.')+' '+(this.client.review.review.no_actions_reason || ''));
-  const footer=this.node(this.editor,'div');footer.className='ap09-footer';this.button(footer,'Back to inbox',()=>frappe.set_route('posteingang'));
-  this.button(footer,'Review next document',async()=>{
-   try{const result=await this.transport('get_queue',{filters:{state:'review',uploaded_by:'all',query:'',sort:'oldest'}});this.client.check(result);if(!this.visible || this.client.state?.letter!==state.letter)return;
-    const next=result.items.find(row=>row.letter!==state.letter);frappe.set_route('posteingang',...(next ? [next.letter] : []));
-   }catch(error){this.failure(error);}
-  },{primary:true});
-  this.correctionBox=this.node(this.editor,'section');this.drawCorrection();
- }
- validateStep(step){
-  if(!this.client.state || !this.client.review.review)return false;
-  const issues=this.api.reviewIssues(this.client.state,this.client.review.review,step);
-  this.errors?.replaceChildren();
-  if(issues.length){for(const issue of issues)this.node(this.errors,'p',__(issue.message)+(issue.action_id ? ' · '+(this.client.review.review.actions.find(a=>a.action_id===issue.action_id)?.title || '') : ''));this.errors.focus();return false;}
-  return true;
- }
- async nextStep(){
-  if(!this.validateStep(this.step))return;
-  const letter=this.client.state.letter,step=this.step;
-  const current=()=>this.visible && this.client.state?.letter===letter && this.step===step;
-  if(!await this.submit('save_review') || !current())return;
-  if(step===0 && this.client.state.analysis?.allowed_operations.includes('manual_review')){
-   if(!await this.run('analysis.manual_review',{letter,expected_revision:this.client.state.revision}) || !current())return;
-  }
-  this.step++;this.draw();
- }
- async submit(operation,mode='draft'){
-  const args=this.client.review.payload(operation,{mode});return await this.run('review.'+operation,args);
- }
- confirm(){
-  const client=this.client.review;
-  if(!this.validateStep(0) || !this.validateStep(1))return;
-  if(!client.humanVerified){this.errors.textContent=__('Check the original and explicitly confirm the human review.');this.errors.focus();return;}
-  const proposal=client.state.proposal;
-  if(proposal && proposal.run!==client.state.applied_run && (client.retainedResult?.run!==proposal.run || !client.retainedResult?.reason?.trim())){
-   this.errors.textContent=__('A newer analysis is available. Apply it or explain why you are keeping this review.');this.errors.focus();return;
-  }
-  return this.submit('confirm');
- }
- drawCorrection(){
-  this.correctionBox.replaceChildren();const state=this.client.state,allowed=state.review.allowed_operations;
-  if(allowed.includes('create_correction'))this.button(this.correctionBox,'Create correction',()=>{
+ // Administrative correction, moved from the old editor unchanged.
+ drawCorrection(box,state){
+  const allowed=state.review.allowed_operations,correction=state.review.correction;
+  if(!allowed.includes('create_correction') && !correction)return;
+  const section=this.section(box,__('Correction'));
+  if(allowed.includes('create_correction'))this.button(section,'Create correction',()=>{
    const valid=this.capture();
    const dialog=new frappe.ui.Dialog({title:__('Create correction'),fields:[{fieldname:'reason',fieldtype:'Small Text',label:__('Correction reason'),reqd:1},{fieldname:'reuse_original',fieldtype:'Check',label:__('Reuse original PDF'),default:1},{fieldname:'received_date_known',fieldtype:'Check',label:__('Receipt date known'),default:0},{fieldname:'received_date',fieldtype:'Date',label:__('Receipt date')},{fieldname:'upload',fieldtype:'HTML'}],primary_action_label:__('Create correction'),primary_action:async values=>{
     if(!valid())return;if(!values.reuse_original && file.files.length!==1){frappe.msgprint(__('Choose one PDF for the replacement.'));return;}
     const result=await this.run('review.create_correction',{old_letter:state.letter,expected_revision:state.revision,reason:values.reason,reuse_original:!!values.reuse_original,received_date_known:!!values.received_date_known,received_date:values.received_date_known ? values.received_date : null,...(!values.reuse_original ? {_file:file.files[0]} : {})});if(result)dialog.hide();
    }});this.dialogs.add(dialog);const file=this.node(dialog.fields_dict.upload.$wrapper[0],'input');file.type='file';file.accept='.pdf,application/pdf';file.setAttribute('aria-label',__('Choose one PDF for the replacement.'));dialog.onhide=()=>this.dialogs.delete(dialog);dialog.show();
   },{mutation:true,requiresEnabled:false});
-  if(state.review.correction){
-   this.node(this.correctionBox,'p',__(state.review.correction.ready ? 'Administrative review is complete.' : 'Administrative review of the original tasks is required.'));
-   if(allowed.includes('correction_disposition'))for(const task of state.review.correction.tasks || []){
-    this.node(this.correctionBox,'p',task.task+' · '+__(task.status)+' · '+__(task.disposition || 'Pending'));
-    const a=this.node(this.correctionBox,'a',__('Open task'));a.href=frappe.utils.get_form_link('Task',task.task);
-    this.button(this.correctionBox,'Resolve original task',()=>this.promptFields([{fieldname:'disposition',fieldtype:'Select',label:__('Disposition'),options:['cancelled','historical'],reqd:1},{fieldname:'reason',fieldtype:'Small Text',label:__('Reason'),reqd:1}],values=>this.run('review.correction_disposition',{replacement:state.letter,expected_revision:state.revision,original_action_id:task.action_id,...values}),'Resolve original task'),{mutation:true,requiresEnabled:false});
+  if(correction){
+   this.node(section,'p',__(correction.ready ? 'Administrative review is complete.' : 'Administrative review of the original tasks is required.'));
+   if(allowed.includes('correction_disposition'))for(const task of correction.tasks || []){
+    this.node(section,'p',task.task+' · '+__(task.status)+' · '+__(task.disposition || 'Pending'));
+    const a=this.node(section,'a',__('Open task'));a.href=frappe.utils.get_form_link('Task',task.task);
+    this.button(section,'Resolve original task',()=>this.promptFields([{fieldname:'disposition',fieldtype:'Select',label:__('Disposition'),options:['cancelled','historical'],reqd:1},{fieldname:'reason',fieldtype:'Small Text',label:__('Reason'),reqd:1}],values=>this.run('review.correction_disposition',{replacement:state.letter,expected_revision:state.revision,original_action_id:task.action_id,...values}),'Resolve original task'),{mutation:true,requiresEnabled:false});
    }
   }
  }

@@ -55,3 +55,14 @@ test('retry freezes semantic parameters and unknown recovery requires file selec
  assert.equal(recovered[0].result,null);
  assert.equal(recovered[0].key,row.key);
 });
+
+test('files dropped onto the page arrive preselected in the upload dialog', async () => {
+ const texts=[];
+ const chain=new Proxy(function(){},{get:(_t,key)=>key==='text' ? value=>{texts.push(value);return chain;} : key==='then' ? undefined : ()=>chain,apply:()=>chain});
+ const h=harness(async()=>({}));
+ Object.assign(h.context,{$:()=>chain,__:s=>s,document:{createTextNode:()=>({})}});
+ h.context.frappe.call=async({method})=>({message:method.endsWith('get_intake_options') ? {enabled:true} : {outcome:'unknown'}});
+ h.context.frappe.ui={Dialog:class{constructor(){this.fields_dict={body:{$wrapper:chain}};}get_primary_btn(){return chain;}show(){}}};
+ await h.context.frappe.posteingang.open({files:[{name:'dropped.pdf'}]});
+ assert.ok(texts.includes('dropped.pdf'));
+});
