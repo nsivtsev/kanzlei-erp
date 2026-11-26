@@ -91,7 +91,7 @@ function harness({letters={one:workspace('one')},route=['posteingang','one'],han
   return {letter:args.letter,revision:2,status:'Completed'};
  };
  page.transport=transport;page.client.transport=transport;
- return {page,document,context,frappe,calls,routes,prompts,opened,letters,queue,root:page.root,
+ return {page,document,context,frappe,calls,routes,prompts,opened,letters,queue,timers,root:page.root,
   writes:()=>calls.filter(c=>c.operation.includes('.')),
   go:async(...next)=>{current=['posteingang',...next];await page.show();await settle();},
   main:()=>page.main};
@@ -340,6 +340,15 @@ test('Next document opens the next open letter only on request',async()=>{
  const h=await shown({letters:{one:workspace('one',{status:'Completed',card:{state:'done',tasks:[]},review:{receipt:{actions:[]}}})}});
  h.queue.open=[{letter:'two',status:'Needs Review',sender:'Zwei',file_name:'two.pdf',analysis:{},matching:null,deadline:null}];await h.page.loadQueue();h.page.draw();
  assert.equal(h.routes.length,0);button(h.main(),'Next document').click();assert.deepEqual(h.routes.at(-1),['posteingang','two']);
+});
+
+test('status polling never draws a letter card over the list view',async()=>{
+ const h=await shown();
+ await h.go();assert.equal(h.root.dataset.view,'list');
+ h.letters.one=workspace('one',{revision:2,status:'Completed',card:{state:'done',tasks:[]}});
+ const poll=h.timers.filter(t=>t.ms===5000).at(-1);await poll.fn();await settle();
+ assert.equal(h.root.dataset.view,'list');assert.ok(text(h.main()).includes('Choose a document from the list or upload a PDF.'));
+ assert.equal(h.page.client.state.revision,2,'the polled letter itself is refreshed');
 });
 
 test('page search waits for the shown dialog before reading a fast result',async()=>{

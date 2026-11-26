@@ -136,7 +136,9 @@ class PosteingangWorkspace {
  scheduleStatus(){if(this.visible && !document.hidden)this.statusTimer=setTimeout(async()=>{
   if(!this.statusBusy && !this.client.busy && !this.operationBusy && this.client.state){
    this.statusBusy=true;const before=this.client.state;
-   try{await this.client.status();if(!this.client.state){this.clearMain();this.clearPdf();}else if(this.client.state!==before || this.client.referencesChanged){this.client.referencesChanged=false;this.draw();}}
+   // Only the letter in the route owns the card; the list view keeps its placeholder.
+   const shown=()=>frappe.get_route()[1]===before.letter;
+   try{await this.client.status();if(!this.client.state){if(shown()){this.clearMain();this.clearPdf();}}else if((this.client.state!==before || this.client.referencesChanged) && shown()){this.client.referencesChanged=false;this.draw();}}
    catch(error){this.failure(error);}finally{this.statusBusy=false;}
   }
   this.scheduleStatus();
