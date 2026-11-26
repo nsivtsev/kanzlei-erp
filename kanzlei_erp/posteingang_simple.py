@@ -1,5 +1,6 @@
 """One-click Posteingang: internal working date and the proposal card projection."""
 
+import re
 from datetime import date, timedelta
 from uuid import uuid4
 
@@ -21,7 +22,8 @@ DEFAULT_ASSIGNEE = object()
 CUSTOMER_SUGGESTED = "Vorschlag übernommen"
 CUSTOMER_MANUAL = "Manuell gewählt"
 CUSTOMER_MULTIPLE = "Mehrere Empfänger, Mandant manuell gewählt"
-DATE_PROPOSED = "Vorschlag übernommen"
+DATE_PROPOSED = "Vorschlag übernommen (Fundstelle S. {page})"
+DATE_PROPOSED_UNVERIFIED = "Vorschlag übernommen (ohne geprüfte Fundstelle)"
 DATE_MANUAL = "Manuell eingetragen"
 NOT_SELECTED = "Nicht ausgewählt"
 NO_TASKS_PROPOSED = "Vom Assistenten: keine Handlung erforderlich, übernommen"
@@ -86,9 +88,11 @@ def _assignee(doc, customer):
 
 
 def _deadline(deadline):
-	proof = deadline["evidence"][0] if deadline["evidence"] else {}
+	"""A page is cited only from evidence whose quote was found in the OCR text."""
+	matched = next((item for item in deadline["evidence"] if item["verification"] == "matched"), None)
+	first = deadline["evidence"][0] if deadline["evidence"] else {}
 	return {"kind": deadline["kind"], "date": deadline["date"], "wording": deadline["wording"],
-		"page": proof.get("page"), "quote": proof.get("quote")}
+		"page": matched["page"] if matched else None, "quote": (matched or first).get("quote"), "verified": matched is not None}
 
 
 def _internal(deadline, today, holidays):
@@ -106,10 +110,10 @@ def _proposed(index, action, today, holidays):
 
 def _stored(row, today, holidays):
 	proposal = review._object(row.original_proposal_json) if row.original_proposal_json else None
-	deadline = _deadline(proposal["deadline"]) if proposal else {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None}
+	deadline = _deadline(proposal["deadline"]) if proposal else {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None, "verified": False}
 	if row.external_date and str(row.external_date) != deadline["date"]:
 		# A date a human entered from the letter wins over the proposal.
-		deadline = {"kind": "explicit_date", "date": str(row.external_date), "wording": None, "page": None, "quote": None}
+		deadline = {"kind": "explicit_date", "date": str(row.external_date), "wording": None, "page": None, "quote": None, "verified": False}
 	if row.internal_date:
 		internal = str(row.internal_date)
 	elif row.scheduling_decision == "unscheduled":
@@ -171,7 +175,7 @@ def _iso(value):
 	if value is None:
 		return None
 	try:
-		if isinstance(value, str) and len(value) == 10 and date.fromisoformat(value):
+		if isinstance(value, str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) and date.fromisoformat(value):
 			return value
 	except ValueError:
 		pass
@@ -218,8 +222,8 @@ def _basis(deadline, external):
 	if external is None:
 		return None
 	if deadline["kind"] == "explicit_date" and external == deadline["date"]:
-		page = deadline["evidence"][0]["page"] if deadline["evidence"] else None
-		return f"{DATE_PROPOSED} (Fundstelle S. {page})" if page else DATE_PROPOSED
+		cited = _deadline(deadline)
+		return DATE_PROPOSED.format(page=cited["page"]) if cited["verified"] else DATE_PROPOSED_UNVERIFIED
 	return DATE_MANUAL
 
 

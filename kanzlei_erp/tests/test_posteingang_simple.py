@@ -187,7 +187,7 @@ class TestSimpleCard(SimpleCase):
 		task = card["tasks"][0]
 		self.assertIsNone(task["source_index"])
 		self.assertEqual(task["description"], "Synthetic description")
-		self.assertEqual(task["deadline"], {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None})
+		self.assertEqual(task["deadline"], {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None, "verified": False})
 		self.assertEqual(task["internal_date"], str(working_date(None, frappe.utils.getdate(), company_holidays())))
 		self.assertEqual(task["assigned_to"], self.operator.name)
 
@@ -209,7 +209,7 @@ class TestSimpleCard(SimpleCase):
 		self.assertEqual(card["customer"]["candidates"], [{"customer": self.customer.name, "customer_name": self.customer.customer_name,
 			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True}])
 		self.assertEqual(card["tasks"], [{"source_index": 0, "title": "Unterlagen einreichen", "description": "Bitte die angeforderten Unterlagen einreichen.",
-			"deadline": {"kind": "explicit_date", "date": "2026-11-20", "wording": "Bitte bis zum 20.11.2026 einreichen.", "page": 1, "quote": "Bitte bis zum 20.11.2026 einreichen."},
+			"deadline": {"kind": "explicit_date", "date": "2026-11-20", "wording": "Bitte bis zum 20.11.2026 einreichen.", "page": 1, "quote": "Bitte bis zum 20.11.2026 einreichen.", "verified": True},
 			"internal_date": str(working_date(date(2026, 11, 20), frappe.utils.getdate(), company_holidays())),
 			"assigned_to": self.operator.name, "assigned_to_name": self.operator.full_name}])
 		self.assertIsNone(card["no_task_reason"])
@@ -245,7 +245,7 @@ class TestSimpleCard(SimpleCase):
 		task = self.card(self.successful("AP01-07"))["tasks"][0]
 		self.assertIsNone(task["internal_date"])
 		self.assertEqual(task["deadline"], {"kind": "relative", "date": None, "wording": "Bitte innerhalb eines Monats nach Zustellung einreichen.",
-			"page": 1, "quote": "Bitte innerhalb eines Monats nach Zustellung einreichen."})
+			"page": 1, "quote": "Bitte innerhalb eines Monats nach Zustellung einreichen.", "verified": True})
 
 	def test_no_actions_found_gives_a_reason(self):
 		card = self.card(self.successful("AP01-03"))
@@ -273,7 +273,7 @@ class TestSimpleCard(SimpleCase):
 		explicit, relative = card["tasks"]
 		self.assertEqual(explicit["source_index"], 0)
 		self.assertEqual(explicit["deadline"], {"kind": "explicit_date", "date": "2026-12-22", "wording": "Spätester Eingang: 22.12.2026.",
-			"page": 2, "quote": "Spätester Eingang: 22.12.2026."})
+			"page": 2, "quote": "Spätester Eingang: 22.12.2026.", "verified": True})
 		self.assertEqual(explicit["internal_date"], str(working_date(date(2026, 12, 22), frappe.utils.getdate(), company_holidays())))
 		self.assertEqual(relative["deadline"]["kind"], "relative")
 		self.assertEqual(relative["deadline"]["wording"], "Antwort innerhalb von sieben Tagen nach der Musterfreigabe.")
@@ -391,6 +391,28 @@ class TestConfirmSimple(SimpleCase):
 		self.assertEqual((second.source_index, second.decision, second.rejection_reason), (1, "reject", "Nicht ausgewählt"))
 		self.assertFalse(second.created_task)
 
+	def test_changed_proposal_date_is_marked_as_entered(self):
+		doc = self.successful()
+		self.run_confirm(doc, self.proposal_tasks(doc, external_date="2026-12-01"))
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual((str(row.external_date), row.external_date_basis), ("2026-12-01", "Manuell eingetragen"))
+
+	def test_unverified_deadline_evidence_cites_no_page(self):
+		import json
+
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		run = frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, ["name", "result_json"], as_dict=True)
+		result = json.loads(run.result_json)
+		# Test-side state: a quote that does not occur on the OCR page is stamped "unverified".
+		result["actions"][0]["deadline"]["evidence"][0]["quote"] = "Synthetic quote absent from the letter"
+		frappe.db.set_value("Incoming Letter Run", run.name, "result_json", json.dumps(result))
+		deadline = self.card(doc)["tasks"][0]["deadline"]
+		self.assertEqual((deadline["page"], deadline["quote"], deadline["verified"]), (None, "Synthetic quote absent from the letter", False))
+		self.run_confirm(doc, self.proposal_tasks(doc))
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual(row.external_date_basis, "Vorschlag übernommen (ohne geprüfte Fundstelle)")
+
 	def test_archive_without_tasks_states_why(self):
 		doc = self.successful("AP01-03")
 		self.run_confirm(doc, [])
@@ -432,7 +454,7 @@ class TestConfirmSimple(SimpleCase):
 		self.status(doc, "Error")
 		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_TRANSITION"):
 			self.run_confirm(doc, [self.manual_task()])
-		for tasks in (None, [self.manual_task(assigned_to="")], [self.manual_task(source_index=0)], [self.manual_task(external_date="10.12.2026")]):
+		for tasks in (None, [self.manual_task(assigned_to="")], [self.manual_task(source_index=0)], [self.manual_task(external_date="10.12.2026")], [self.manual_task(external_date="2026-W48-4")]):
 			with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
 				self.run_confirm(doc, tasks, "manual")
 		result = self.run_confirm(doc, [self.manual_task()], "manual")
