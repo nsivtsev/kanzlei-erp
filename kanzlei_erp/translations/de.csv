@@ -920,3 +920,101 @@ Import queued,Import eingereiht
 Import in progress,Import läuft
 Import completed,Import abgeschlossen
 Messages in folder,Nachrichten im Ordner
+(No subject),(Kein Betreff),Email client
+1 attachment,1 Anhang,Email client
+Add Mandant,Mandant hinzufügen,Email client
+All mailboxes,Alle Postfächer,Email client
+Ask your administrator to assign the shared mailbox in User Email.,"Bitten Sie Ihre Administration, Ihnen das gemeinsame Postfach unter User Email zuzuweisen.",Email client
+Attachments,Anhänge,Email client
+Back to messages,Zurück zur Liste,Email client
+Bcc,Bcc,Email client
+Cc,Cc,Email client
+Conversation,Verlauf,Email client
+"Conversation, {0} messages","Verlauf, {0} Nachrichten",Email client
+E-Mail,E-Mail,Email client
+Earlier this month,Früher in diesem Monat,Email client
+Earlier this week,Früher in dieser Woche,Email client
+Every incoming message is linked to a Mandant.,Alle eingegangenen Nachrichten sind einem Mandanten zugeordnet.,Email client
+Everything read,Alles gelesen,Email client
+External images are blocked to protect your privacy.,Externe Bilder wurden zum Schutz Ihrer Privatsphäre blockiert.,Email client
+Filter messages,Nachrichten filtern,Email client
+Forward,Weiterleiten,Email client
+From,Von,Email client
+Has attachments,Mit Anhängen,Email client
+Inbox,Posteingang,Email client
+Incoming mail not yet linked to a Mandant,"Eingang, der noch keinem Mandanten zugeordnet ist",Email client
+Link,Zuordnen,Email client
+Link to Mandant,Mandant zuordnen,Email client
+Linked to {0},{0} zugeordnet,Email client
+Load older messages,Ältere Nachrichten laden,Email client
+Loading message…,Nachricht wird geladen …,Email client
+Mail folders,E-Mail-Ordner,Email client
+Mail updated,E-Mails aktualisiert,Email client
+Mailboxes,Postfächer,Email client
+Mandant,Mandant,Email client
+Mark as spam,Als Spam markieren,Email client
+Mark as unread,Als ungelesen markieren,Email client
+Marked as spam,Als Spam markiert,Email client
+Message actions,Aktionen für die Nachricht,Email client
+Message content,Inhalt der Nachricht,Email client
+Message restored,Nachricht wiederhergestellt,Email client
+Messages,Nachrichten,Email client
+Messages could not be loaded.,Die Nachrichten konnten nicht geladen werden.,Email client
+Move to trash,In den Papierkorb,Email client
+Moved to spam,In Spam verschoben,Email client
+Moved to trash,In den Papierkorb verschoben,Email client
+New Email,Neue E-Mail,Email client
+Next or previous message,Nächste oder vorherige Nachricht,Email client
+No mailbox is assigned to you,Ihnen ist kein Postfach zugewiesen,Email client
+No messages match these filters.,Keine Nachrichten passen zu diesen Filtern.,Email client
+No sent messages yet.,Noch keine gesendeten Nachrichten.,Email client
+No spam.,Kein Spam.,Email client
+Not linked to a Mandant yet,Noch keinem Mandanten zugeordnet,Email client
+Not spam,Kein Spam,Email client
+Open Mandant,Mandant öffnen,Email client
+Open record,Als Datensatz öffnen,Email client
+Refresh,Aktualisieren,Email client
+Reply,Antworten,Email client
+Reply all,Allen antworten,Email client
+Reply to {0},{0} antworten,Email client
+Restore,Wiederherstellen,Email client
+Search,Suchen,Email client
+Search mail,E-Mails durchsuchen,Email client
+"Search sender, subject or recipient","Absender, Betreff oder Empfänger suchen",Email client
+Select a message to read it here.,"Wählen Sie eine Nachricht aus, um sie hier zu lesen.",Email client
+Sent,Gesendet,Email client
+Sent from your mailboxes,Aus Ihren Postfächern gesendet,Email client
+Show images,Bilder anzeigen,Email client
+Spam,Spam,Email client
+The message then appears in the Mandant's documents and timeline.,Die Nachricht erscheint dann in den Dokumenten und im Verlauf des Mandanten.,Email client
+The read status could not be changed.,Der Lesestatus konnte nicht geändert werden.,Email client
+This message could not be opened.,Die Nachricht konnte nicht geöffnet werden.,Email client
+This message is in spam.,Diese Nachricht liegt im Spam.,Email client
+This message is in the trash.,Diese Nachricht liegt im Papierkorb.,Email client
+To,An,Email client
+To: {0},An: {0},Email client
+Today,Heute,Email client
+Trash,Papierkorb,Email client
+Trash is empty.,Der Papierkorb ist leer.,Email client
+Try again,Erneut versuchen,Email client
+Undated,Ohne Datum,Email client
+Unknown recipient,Unbekannter Empfänger,Email client
+Unknown sender,Unbekannter Absender,Email client
+Unread,Ungelesen,Email client
+With attachments,Mit Anhang,Email client
+Without Mandant,Ohne Mandant,Email client
+Yesterday,Gestern,Email client
+You,Sie,Email client
+You cannot read mail,Sie haben keinen Zugriff auf E-Mails,Email client
+Your inbox is empty.,Ihr Posteingang ist leer.,Email client
+{0} attachments,{0} Anhänge,Email client
+{0} unread,{0} ungelesen,Email client
+Choose up to {0} messages.,Wählen Sie höchstens {0} Nachrichten.
+Invalid mail pagination.,Ungültige Seitenangabe für E-Mails.
+Mandant {0} does not exist.,Mandant {0} existiert nicht.
+No mailbox is assigned to you.,Ihnen ist kein Postfach zugewiesen.
+The mail client is available to Desk users only.,Das E-Mail-Programm ist nur für Desk-Benutzer verfügbar.
+This mailbox is not assigned to you.,Dieses Postfach ist Ihnen nicht zugewiesen.
+This message is not available in your mailboxes.,Diese Nachricht ist in Ihren Postfächern nicht verfügbar.
+Unknown mail folder.,Unbekannter E-Mail-Ordner.
+File,Datei,Email client

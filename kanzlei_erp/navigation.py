@@ -2,7 +2,9 @@
 
 import frappe
 
-EMAIL_INBOX_URL = "/desk/communication/view/inbox"
+EMAIL_INBOX_URL = "/desk/kanzlei-mail"
+# Sites whose saved Workspace Sidebar predates the mail client still store this link.
+LEGACY_EMAIL_INBOX_URL = "/desk/communication/view/inbox"
 DRIVE_URL = "/drive"
 
 
@@ -60,6 +62,9 @@ def configure_desk(bootinfo):
 		if name in allowed
 	}
 	if "kanzlei" in bootinfo.workspace_sidebar_item:
+		for item in bootinfo.workspace_sidebar_item["kanzlei"]["items"]:
+			if item.get("url") == LEGACY_EMAIL_INBOX_URL:
+				item["url"] = EMAIL_INBOX_URL
 		bootinfo.workspace_sidebar_item["kanzlei"]["items"] = [
 			item
 			for item in bootinfo.workspace_sidebar_item["kanzlei"]["items"]

@@ -101,14 +101,7 @@ class KanzleiOverview {
 			frappe.set_route("List", "Task", "Calendar", "default")
 		);
 		this.root.on("click", "[data-inbox]", () => {
-			const accounts = this.sections.mail.result?.accounts || [];
-			if (accounts.length)
-				frappe.set_route(
-					"List",
-					"Communication",
-					"Inbox",
-					accounts.length === 1 ? accounts[0].name : "All Accounts"
-				);
+			if ((this.sections.mail.result?.accounts || []).length) frappe.set_route("kanzlei-mail");
 		});
 		this.root.on("click", "[data-all-tasks]", () => {
 			frappe.route_options = {
@@ -279,11 +272,9 @@ class KanzleiOverview {
 							row.sender_full_name || row.sender
 						)}</span><time>${this.escape(
 							this.date(row.communication_date)
-						)}</time></div><div class="overview-mail-subject">${this.link(
-							"Communication",
-							row.name,
-							row.subject || __("No subject")
-						)}${
+						)}</time></div><div class="overview-mail-subject"><a href="/desk/kanzlei-mail/${encodeURIComponent(
+							row.name
+						)}">${this.escape(row.subject || __("No subject"))}</a>${
 							row.has_attachment
 								? `<span title="${this.escape(
 										__("Has attachments")

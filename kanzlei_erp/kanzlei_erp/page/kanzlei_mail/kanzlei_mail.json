@@ -1,0 +1,9 @@
+{
+ "doctype": "Page",
+ "name": "kanzlei-mail",
+ "page_name": "kanzlei-mail",
+ "module": "Kanzlei ERP",
+ "standard": "Yes",
+ "title": "E-Mail",
+ "roles": []
+}

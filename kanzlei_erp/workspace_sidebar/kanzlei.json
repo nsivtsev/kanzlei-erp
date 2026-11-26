@@ -18,7 +18,7 @@
    "label": "E-Mail",
    "type": "Link",
    "link_type": "URL",
-   "url": "/desk/communication/view/inbox",
+   "url": "/desk/kanzlei-mail",
    "icon": "email"
   },
   {
