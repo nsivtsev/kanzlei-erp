@@ -379,6 +379,7 @@ class TestConfirmSimple(SimpleCase):
 		self.assertEqual(payload["tasks"], tasks)
 		self.assertIs(payload["review"]["human_verified"], True)
 		self.assertEqual(payload["before"]["review"]["actions"], [])
+		self.assertIn("fact_evidence_json", payload["before"])
 
 	def test_unselected_proposal_action_is_rejected(self):
 		doc = self.successful("AP01-40")
@@ -442,6 +443,15 @@ class TestConfirmSimple(SimpleCase):
 		letter = self.letter_row(doc)
 		self.assertEqual((letter.status, letter.customer_reason), ("Completed", "Manuell gewählt"))
 		self.assertIsNone(self.review._actions(doc.name)[0].external_date_basis)
+
+	def test_received_letter_archives_manually(self):
+		doc = self.letter()
+		self.assertEqual(self.letter_row(doc).status, "Received")
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_TRANSITION"):
+			self.run_confirm(doc, [])
+		self.run_confirm(doc, [], "manual")
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.status, letter.no_actions_reason), ("Completed", "Ohne Aufgabe abgelegt"))
 
 	def test_manual_dates_are_marked_as_entered(self):
 		doc = self.letter()

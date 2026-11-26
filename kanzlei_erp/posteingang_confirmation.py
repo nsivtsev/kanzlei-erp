@@ -385,7 +385,7 @@ def confirm_simple(letter=None, expected_revision=None, request_key=None, origin
 	if not (matching._customer(customer) or {}).get("can_select"):
 		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
 	plan = simple.simple_review(doc, origin, customer, tasks)
-	before = {"review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run}
+	before = {"review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run, "fact_evidence_json": doc.fact_evidence_json}
 	with _atomic():
 		# validate_review compares against the stored rows, the Letter's customer and the applied Run's OCR.
 		changes = {"selected_customer": customer, "customer_reason": plan["review"]["customer_reason"]}
