@@ -233,7 +233,7 @@ def _finish(doc, operation, changes, payload, receipt=None, result=None):
 	event_name = frappe.generate_hash(length=10)
 	result = {"schema_version": "1.0", "letter": doc.name, "revision": doc.revision, "status": doc.status,
 		"run": doc.current_run, "generation": doc.analysis_generation, **(result or {})}
-	if operation == "confirm":
+	if operation in ("confirm", "confirm_simple"):
 		result["event"] = event_name
 		frappe.db.set_value("Incoming Letter", doc.name, "confirmation_receipt_json", canonical(result))
 	workflow._insert("Incoming Letter Event", {"name": event_name, "letter": doc.name, "event_type": operation,
@@ -350,6 +350,10 @@ def confirm(letter=None, review=None, document_fields=None, request_key=None, re
 			workflow.fail("RESULT_NOT_APPLIED")
 	elif retained is not None:
 		workflow.fail("INVALID_REQUEST")
+	return _complete(doc, review, fields, receipt, payload, "confirm")
+
+
+def _complete(doc, review, fields, receipt, payload, operation):
 	accepted = [item for item in review["actions"] if item["decision"] == "accept"]
 	if accepted and not frappe.has_permission("Task", "create"):
 		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
@@ -389,8 +393,9 @@ def confirm(letter=None, review=None, document_fields=None, request_key=None, re
 		except Exception:
 			workflow.fail("TASK_CREATION_FAILED")
 		_authorized(doc)
-		return _finish(doc, "confirm", changes, {"before": before, **payload}, receipt,
-			{"confirmed_customer": doc.selected_customer, "confirmed_by": frappe.session.user, "confirmed_at": str(timestamp), "actions": created})
+		tasks_modified = {row["task"]: str(frappe.db.get_value("Task", row["task"], "modified")) for row in created}
+		return _finish(doc, operation, changes, {"before": before, **payload}, receipt,
+			{"confirmed_customer": doc.selected_customer, "confirmed_by": frappe.session.user, "confirmed_at": str(timestamp), "actions": created, "tasks_modified": tasks_modified})
 
 
 def _correction_state(doc, *, lock=False):
