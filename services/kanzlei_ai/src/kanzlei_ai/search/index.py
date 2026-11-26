@@ -88,7 +88,9 @@ class SearchIndex:
         self.dimensions = dimensions
 
     @classmethod
-    def from_settings(cls, settings, *, check_compatibility: bool = True):
+    def from_settings(
+        cls, settings, *, check_compatibility: bool = True, interactive: bool = False
+    ):
         key = settings.qdrant_api_key
         kwargs = {"collection": settings.search_collection}
         if settings.model_profile == "mistral":
@@ -103,7 +105,7 @@ class SearchIndex:
                 "embedding": MistralEmbeddingProvider(
                     endpoint=settings.mistral_endpoint,
                     api_key=settings.mistral_api_key.get_secret_value(),
-                    gate=MistralRequestGate(settings.redis_url.get_secret_value()),
+                    gate=MistralRequestGate.from_settings(settings, interactive=interactive),
                 ),
                 "profile": MISTRAL_INDEX_PROFILE,
                 "dimensions": EMBEDDING_DIMENSIONS,

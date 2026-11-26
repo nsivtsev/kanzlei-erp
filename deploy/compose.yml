@@ -36,10 +36,17 @@ x-ai-ingestion: &ai-ingestion
   AI_INGESTION_KEY: ${AI_INGESTION_KEY:-}
   AI_INGESTION_PIPELINE_VERSION: ${AI_INGESTION_PIPELINE_VERSION:-pdf-native-v1}
 
+# Every AI process must see the same Mistral request limits.
+x-ai-mistral-limits: &ai-mistral-limits
+  AI_MISTRAL_MAX_CONCURRENT_REQUESTS: ${AI_MISTRAL_MAX_CONCURRENT_REQUESTS:-4}
+  AI_MISTRAL_BACKGROUND_CONCURRENT_REQUESTS: ${AI_MISTRAL_BACKGROUND_CONCURRENT_REQUESTS:-2}
+  AI_MISTRAL_REQUEST_WAIT_SECONDS: ${AI_MISTRAL_REQUEST_WAIT_SECONDS:-10}
+
 x-ai-model: &ai-model
   AI_MODEL_PROFILE: ${AI_MODEL_PROFILE:-synthetic}
   AI_MISTRAL_ENABLED: ${AI_MISTRAL_ENABLED:-false}
   AI_MISTRAL_ENDPOINT: ${AI_MISTRAL_ENDPOINT:-}
+  <<: *ai-mistral-limits
 
 x-ai-artifacts: &ai-artifacts
   AI_ARTIFACT_S3_ENDPOINT: ${AI_ARTIFACT_S3_ENDPOINT:-}
@@ -221,7 +228,7 @@ services:
     init: true
     networks: [default, ai-private]
     environment:
-      <<: [*ai-stores, *ai-erp, *ai-search]
+      <<: [*ai-stores, *ai-erp, *ai-search, *ai-mistral-limits]
       AI_ERP_SERVICE_KEY: ${AI_ERP_SERVICE_KEY:-}
       AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
       AI_CHAT_BROWSER_ERP_ORIGIN: ${AI_CHAT_BROWSER_ERP_ORIGIN:-}

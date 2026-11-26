@@ -38,6 +38,7 @@ identity and `AI_ERP_SERVICE_KEY`. For ingestion, provision the independent
 | `AI_DOCLING_MODELS_DIR` | Absolute host path with verified native PDF weights, readable by container UID 10001. Compose mounts it read-only and the worker loads weights offline. |
 | `AI_INGESTION_OCR_PROFILE` | Set `paddle` for the Mac archive pass and `native` for server fallback configuration. The saved connector override controls Mistral OCR after cutover. |
 | `AI_MISTRAL_ENABLED`, `AI_MODEL_PROFILE`, `AI_MISTRAL_ENDPOINT` | Enable Mistral only for the approved pilot and endpoint, using the explicit `mistral` profile. |
+| `AI_MISTRAL_MAX_CONCURRENT_REQUESTS`, `AI_MISTRAL_BACKGROUND_CONCURRENT_REQUESTS`, `AI_MISTRAL_REQUEST_WAIT_SECONDS` | Shared limit of simultaneous Mistral requests (default 4), the part OCR and indexing may use (default 2) and how long chat waits for a free slot (default 10 s). Keep the values the same for all AI services and within the workspace's provider rate limit. |
 | `AI_WORKER_MISTRAL_API_KEY`, `AI_API_MISTRAL_API_KEY` | Distinct provider keys for the worker and for chat. The API receives its key only when Mistral chat is enabled. The coordinator routes jobs without either key. |
 | `AI_SEARCH_INDEX_ENABLED`, `AI_CHAT_ENABLED`, `AI_CHAT_BROWSER_ERP_ORIGIN`, `AI_CHAT_WEB_DIR` | Enable search for reindexing and enable chat after index verification. Set the exact public HTTPS ERP origin and the absolute path to the built chat bundle on the deployment host. |
 
