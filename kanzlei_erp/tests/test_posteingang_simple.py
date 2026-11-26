@@ -2,11 +2,13 @@
 
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from kanzlei_erp.posteingang_simple import company_holidays, working_date
+from kanzlei_erp.tests.posteingang_helpers import PosteingangTestCase
 
 
 class TestWorkingDate(unittest.TestCase):
@@ -65,3 +67,183 @@ class TestCompanyHolidays(FrappeTestCase):
 	def test_empty_without_default_company(self):
 		frappe.db.set_single_value("Global Defaults", "default_company", None)
 		self.assertEqual(company_holidays(), frozenset())
+
+
+class TestSimpleCard(PosteingangTestCase):
+	def setUp(self):
+		delivery = patch("kanzlei_erp.drive_realtime._deliver")
+		delivery.start()
+		self.addCleanup(delivery.stop)
+		super().setUp()
+		from kanzlei_erp import posteingang_confirmation, posteingang_jobs, posteingang_workspace
+
+		self.review, self.jobs, self.workspace = posteingang_confirmation, posteingang_jobs, posteingang_workspace
+		self.committed = []
+		self.customer.append("kanzlei_identifiers", SYN_0007)
+		self.customer.save()
+		self.share_and_verify(self.customer)
+
+	def share_and_verify(self, customer, write=1):
+		from kanzlei_erp.mandant_identifiers import verify_identifier
+
+		frappe.share.add("Customer", customer.name, self.operator.name, read=1, write=write)
+		frappe.share.add("Customer", customer.name, self.manager.name, read=1, write=1)
+		frappe.set_user(self.manager.name)
+		customer.reload()
+		verify_identifier(customer.name, customer.kanzlei_identifiers[0].name, str(customer.modified), "Synthetic one-click source")
+		frappe.set_user("Administrator")
+
+	def successful(self, case="AP01-01"):
+		from kanzlei_erp.tests.test_posteingang_matching import TestPosteingangMatching
+
+		doc = TestPosteingangMatching.successful_letter(self, case)
+		self.committed.append(doc.name)
+		return doc
+
+	def tearDown(self):
+		# process_run commits; remove those Letters so they do not crowd other modules' queues.
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+		for name in self.committed:
+			frappe.db.delete("File", {"attached_to_doctype": "Incoming Letter", "attached_to_name": name})
+			for kind in ("Incoming Letter Intake Receipt", "Incoming Letter Event", "Incoming Letter Run"):
+				frappe.db.delete(kind, {"letter": name})
+			frappe.db.delete("Incoming Letter Action", {"parent": name})
+			frappe.db.delete("Incoming Letter", {"name": name})
+		frappe.db.commit()
+		super().tearDown()
+
+	def card(self, doc, user=None):
+		frappe.set_user(user or self.operator.name)
+		return self.workspace.get_letter_workspace(doc.name)["card"]
+
+	def status(self, doc, status):
+		frappe.set_user("Administrator")
+		frappe.db.set_value("Incoming Letter", doc.name, "status", status, update_modified=False)
+
+	def manual_review(self, doc):
+		frappe.set_user(self.operator.name)
+		self.jobs.manual_review(doc.name, doc.revision, frappe.generate_hash())
+
+	def add_action(self, doc):
+		frappe.set_user(self.operator.name)
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		self.review.add_manual_action(doc.name, "Synthetic work", "Synthetic description", revision, frappe.generate_hash())
+
+	def test_queued_and_processing_are_analyzing(self):
+		doc = self.letter()
+		for status in ("Queued", "Processing"):
+			self.status(doc, status)
+			card = self.card(doc)
+			self.assertEqual(card["state"], "analyzing")
+			self.assertEqual(card["tasks"], [])
+			self.assertEqual(card["customer"], {"suggested": None, "candidates": [], "ambiguity": None})
+			self.assertIsNone(card["undo_until"])
+
+	def test_error_is_failed(self):
+		doc = self.letter()
+		self.status(doc, "Error")
+		self.assertEqual(self.card(doc)["state"], "failed")
+
+	def test_unreadable_extraction_is_failed(self):
+		doc = self.successful("AP01-11")
+		self.assertIn(doc.status, ("Needs Review", "Needs Clarification"))
+		card = self.card(doc)
+		self.assertEqual(card["state"], "failed")
+		self.assertEqual(card["tasks"], [])
+
+	def test_received_and_review_without_run_are_not_started(self):
+		doc = self.letter()
+		self.assertEqual(self.card(doc)["state"], "not_started")
+		self.manual_review(doc)
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "status"), "Needs Review")
+		card = self.card(doc)
+		self.assertEqual(card["state"], "not_started")
+		self.assertIsNone(card["run"])
+		self.assertEqual(card["tasks"], [])
+
+	def test_stored_actions_are_a_draft_even_with_a_run(self):
+		doc = self.successful()
+		self.add_action(doc)
+		card = self.card(doc)
+		self.assertEqual(card["state"], "draft")
+		self.assertTrue(card["run"])
+		self.assertEqual([task["title"] for task in card["tasks"]], ["Synthetic work"])
+		task = card["tasks"][0]
+		self.assertIsNone(task["source_index"])
+		self.assertEqual(task["description"], "Synthetic description")
+		self.assertEqual(task["deadline"], {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None})
+		self.assertEqual(task["internal_date"], str(working_date(None, frappe.utils.getdate(), company_holidays())))
+		self.assertEqual(task["assigned_to"], self.operator.name)
+
+	def test_needs_clarification_with_actions_is_a_draft(self):
+		doc = self.letter()
+		self.manual_review(doc)
+		self.add_action(doc)
+		self.status(doc, "Needs Clarification")
+		self.assertEqual(self.card(doc)["state"], "draft")
+
+	def test_successful_run_without_actions_is_a_proposal(self):
+		doc = self.successful()
+		card = self.card(doc)
+		self.assertEqual(card["state"], "proposal")
+		self.assertEqual(card["run"], frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, "name"))
+		self.assertEqual(card["customer"]["ambiguity"], "none")
+		self.assertEqual(card["customer"]["suggested"], {"customer": self.customer.name, "customer_name": self.customer.customer_name,
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "page": 1})
+		self.assertEqual(card["customer"]["candidates"], [{"customer": self.customer.name, "customer_name": self.customer.customer_name,
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True}])
+		self.assertEqual(card["tasks"], [{"source_index": 0, "title": "Unterlagen einreichen", "description": "Bitte die angeforderten Unterlagen einreichen.",
+			"deadline": {"kind": "explicit_date", "date": "2026-11-20", "wording": "Bitte bis zum 20.11.2026 einreichen.", "page": 1, "quote": "Bitte bis zum 20.11.2026 einreichen."},
+			"internal_date": str(working_date(date(2026, 11, 20), frappe.utils.getdate(), company_holidays())),
+			"assigned_to": self.operator.name, "assigned_to_name": self.operator.full_name}])
+		self.assertIsNone(card["no_task_reason"])
+		self.assertIsNone(card["undo_until"])
+
+	def test_completed_is_done(self):
+		doc = self.confirm_fixture(self.letter())
+		card = self.card(doc)
+		self.assertEqual(card["state"], "done")
+		self.assertEqual(card["tasks"], [])
+
+	def test_multiple_matches_suggest_nothing(self):
+		frappe.set_user("Administrator")
+		other = frappe.copy_doc(self.customer)
+		other.customer_name += " other"
+		other.insert()
+		self.share_and_verify(other)
+		card = self.card(self.successful())
+		self.assertEqual(card["customer"]["ambiguity"], "multiple_matches")
+		self.assertIsNone(card["customer"]["suggested"])
+		self.assertEqual({c["customer"] for c in card["customer"]["candidates"]}, {self.customer.name, other.name})
+
+	def test_read_only_candidate_is_not_suggested(self):
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		frappe.share.add("Customer", self.customer.name, self.operator.name, read=1)
+		card = self.card(self.successful())
+		self.assertEqual(card["customer"]["ambiguity"], "none")
+		self.assertIsNone(card["customer"]["suggested"])
+		self.assertFalse(card["customer"]["candidates"][0]["can_select"])
+
+	def test_relative_deadline_has_no_internal_date(self):
+		task = self.card(self.successful("AP01-07"))["tasks"][0]
+		self.assertIsNone(task["internal_date"])
+		self.assertEqual(task["deadline"], {"kind": "relative", "date": None, "wording": "Bitte innerhalb eines Monats nach Zustellung einreichen.",
+			"page": 1, "quote": "Bitte innerhalb eines Monats nach Zustellung einreichen."})
+
+	def test_no_actions_found_gives_a_reason(self):
+		card = self.card(self.successful("AP01-03"))
+		self.assertEqual(card["state"], "proposal")
+		self.assertEqual(card["tasks"], [])
+		self.assertEqual(card["no_task_reason"], "Reine Information ohne Handlungsbedarf.")
+
+	def test_inactive_uploader_falls_back_to_current_user(self):
+		doc = self.successful()
+		frappe.db.set_value("User", self.operator.name, "enabled", 0)
+		task = self.card(doc, self.manager.name)["tasks"][0]
+		self.assertEqual(task["assigned_to"], self.manager.name)
+		self.assertEqual(task["assigned_to_name"], self.manager.full_name)
+
+
+SYN_0007 = {"identifier_type": "other", "raw_value": "SYN-0007", "jurisdiction": "SYNTHETIC",
+	"authority": "Fiktive Beispielstelle", "other_type": "synthetic_client_reference"}

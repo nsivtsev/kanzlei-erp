@@ -11,6 +11,7 @@ import frappe
 from kanzlei_erp import posteingang_confirmation as review
 from kanzlei_erp import posteingang_jobs as jobs
 from kanzlei_erp import posteingang_matching as matching
+from kanzlei_erp import posteingang_simple as simple
 from kanzlei_erp.mandant_identifiers import readable_customers
 from kanzlei_erp.posteingang_ai_validation import InvalidResult, parse_json
 from kanzlei_erp.posteingang_documents import document_endpoint, original, pdf_response, unavailable
@@ -80,7 +81,7 @@ def get_letter_workspace(letter=None, **extra):
 	state = _status(doc)
 	draft = review.review_projection(doc)
 	draft.pop("original_file", None)
-	return {**state, "matching": matching.matching_projection(doc), "review": draft, "original": _original(doc)}
+	return {**state, "matching": matching.matching_projection(doc), "review": draft, "original": _original(doc), "card": simple.simple_card(doc)}
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
