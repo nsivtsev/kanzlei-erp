@@ -22,3 +22,17 @@ def test_coordinator_can_route_mistral_jobs_without_provider_credentials(monkeyp
     monkeypatch.delenv("AI_COORDINATOR_ONLY")
     with pytest.raises(ValidationError, match="Mistral requires"):
         Settings(_env_file=None)
+
+
+def test_mistral_background_requests_stay_within_the_total_limit():
+    settings = Settings(_env_file=None)
+    assert (
+        settings.mistral_max_concurrent_requests,
+        settings.mistral_background_concurrent_requests,
+    ) == (4, 2)
+    with pytest.raises(ValidationError, match="background requests cannot exceed"):
+        Settings(
+            _env_file=None,
+            mistral_max_concurrent_requests=2,
+            mistral_background_concurrent_requests=3,
+        )

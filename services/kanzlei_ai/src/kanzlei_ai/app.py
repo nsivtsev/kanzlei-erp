@@ -54,7 +54,7 @@ def create_app(
 
         engine = engine_from_settings(settings)
         try:
-            index = SearchIndex.from_settings(settings, check_compatibility=False)
+            index = SearchIndex.from_settings(settings, check_compatibility=False, interactive=True)
             try:
                 provider = assistant_provider = None
                 if settings.model_profile == "mistral":
@@ -64,7 +64,7 @@ def create_app(
                         MistralChatProvider,
                     )
 
-                    gate = MistralRequestGate(settings.redis_url.get_secret_value())
+                    gate = MistralRequestGate.from_settings(settings, interactive=True)
                     provider = MistralChatProvider(
                         endpoint=settings.mistral_endpoint,
                         api_key=settings.mistral_api_key.get_secret_value(),

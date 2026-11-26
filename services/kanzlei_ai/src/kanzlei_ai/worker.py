@@ -152,7 +152,7 @@ def _ocr_provider(settings, profile):
         return MistralOcrProvider(
             endpoint=settings.mistral_endpoint,
             api_key=settings.mistral_api_key.get_secret_value(),
-            gate=MistralRequestGate(settings.redis_url.get_secret_value()),
+            gate=MistralRequestGate.from_settings(settings),
         )
     raise TerminalExtractionError("OCR_PROVIDER_UNCONFIGURED")
 

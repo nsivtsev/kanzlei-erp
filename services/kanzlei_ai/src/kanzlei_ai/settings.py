@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     mistral_enabled: bool = False
     mistral_endpoint: Literal["https://api.eu.mistral.ai", "https://api.mistral.ai"] | None = None
     mistral_api_key: SecretStr | None = None
+    # Simultaneous Mistral requests across all AI processes; background work
+    # (OCR, indexing) may use only part of them so chat answers keep the rest.
+    mistral_max_concurrent_requests: int = Field(default=4, ge=1, le=32)
+    mistral_background_concurrent_requests: int = Field(default=2, ge=1, le=32)
+    mistral_request_wait_seconds: float = Field(default=10.0, ge=0, le=30)
     coordinator_only: bool = False
     chat_enabled: bool = False
     chat_browser_erp_origin: HttpUrl | None = None
@@ -72,6 +77,8 @@ class Settings(BaseSettings):
             not self.mistral_endpoint or (not self.coordinator_only and not self.mistral_api_key)
         ):
             raise ValueError("Mistral requires an approved endpoint and API key")
+        if self.mistral_background_concurrent_requests > self.mistral_max_concurrent_requests:
+            raise ValueError("Mistral background requests cannot exceed the total limit")
         if self.mistral_search_collection == self.search_collection:
             raise ValueError("Mistral and synthetic indexes require separate collections")
         return self
