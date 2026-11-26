@@ -940,3 +940,101 @@ Import queued,Импорт в очереди
 Import in progress,Идёт импорт
 Import completed,Импорт завершён
 Messages in folder,Писем в папке
+(No subject),(Без темы),Email client
+1 attachment,1 вложение,Email client
+Add Mandant,Добавить клиента,Email client
+All mailboxes,Все ящики,Email client
+Ask your administrator to assign the shared mailbox in User Email.,Попросите администратора назначить вам общий ящик в разделе User Email.,Email client
+Attachments,Вложения,Email client
+Back to messages,Назад к списку,Email client
+Bcc,Скрытая копия,Email client
+Cc,Копия,Email client
+Conversation,Переписка,Email client
+"Conversation, {0} messages","Переписка, сообщений: {0}",Email client
+E-Mail,Почта,Email client
+Earlier this month,Ранее в этом месяце,Email client
+Earlier this week,Ранее на этой неделе,Email client
+Every incoming message is linked to a Mandant.,Все входящие письма привязаны к клиентам.,Email client
+Everything read,Всё прочитано,Email client
+External images are blocked to protect your privacy.,Внешние изображения заблокированы для защиты конфиденциальности.,Email client
+Filter messages,Фильтр писем,Email client
+Forward,Переслать,Email client
+From,От,Email client
+Has attachments,Есть вложения,Email client
+Inbox,Входящие,Email client
+Incoming mail not yet linked to a Mandant,"Входящие, ещё не привязанные к клиенту",Email client
+Link,Привязать,Email client
+Link to Mandant,Привязать к клиенту,Email client
+Linked to {0},Привязано: {0},Email client
+Load older messages,Загрузить более ранние,Email client
+Loading message…,Загрузка письма…,Email client
+Mail folders,Папки почты,Email client
+Mail updated,Почта обновлена,Email client
+Mailboxes,Почтовые ящики,Email client
+Mandant,Клиент,Email client
+Mark as spam,Пометить как спам,Email client
+Mark as unread,Пометить непрочитанным,Email client
+Marked as spam,Помечено как спам,Email client
+Message actions,Действия с письмом,Email client
+Message content,Текст письма,Email client
+Message restored,Письмо восстановлено,Email client
+Messages,Письма,Email client
+Messages could not be loaded.,Не удалось загрузить письма.,Email client
+Move to trash,В корзину,Email client
+Moved to spam,Перемещено в спам,Email client
+Moved to trash,Перемещено в корзину,Email client
+New Email,Новое письмо,Email client
+Next or previous message,Следующее или предыдущее письмо,Email client
+No mailbox is assigned to you,Вам не назначен почтовый ящик,Email client
+No messages match these filters.,"Нет писем, подходящих под фильтры.",Email client
+No sent messages yet.,Отправленных писем пока нет.,Email client
+No spam.,Спама нет.,Email client
+Not linked to a Mandant yet,Ещё не привязано к клиенту,Email client
+Not spam,Не спам,Email client
+Open Mandant,Открыть клиента,Email client
+Open record,Открыть запись,Email client
+Refresh,Обновить,Email client
+Reply,Ответить,Email client
+Reply all,Ответить всем,Email client
+Reply to {0},Ответить: {0},Email client
+Restore,Восстановить,Email client
+Search,Поиск,Email client
+Search mail,Поиск по почте,Email client
+"Search sender, subject or recipient","Поиск по отправителю, теме или получателю",Email client
+Select a message to read it here.,"Выберите письмо, чтобы прочитать его здесь.",Email client
+Sent,Отправленные,Email client
+Sent from your mailboxes,Отправлено из ваших ящиков,Email client
+Show images,Показать изображения,Email client
+Spam,Спам,Email client
+The message then appears in the Mandant's documents and timeline.,Письмо появится в документах и ленте клиента.,Email client
+The read status could not be changed.,Не удалось изменить статус прочтения.,Email client
+This message could not be opened.,Не удалось открыть письмо.,Email client
+This message is in spam.,Это письмо в спаме.,Email client
+This message is in the trash.,Это письмо в корзине.,Email client
+To,Кому,Email client
+To: {0},Кому: {0},Email client
+Today,Сегодня,Email client
+Trash,Корзина,Email client
+Trash is empty.,Корзина пуста.,Email client
+Try again,Повторить,Email client
+Undated,Без даты,Email client
+Unknown recipient,Неизвестный получатель,Email client
+Unknown sender,Неизвестный отправитель,Email client
+Unread,Непрочитанные,Email client
+With attachments,С вложениями,Email client
+Without Mandant,Без клиента,Email client
+Yesterday,Вчера,Email client
+You,Вы,Email client
+You cannot read mail,У вас нет доступа к почте,Email client
+Your inbox is empty.,Входящие пусты.,Email client
+{0} attachments,Вложений: {0},Email client
+{0} unread,Непрочитанных: {0},Email client
+Choose up to {0} messages.,Выберите не больше {0} писем.
+Invalid mail pagination.,Неверные параметры страницы писем.
+Mandant {0} does not exist.,Клиент {0} не существует.
+No mailbox is assigned to you.,Вам не назначен почтовый ящик.
+The mail client is available to Desk users only.,Почта доступна только пользователям Desk.
+This mailbox is not assigned to you.,Этот ящик вам не назначен.
+This message is not available in your mailboxes.,Этого письма нет в ваших ящиках.
+Unknown mail folder.,Неизвестная папка почты.
+File,Файл,Email client

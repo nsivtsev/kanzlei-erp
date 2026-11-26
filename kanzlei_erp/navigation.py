@@ -2,7 +2,7 @@
 
 import frappe
 
-EMAIL_INBOX_URL = "/desk/communication/view/inbox"
+EMAIL_INBOX_URL = "/desk/kanzlei-mail"
 DRIVE_URL = "/drive"
 
 
