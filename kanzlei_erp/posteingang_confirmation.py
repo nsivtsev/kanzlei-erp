@@ -1,13 +1,15 @@
 """Human review and atomic confirmation. No AI, enqueue or generic CRUD bypass."""
 
 import copy
+import re
 from collections import deque
 from contextlib import contextmanager
+from datetime import timedelta
 from hashlib import sha256
 from uuid import uuid4
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from kanzlei_erp import posteingang_jobs as workflow
 from kanzlei_erp import posteingang_matching as matching
@@ -17,12 +19,13 @@ from kanzlei_erp.posteingang_permissions import letter_access, staff
 from kanzlei_erp.posteingang_review_validation import validate_review
 
 DRAFT_STATES = {"Needs Review", "Needs Clarification"}
+UNDO_SECONDS = 600
 DOCUMENT_FIELDS = ("sender", "document_date", "letter_type", "summary")
 ACTION_FIELDS = ("action_id", "source_index", "title", "description", "decision", "assigned_to",
 	"assignment_decision", "assignment_reason", "external_date", "external_date_basis", "internal_date",
 	"scheduling_decision", "scheduling_reason", "rejection_reason", "needs_planning")
 WRITABLE = set(DOCUMENT_FIELDS) | {"applied_run", "fact_evidence_json", "no_actions_reason", "clarification_reason",
-	"status", "confirmed_customer", "confirmed_by", "confirmed_at", "review_outcome", "confirmation_receipt_json",
+	"status", "selected_customer", "customer_reason", "confirmed_customer", "confirmed_by", "confirmed_at", "review_outcome", "confirmation_receipt_json",
 	"replacement_letter", "replaces_letter", "correction_reason", "correction_quarantined", "cancellation_reason"}
 
 
@@ -220,7 +223,9 @@ def _write_actions(doc, actions, *, replace=False, run=None, proposals=None):
 		else:
 			values.update(parent=doc.name, parenttype="Incoming Letter", parentfield="actions")
 			if run:
-				values.update(source_run=run, original_proposal_json=canonical(proposals[item["source_index"]]))
+				values["source_run"] = run
+				if item["source_index"] is not None:
+					values["original_proposal_json"] = canonical(proposals[item["source_index"]])
 			workflow._insert("Incoming Letter Action", values)
 
 
@@ -233,7 +238,7 @@ def _finish(doc, operation, changes, payload, receipt=None, result=None):
 	event_name = frappe.generate_hash(length=10)
 	result = {"schema_version": "1.0", "letter": doc.name, "revision": doc.revision, "status": doc.status,
 		"run": doc.current_run, "generation": doc.analysis_generation, **(result or {})}
-	if operation == "confirm":
+	if operation in ("confirm", "confirm_simple"):
 		result["event"] = event_name
 		frappe.db.set_value("Incoming Letter", doc.name, "confirmation_receipt_json", canonical(result))
 	workflow._insert("Incoming Letter Event", {"name": event_name, "letter": doc.name, "event_type": operation,
@@ -315,10 +320,17 @@ def save_review(letter=None, review=None, document_fields=None, request_key=None
 		return _finish(doc, "save_review", changes, {"before": before, "review": review, "document_fields": fields, "origin": "human"}, receipt)
 
 
+def _readable_task(name):
+	# undo_confirm deletes Tasks; a later replay of the confirm receipt must not fail on them.
+	return bool(name and frappe.db.exists("Task", name) and frappe.has_permission("Task", "read", doc=name))
+
+
 def _receipt_projection(result):
 	result = copy.deepcopy(result)
 	if "actions" in result:
-		result["actions"] = [{**row, "task": row["task"] if frappe.has_permission("Task", "read", doc=row["task"]) else None} for row in result["actions"]]
+		result["actions"] = [{**row, "task": row["task"] if _readable_task(row["task"]) else None} for row in result["actions"]]
+	if "tasks_modified" in result:
+		result["tasks_modified"] = {task: value for task, value in result["tasks_modified"].items() if _readable_task(task)}
 	return result
 
 
@@ -350,6 +362,136 @@ def confirm(letter=None, review=None, document_fields=None, request_key=None, re
 			workflow.fail("RESULT_NOT_APPLIED")
 	elif retained is not None:
 		workflow.fail("INVALID_REQUEST")
+	return _complete(doc, review, fields, receipt, payload, "confirm")
+
+
+def _set(doc, changes):
+	if set(changes) - WRITABLE:
+		raise ValueError("INVALID_SERVER_OPERATION")
+	# Frappe appends modified/modified_by to a supplied mapping in place.
+	frappe.db.set_value("Incoming Letter", doc.name, dict(changes))
+	doc.update(changes)
+
+
+@frappe.whitelist(methods=["POST"])
+def confirm_simple(letter=None, expected_revision=None, request_key=None, origin=None, customer=None, tasks=None, **extra):
+	"""One click: the server builds the full confirm review from the card choice and applies it atomically."""
+	from kanzlei_erp import posteingang_simple as simple
+
+	_boundary("confirm_simple", extra)
+	if origin not in ("proposal", "manual") or not workflow._text(customer, 140):
+		workflow.fail("INVALID_REQUEST")
+	tasks = simple.simple_tasks(tasks, min(30, frappe.db.get_single_value("Posteingang Settings", "max_actions")))
+	payload = {"origin": origin, "customer": customer, "tasks": tasks}
+	doc, receipt, replay = _begin("confirm_simple", letter, expected_revision, request_key, payload)
+	if replay:
+		return _receipt_projection(replay)
+	_check_revision(doc, expected_revision)
+	statuses = DRAFT_STATES | ({"Received", "Error"} if origin == "manual" else set())
+	if doc.status not in statuses or not frappe.db.get_single_value("Posteingang Settings", "enabled"):
+		workflow.fail("INVALID_TRANSITION")
+	if not (matching._customer(customer) or {}).get("can_select"):
+		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
+	plan = simple.simple_review(doc, origin, customer, tasks)
+	before = {"status": doc.status, "review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run, "fact_evidence_json": doc.fact_evidence_json}
+	with _atomic():
+		# validate_review compares against the stored rows, the Letter's customer and the applied Run's OCR.
+		changes = {"selected_customer": customer, "customer_reason": plan["review"]["customer_reason"]}
+		if plan["applied_run"]:
+			changes.update(applied_run=plan["applied_run"], fact_evidence_json=plan["fact_evidence_json"])
+		_set(doc, changes)
+		_write_actions(doc, plan["review"]["actions"], replace=True, run=plan["run"], proposals=plan["proposals"])
+		review, fields = _validated(doc, plan["review"], plan["document_fields"], confirm=True)
+		payload = {"before": before, **payload, "review": review}
+		return _receipt_projection(_complete(doc, review, fields, receipt, payload, "confirm_simple"))
+
+
+def _undo_refusal(doc, *, lock=False):
+	"""None while the session user may undo this confirm_simple; otherwise the refusal code."""
+	if not frappe.db.get_single_value("Posteingang Settings", "enabled"):
+		return "INVALID_TRANSITION"
+	if (doc.status != "Completed" or doc.replaces_letter or doc.replacement_letter or not doc.confirmed_at
+		or doc.confirmed_by != frappe.session.user or not doc.confirmation_receipt_json):
+		return "UNDO_EXPIRED"
+	if (now_datetime() - get_datetime(doc.confirmed_at)).total_seconds() > UNDO_SECONDS:
+		return "UNDO_EXPIRED"
+	events = frappe.get_all("Incoming Letter Event", filters={"letter": doc.name, "event_type": ["in", ["confirm", "confirm_simple"]]},
+		fields=["name", "event_type", "occurred_at"], order_by="revision_after desc", limit=1)
+	receipt = _object(doc.confirmation_receipt_json)
+	if not events or events[0].event_type != "confirm_simple" or receipt.get("event") != events[0].name:
+		return "UNDO_EXPIRED"
+	tasks = receipt["tasks_modified"]
+	linked = {row.created_task for row in _actions(doc.name) if row.created_task}
+	if linked != set(tasks) or {row["task"] for row in receipt["actions"]} != set(tasks):
+		return "TASK_CHANGED"
+	for name in sorted(tasks):
+		modified = frappe.db.get_value("Task", name, "modified", for_update=lock)
+		if modified is None or str(modified) != tasks[name]:
+			return "TASK_CHANGED"
+	# Assignment changes write the Task's _assign without touching its modified.
+	if tasks and frappe.db.exists("ToDo", {"reference_type": "Task", "reference_name": ["in", list(tasks)], "modified": [">", events[0].occurred_at]}):
+		return "TASK_CHANGED"
+	return None
+
+
+def _keep_series(name):
+	# delete_doc hands the last series number out again, but its Comment/ToDo/Version
+	# cleanup for that name runs after commit and would hit a re-created Task.
+	if match := re.fullmatch(r"(.*?)([0-9]+)", name):
+		frappe.db.sql("UPDATE `tabSeries` SET `current`=GREATEST(`current`, %s) WHERE `name`=%s", (int(match[2]), match[1]))
+
+
+def undo_until(doc):
+	"""ISO end of the undo window when the session user may undo now; otherwise None."""
+	try:
+		_authorized(doc)
+	except frappe.PermissionError:
+		return None
+	if _undo_refusal(doc) is not None:
+		return None
+	return (get_datetime(doc.confirmed_at) + timedelta(seconds=UNDO_SECONDS)).isoformat()
+
+
+@frappe.whitelist(methods=["POST"])
+def undo_confirm(letter=None, expected_revision=None, request_key=None, **extra):
+	"""Delete the untouched Tasks of the session user's own recent confirm_simple and reopen the Letter."""
+	from kanzlei_erp.posteingang_task_access import undoing_confirmation
+
+	_boundary("undo_confirm", extra)
+	doc, receipt, replay = _begin("undo_confirm", letter, expected_revision, request_key, {})
+	if replay:
+		return replay
+	_check_revision(doc, expected_revision)
+	if code := _undo_refusal(doc, lock=True):
+		workflow.fail(code)
+	confirmation = _object(doc.confirmation_receipt_json)
+	previous = _object(frappe.db.get_value("Incoming Letter Event", confirmation["event"], "payload_json"))["before"]
+	tasks = sorted(confirmation["tasks_modified"])
+	before = {"status": doc.status, "review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run,
+		"fact_evidence_json": doc.fact_evidence_json, "review_outcome": doc.review_outcome, "confirmed_customer": doc.confirmed_customer,
+		"confirmed_by": doc.confirmed_by, "confirmed_at": str(doc.confirmed_at), "receipt": confirmation}
+	with _atomic():
+		# Deleting the rows removes the created_task Links that would block Task deletion.
+		frappe.db.delete("Incoming Letter Action", {"parent": doc.name, "parenttype": "Incoming Letter"})
+		with undoing_confirmation(doc.name, tasks):
+			try:
+				for name in frappe.get_all("ToDo", filters={"reference_type": "Task", "reference_name": ["in", tasks]}, pluck="name", order_by="name asc") if tasks else []:
+					frappe.delete_doc("ToDo", name)
+				for name in tasks:
+					frappe.delete_doc("Task", name)
+					_keep_series(name)
+			except frappe.LinkExistsError:
+				workflow.fail("TASK_CHANGED")
+		# The Letter keeps its confirmed Customer until the Task guards have run.
+		changes = {**previous["document_fields"], "applied_run": previous["applied_run"], "fact_evidence_json": previous["fact_evidence_json"],
+			"selected_customer": None, "customer_reason": None, "confirmed_customer": None, "confirmed_by": None, "confirmed_at": None,
+			"confirmation_receipt_json": None, "no_actions_reason": None, "review_outcome": "pending",
+			# Events written before the status was recorded came from Needs Review.
+			"status": previous.get("status") or "Needs Review"}
+		return _finish(doc, "undo_confirm", changes, {"before": before, "confirm_event": confirmation["event"], "tasks": tasks}, receipt)
+
+
+def _complete(doc, review, fields, receipt, payload, operation):
 	accepted = [item for item in review["actions"] if item["decision"] == "accept"]
 	if accepted and not frappe.has_permission("Task", "create"):
 		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
@@ -389,8 +531,9 @@ def confirm(letter=None, review=None, document_fields=None, request_key=None, re
 		except Exception:
 			workflow.fail("TASK_CREATION_FAILED")
 		_authorized(doc)
-		return _finish(doc, "confirm", changes, {"before": before, **payload}, receipt,
-			{"confirmed_customer": doc.selected_customer, "confirmed_by": frappe.session.user, "confirmed_at": str(timestamp), "actions": created})
+		tasks_modified = {row["task"]: str(frappe.db.get_value("Task", row["task"], "modified")) for row in created}
+		return _finish(doc, operation, changes, {"before": before, **payload}, receipt,
+			{"confirmed_customer": doc.selected_customer, "confirmed_by": frappe.session.user, "confirmed_at": str(timestamp), "actions": created, "tasks_modified": tasks_modified})
 
 
 def _correction_state(doc, *, lock=False):
@@ -460,19 +603,27 @@ def review_projection(doc):
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def search_assignees(letter=None, text="", **extra):
+def search_assignees(letter=None, text="", customer=None, **extra):
+	"""Staff who can read the Mandant: the given candidate (the card's choice before confirm) or the stored one."""
 	_boundary("search_assignees", extra)
 	doc = _read_letter(letter)
 	_authorized(doc)
 	if not isinstance(text, str) or len(text) > 140:
 		workflow.fail("INVALID_REQUEST")
-	if not doc.selected_customer:
+	if customer is not None:
+		if not workflow._text(customer, 140):
+			workflow.fail("INVALID_REQUEST")
+		# The same gate confirm_simple applies: only a Mandant the caller may select.
+		if not (matching._customer(customer) or {}).get("can_select"):
+			frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
+	customer = customer or doc.selected_customer
+	if not customer:
 		return {"rows": []}
 	rows = []
 	for user in frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, fields=["name", "full_name"], order_by="name asc"):
 		if text.casefold() not in (user.name + " " + (user.full_name or "")).casefold():
 			continue
-		if staff(user.name) and frappe.has_permission("Customer", "read", doc=doc.selected_customer, user=user.name):
+		if staff(user.name) and frappe.has_permission("Customer", "read", doc=customer, user=user.name):
 			rows.append({"user": user.name, "full_name": user.full_name})
 	return {"rows": rows[:20]}
 

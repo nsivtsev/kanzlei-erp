@@ -715,6 +715,9 @@ The tasks could not be created. Nothing was confirmed.,Не удалось со�
 An administrator must resolve every task of the original letter before confirmation.,До подтверждения администратор должен разобрать каждую задачу исходного письма.
 A replacement already exists for this letter.,Для этого письма уже создана замена.
 This letter was already confirmed with different decisions.,Это письмо уже подтверждено с другими решениями.
+Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.,Укажите дату срока из письма для каждой выбранной задачи с относительным или неточным сроком.
+"A created task was already changed, so undo is no longer possible. Edit or close the task itself.","Созданная задача уже была изменена, поэтому отмена невозможна. Измените или закройте саму задачу."
+Undo is no longer available for this letter.,Отмена для этого письма больше недоступна.
 The review operation could not finish. Reload and try again.,Не удалось завершить операцию проверки. Перечитайте форму и повторите попытку.
 Human review,Проверка сотрудником
 Review incoming letter,Проверить входящее письмо
@@ -805,101 +808,24 @@ Posteingang uses the known receipt date or upload time; email attachments use th
 Received on,Получено
 PDF inbox,Входящие PDF
 Queue,Очередь
-Queue state,Состояние очереди
-Unfinished letters,Незавершённые письма
 History,История
-Uploaded by,Загрузивший сотрудник
 Me,Я
-Search letters,Поиск писем
 Workspace panels,Панели рабочего экрана
-Choose a letter from the queue.,Выберите письмо из очереди.
 Age in days: {0},Возраст в днях: {0}
 No completed analysis is available.,Завершённого анализа ещё нет.
-Unverified proposed deadline,Непроверенный предложенный срок
 No explicit date,Явная дата не указана
 Explicit dates: {0}; relative deadlines: {1},Явных дат: {0}; относительных сроков: {1}
-Unsaved review,Несохранённая проверка
-Save and continue,Сохранить и перейти
 Discard,Отбросить
-Stay,Остаться
 Original PDF,Исходный PDF
-The letter changed. Your local review has been preserved.,Письмо изменилось. Ваши локальные правки сохранены.
-Compare with saved review,Сравнить с сохранённой проверкой
-Local review,Локальная проверка
-Saved review,Сохранённая проверка
-Discard local review and load saved version,Отбросить локальные правки и загрузить сохранённую версию
 Check and retry the same request,Проверить и повторить тот же запрос
 Resolve the unknown request before another operation.,Сначала выясните результат предыдущего запроса.
-Save or discard the current review before continuing.,Сначала сохраните или отбросьте текущие правки.
 The operation could not finish. Refresh and try again.,Операция не завершена. Обновите данные и повторите попытку.
 Open task,Открыть задачу
 Search,Поиск
 Select,Выбрать
-Explicit date,Явная дата
 Relative deadline,Относительный срок
-No deadline stated,Срок не указан
-Uncertain deadline,Неоднозначный срок
 Sort,Сортировка
-A newer analysis is available. Apply it or explain why you are keeping this review.,Доступен новый анализ. Примените его или обоснуйте сохранение текущей проверки.
-Action details,Подробности действия
-Analysis and document options,Анализ и действия с документом
-Back to inbox,К очереди
-Back to review,К проверке
-Change document or Mandant,Изменить документ или клиента
-Change tasks and dates,Изменить задачи и сроки
-Check exactly what will be created before confirming.,Перед подтверждением проверьте итоговый результат.
-Check the original and explicitly select the Mandant.,Проверьте оригинал и явно выберите клиента.
-"Check the original, select the Mandant and prepare the next steps.","Проверьте оригинал, выберите клиента и подготовьте следующие действия."
-Clear the no-actions reason when accepting a task.,"Уберите причину отсутствия действий, если принимаете задачу."
-Completed documents,Завершённые
-Confirm and create one task,Подтвердить и создать 1 задачу
-Confirm and create {0} tasks,Подтвердить и создать задачи: {0}
 Deadline in the letter,Срок из письма
-Decide what needs to be done and plan the work.,"Решите, что нужно сделать, и запланируйте работу."
-Decide whether this action is required.,"Решите, требуется ли это действие."
-Document and Mandant,Документ и клиент
-Document details,Данные письма
-Enter an action title and description.,Укажите название и описание действия.
-Enter the basis for the confirmed external deadline.,Укажите основание подтверждённого внешнего срока.
-Explain the Mandant selection.,Обоснуйте выбор клиента.
-Explain why no tasks are required.,Обоснуйте отсутствие задач.
-Explain why this action is not required.,Обоснуйте отказ от этого действия.
-Final review,Подтверждение
-Finish without tasks,Завершить без задач
-In progress,В обработке
-Inbox views,Представления входящих
-Internal planning,Внутренняя работа
-Leave assignment for later,Назначить исполнителя позже
-Letter completed,Письмо обработано
-More filters,Дополнительные фильтры
-No confirmed external deadline.,Нет подтверждённого внешнего срока.
-No documents in this view.,В этом представлении нет документов.
-No matching documents.,Подходящие документы не найдены.
-No tasks have been created yet.,Задачи ещё не созданы.
-No tasks will be created. Explain your decision after checking the original.,Задачи не будут созданы. Проверьте оригинал и обоснуйте решение.
-Not assigned to a Mandant,Клиент ещё не выбран
-Not yet confirmed,Ещё не подтверждено
-Open review,Проверить
-Plan the work date later,Запланировать дату работы позже
-Previous step,Назад
-Review incoming documents,Проверка входящих документов
-Review next document,Проверить следующий документ
-Review saved. No tasks have been created.,Черновик сохранён. Задачи не созданы.
-Review steps,Этапы проверки
-Save and review result,Сохранить и проверить итог
-Select a Mandant before continuing.,Сначала выберите клиента.
-Select an assignee or explain why assignment is deferred.,Выберите исполнителя или обоснуйте отложенное назначение.
-Set an internal work date or explain why planning is deferred.,Укажите внутреннюю дату работы или обоснуйте отложенное планирование.
-Start the analysis or switch to human review to prepare a draft.,Запустите анализ или перейдите к ручной проверке.
-Step {0} of 3,Шаг {0} из 3
-Tasks and deadlines,Задачи и сроки
-Tasks are created only after your final confirmation.,Задачи создаются только после окончательного подтверждения.
-The proposed date is unverified until you explicitly confirm it.,Предложенная дата не проверена до вашего явного подтверждения.
-To review,К проверке
-View result,Посмотреть результат
-When should the firm work on this task?,Когда канцелярия должна выполнить работу?
-Tasks created: {0},Создано задач: {0}
-Uploaded at,Загружено
 Reimport all emails,Повторно импортировать все письма
 Email import progress,Прогресс импорта email
 Start reimport,Начать повторный импорт
@@ -940,6 +866,118 @@ Import queued,Импорт в очереди
 Import in progress,Идёт импорт
 Import completed,Импорт завершён
 Messages in folder,Писем в папке
+"Upload a PDF, check the proposal, accept it.","Загрузите PDF, проверьте предложение, примите его."
+Documents,Документы,Posteingang
+Drop PDF here,Перетащите PDF сюда
+or,или
+Choose PDF,Выбрать PDF
+Open · {0},Открытые · {0}
+No open documents.,Нет открытых документов.
+Done,Готово
+Choose a document from the list or upload a PDF.,Выберите документ в списке или загрузите PDF.
+All documents,Все документы
+Received: {0},Получено: {0}
+Received: unknown,Получено: неизвестно
+Original,Оригинал
+Hide original,Скрыть оригинал
+More actions,Другие действия
+Discard document,Отбросить документ
+"For example advertising, misdirected mail or a wrong upload. No task is created.","Например, реклама, чужое письмо или ошибочная загрузка. Задача не создаётся."
+The letter changed. It was reloaded; check the card and try again.,Письмо изменилось и было перезагружено. Проверьте карточку и повторите.
+{0} tasks found,Найдено задач: {0}
+Assistant's proposal · please compare briefly with the original,Предложение ассистента · коротко сверьте с оригиналом
+Several Mandants match the letter. Please choose one.,Письму соответствуют несколько Mandanten. Выберите одного.
+The letter is addressed to several recipients. Please choose one Mandant.,Письмо адресовано нескольким получателям. Выберите одного Mandant.
+No Mandant was found in the letter. Please search for it.,В письме не найден Mandant. Найдите его через поиск.
+Please choose the Mandant.,Выберите Mandant.
+Chosen by search,Выбран через поиск
+Read-only Mandant; selection requires write access.,Mandant доступен только для чтения; для выбора нужно право изменения.
+Search other Mandant,Найти другого Mandant
+No task needed,Задача не нужна
+The assistant found no task in the letter.,Ассистент не нашёл в письме задач.
+Tasks · {0} of {1} selected,Задачи · выбрано {0} из {1}
+Accept {0},Принять: {0}
+p. {0},с. {0}
+Show page {0} of the original,Показать страницу {0} оригинала
+Enter deadline,Введите срок
+DD.MM.YYYY,ДД.ММ.ГГГГ
+Not computed,Не вычисляется
+Enter the date as DD.MM.YYYY.,Введите дату в формате ДД.ММ.ГГГГ.
+none,нет
+not stated,не указан
+Work date,Дата работы
+5 working days before the deadline,За 5 рабочих дней до срока
+No deadline: in 7 days,Без срока: через 7 дней
+Calculated from the deadline you enter,Вычисляется из введённого срока
+Responsible,Ответственный,Posteingang
+Not assigned,Не назначен
+uploaded the document,загрузил(а) документ
+Change,Изменить,Posteingang
+This person has no access to the selected Mandant.,У этого сотрудника нет доступа к выбранному Mandant.
+In the letter:,В письме:
+the selected Mandant,выбранного Mandant
+"Creates 1 task for {0}. With “Accept” you confirm Mandant, deadline and task.","Будет создана 1 задача для {0}. Нажимая «Принять», вы подтверждаете Mandant, срок и задачу."
+"Creates {0} tasks for {1}. With “Accept {0} tasks” you confirm Mandant, deadlines and tasks.","Будет создано задач: {0} для {1}. Нажимая «Принять задачи ({0})», вы подтверждаете Mandant, сроки и задачи."
+No task selected. The letter is only filed.,Задачи не выбраны. Письмо будет только сохранено в документах.
+The letter is filed with {0} without a task.,Письмо будет сохранено у {0} без задачи.
+Still missing:,Ещё не заполнено:
+1 task created: {0},Создана 1 задача: {0}
+{0} tasks created: {1},Создано задач: {0} · {1}
+Filed without task: {0},Сохранено без задачи: {0}
+Undo,Отменить,Posteingang
+Back to proposal,Назад к предложению
+1 page,1 страница
+{0} pages,Страниц: {0}
+Create task manually,Создать задачу вручную
+Create task manually · prefilled from the proposal,Создать задачу вручную · заполнено из предложения
+Create task manually · prefilled from the saved draft,Создать задачу вручную · заполнено из сохранённого черновика
+Not selected,Не выбран
+Search Mandant,Найти Mandant
+Task {0},Задача {0}
+Task title,Название задачи
+e.g. Check the notice,"например, проверить уведомление"
+Description,Описание
+(optional),(необязательно)
+Deadline from the letter,Срок из письма
+Only a date stated in the letter,"Только дата, указанная в письме"
+When the firm works on it; empty: calculated from the deadline,Когда канцелярия займётся задачей; если пусто — вычисляется из срока
+Remove task,Удалить задачу
++ Another task,+ Ещё задача
+Create task,Создать задачу
+Create {0} tasks,Создать задачи ({0})
+Cancel,Отмена,Posteingang
+Please check the marked fields.,Проверьте отмеченные поля.
+Enter the task title.,Введите название задачи.
+The assistant is reading the letter …,Ассистент читает письмо …
+Usually under a minute. You can work on other documents meanwhile.,Обычно меньше минуты. Пока можно работать с другими документами.
+Automatic analysis failed,Автоматический анализ не удался
+The letter could not be read reliably. Please check the original and create the task yourself. This does not mean that no task is needed.,"Письмо не удалось надёжно прочитать. Проверьте оригинал и создайте задачу сами. Это не значит, что задача не нужна."
+Analyse again,Повторить анализ
+Not analysed yet,Ещё не проанализировано
+Start the analysis or create the task yourself.,Запустите анализ или создайте задачу сами.
+Automatic analysis is not available. Please check the original and create the task yourself.,Автоматический анализ недоступен. Проверьте оригинал и создайте задачу сами.
+Discarded,Отброшено
+1 task created,Создана 1 задача
+{0} tasks created,Создано задач: {0}
+Filed without task,Сохранено без задачи
+The document was discarded. No task was created.,Документ отброшен. Задача не создана.
+The original is filed with {0} under Documents.,Оригинал сохранён у {0} в разделе «Документы».
+The original is filed under Documents.,Оригинал сохранён в разделе «Документы».
+Next document,Следующий документ
+Correction,Исправление
+Accept,Принять
+Accept {0} tasks,Принять задачи ({0})
+File without task,Сохранить без задачи
+Create manually,Создать вручную
+Select the Mandant.,Выберите Mandant
+Enter the deadline date from the letter.,Введите срок из письма
+Proposal ready,Предложение готово
+Input needed,Нужны данные
+Analysing,Анализируется
+Check manually,Проверить вручную
+Not analysed,Не проанализировано
+5 working days before the deadline (no holiday list),За 5 рабочих дней до срока (без учёта праздников)
+Work date is after the deadline.,Дата работы позже срока.
 (No subject),(Без темы),Email client
 1 attachment,1 вложение,Email client
 Add Mandant,Добавить клиента,Email client

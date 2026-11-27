@@ -80,6 +80,7 @@ class TestPosteingangConfirmation(PosteingangTestCase):
 		self.assertEqual(str(frappe.utils.getdate(task.exp_start_date)), "2026-11-18")
 		self.assertEqual(str(frappe.utils.getdate(task.exp_end_date)), "2026-11-18")
 		self.assertEqual(task.kanzlei_incoming_action_id, review["actions"][0]["action_id"])
+		self.assertEqual(result["tasks_modified"][task.name], str(task.modified))
 		self.assertEqual(frappe.db.count("ToDo", {"reference_type": "Task", "reference_name": task.name, "allocated_to": self.reader.name}), 1)
 		self.assertTrue(self.service.confirm(self.doc.name, review, fields, "confirm")["replayed"])
 		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": self.doc.name}), 1)

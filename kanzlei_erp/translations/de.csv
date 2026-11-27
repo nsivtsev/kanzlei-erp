@@ -695,6 +695,9 @@ The tasks could not be created. Nothing was confirmed.,Die Aufgaben konnten nich
 An administrator must resolve every task of the original letter before confirmation.,Vor der Bestätigung muss ein Administrator jede Aufgabe des ursprünglichen Schreibens prüfen.
 A replacement already exists for this letter.,Für dieses Schreiben besteht bereits ein Ersatz.
 This letter was already confirmed with different decisions.,Dieses Schreiben wurde bereits mit anderen Entscheidungen bestätigt.
+Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.,Tragen Sie für jede ausgewählte Aufgabe mit relativer oder unsicherer Frist das Fristdatum aus dem Schreiben ein.
+"A created task was already changed, so undo is no longer possible. Edit or close the task itself.","Eine erstellte Aufgabe wurde bereits geändert, deshalb ist Rückgängig nicht mehr möglich. Bearbeiten oder schließen Sie die Aufgabe selbst."
+Undo is no longer available for this letter.,Rückgängig ist für dieses Schreiben nicht mehr möglich.
 The review operation could not finish. Reload and try again.,Die Prüfung konnte nicht abgeschlossen werden. Laden Sie neu und versuchen Sie es erneut.
 Human review,Manuelle Prüfung
 Review incoming letter,Eingangsschreiben prüfen
@@ -785,101 +788,24 @@ Posteingang uses the known receipt date or upload time; email attachments use th
 Received on,Empfangen am
 PDF inbox,Posteingang
 Queue,Warteschlange
-Queue state,Bearbeitungsstand
-Unfinished letters,Offene Schreiben
 History,Historie
-Uploaded by,Hochgeladen von
 Me,Ich
-Search letters,Schreiben suchen
 Workspace panels,Arbeitsbereiche
-Choose a letter from the queue.,Wählen Sie ein Schreiben aus der Warteschlange.
 Age in days: {0},Alter in Tagen: {0}
 No completed analysis is available.,Keine abgeschlossene Analyse vorhanden.
-Unverified proposed deadline,Ungeprüfter Fristvorschlag
 No explicit date,Kein ausdrückliches Datum
 Explicit dates: {0}; relative deadlines: {1},Ausdrückliche Daten: {0}; relative Fristen: {1}
-Unsaved review,Ungespeicherte Prüfung
-Save and continue,Speichern und fortfahren
 Discard,Verwerfen
-Stay,Bleiben
 Original PDF,Original-PDF
-The letter changed. Your local review has been preserved.,Das Schreiben wurde geändert. Ihre lokale Prüfung bleibt erhalten.
-Compare with saved review,Mit gespeicherter Prüfung vergleichen
-Local review,Lokale Prüfung
-Saved review,Gespeicherte Prüfung
-Discard local review and load saved version,Lokale Prüfung verwerfen und gespeicherte Version laden
 Check and retry the same request,Prüfen und dieselbe Anfrage wiederholen
 Resolve the unknown request before another operation.,Klären Sie zuerst das Ergebnis der vorherigen Anfrage.
-Save or discard the current review before continuing.,Speichern oder verwerfen Sie zuerst die aktuelle Prüfung.
 The operation could not finish. Refresh and try again.,Der Vorgang konnte nicht abgeschlossen werden. Aktualisieren Sie und versuchen Sie es erneut.
 Open task,Aufgabe öffnen
 Search,Suchen
 Select,Auswählen
-Explicit date,Ausdrückliches Datum
 Relative deadline,Relative Frist
-No deadline stated,Keine Frist angegeben
-Uncertain deadline,Unklare Frist
 Sort,Sortierung
-A newer analysis is available. Apply it or explain why you are keeping this review.,Ein neueres Analyseergebnis liegt vor. Übernehmen Sie es oder begründen Sie die Beibehaltung dieses Entwurfs.
-Action details,Aufgabendetails
-Analysis and document options,Analyse und Dokumentoptionen
-Back to inbox,Zur Übersicht
-Back to review,Zurück zur Prüfung
-Change document or Mandant,Dokument oder Mandant ändern
-Change tasks and dates,Aufgaben und Termine ändern
-Check exactly what will be created before confirming.,Prüfen Sie vor der Bestätigung das genaue Ergebnis.
-Check the original and explicitly select the Mandant.,Prüfen Sie das Original und wählen Sie den Mandanten ausdrücklich aus.
-"Check the original, select the Mandant and prepare the next steps.","Original prüfen, Mandant zuordnen und nächste Schritte vorbereiten."
-Clear the no-actions reason when accepting a task.,"Entfernen Sie die Begründung für keine Aufgaben, wenn Sie eine Aufgabe übernehmen."
-Completed documents,Erledigt
-Confirm and create one task,Bestätigen und 1 Aufgabe erstellen
-Confirm and create {0} tasks,Bestätigen und {0} Aufgaben erstellen
-Deadline in the letter,Frist aus dem Schreiben
-Decide what needs to be done and plan the work.,"Entscheiden Sie, was zu erledigen ist, und planen Sie die Bearbeitung."
-Decide whether this action is required.,"Entscheiden Sie, ob diese Aufgabe erforderlich ist."
-Document and Mandant,Dokument und Mandant
-Document details,Angaben zum Schreiben
-Enter an action title and description.,Geben Sie Titel und Beschreibung der Aufgabe ein.
-Enter the basis for the confirmed external deadline.,Geben Sie die Grundlage der bestätigten externen Frist an.
-Explain the Mandant selection.,Begründen Sie die Mandantenzuordnung.
-Explain why no tasks are required.,"Begründen Sie, warum keine Aufgaben erforderlich sind."
-Explain why this action is not required.,"Begründen Sie, warum diese Aufgabe nicht erforderlich ist."
-Final review,Abschluss
-Finish without tasks,Ohne Aufgaben abschließen
-In progress,In Verarbeitung
-Inbox views,Ansichten des Posteingangs
-Internal planning,Interne Bearbeitung
-Leave assignment for later,Später zuweisen
-Letter completed,Schreiben abgeschlossen
-More filters,Weitere Filter
-No confirmed external deadline.,Keine bestätigte externe Frist.
-No documents in this view.,Keine Dokumente in dieser Ansicht.
-No matching documents.,Keine passenden Dokumente.
-No tasks have been created yet.,Es wurden noch keine Aufgaben erstellt.
-No tasks will be created. Explain your decision after checking the original.,Es werden keine Aufgaben erstellt. Begründen Sie Ihre Entscheidung nach Prüfung des Originals.
-Not assigned to a Mandant,Noch keinem Mandanten zugeordnet
-Not yet confirmed,Noch nicht bestätigt
-Open review,Prüfen
-Plan the work date later,Arbeitstermin später planen
-Previous step,Zurück
-Review incoming documents,Eingehende Dokumente prüfen
-Review next document,Nächstes Dokument prüfen
-Review saved. No tasks have been created.,Entwurf gespeichert. Es wurden keine Aufgaben erstellt.
-Review steps,Prüfschritte
-Save and review result,Speichern und Ergebnis prüfen
-Select a Mandant before continuing.,Wählen Sie zuerst einen Mandanten aus.
-Select an assignee or explain why assignment is deferred.,Wählen Sie eine zuständige Person oder begründen Sie die spätere Zuweisung.
-Set an internal work date or explain why planning is deferred.,Legen Sie einen internen Arbeitstermin fest oder begründen Sie die spätere Planung.
-Start the analysis or switch to human review to prepare a draft.,Starten Sie die Analyse oder wechseln Sie zur manuellen Prüfung.
-Step {0} of 3,Schritt {0} von 3
-Tasks and deadlines,Aufgaben und Fristen
-Tasks are created only after your final confirmation.,Aufgaben entstehen erst nach Ihrer abschließenden Bestätigung.
-The proposed date is unverified until you explicitly confirm it.,Das vorgeschlagene Datum ist bis zu Ihrer ausdrücklichen Bestätigung ungeprüft.
-To review,Zu prüfen
-View result,Ergebnis ansehen
-When should the firm work on this task?,Wann soll die Kanzlei daran arbeiten?
-Tasks created: {0},Erstellte Aufgaben: {0}
-Uploaded at,Hochgeladen am
+Deadline in the letter,Frist laut Schreiben
 Reimport all emails,Alle E-Mails erneut importieren
 Email import progress,Fortschritt des E-Mail-Imports
 Start reimport,Erneuten Import starten
@@ -920,6 +846,119 @@ Import queued,Import eingereiht
 Import in progress,Import läuft
 Import completed,Import abgeschlossen
 Messages in folder,Nachrichten im Ordner
+"Upload a PDF, check the proposal, accept it.","PDF hochladen, Vorschlag prüfen, übernehmen."
+Documents,Dokumente,Posteingang
+Drop PDF here,PDF hier ablegen
+or,oder
+Choose PDF,PDF auswählen
+Open · {0},Offen · {0}
+No open documents.,Keine offenen Dokumente.
+Done,Erledigt
+Choose a document from the list or upload a PDF.,Wählen Sie ein Dokument aus der Liste oder laden Sie ein PDF hoch.
+All documents,Alle Dokumente
+Received: {0},Eingang: {0}
+Received: unknown,Eingang: unbekannt
+Original,Original
+Hide original,Original ausblenden
+More actions,Weitere Aktionen
+Discard document,Dokument verwerfen
+"For example advertising, misdirected mail or a wrong upload. No task is created.","Zum Beispiel Werbung, fehlgeleitete Post oder ein falscher Upload. Es wird keine Aufgabe erstellt."
+The letter changed. It was reloaded; check the card and try again.,Das Schreiben hat sich geändert und wurde neu geladen. Prüfen Sie die Karte und versuchen Sie es erneut.
+{0} tasks found,{0} Aufgaben erkannt
+Assistant's proposal · please compare briefly with the original,Vorschlag des Assistenten · bitte kurz mit dem Original vergleichen
+Mandant,Mandant
+Several Mandants match the letter. Please choose one.,Mehrere Mandanten passen zum Schreiben. Bitte wählen Sie einen aus.
+The letter is addressed to several recipients. Please choose one Mandant.,Das Schreiben richtet sich an mehrere Empfänger. Bitte wählen Sie einen Mandanten.
+No Mandant was found in the letter. Please search for it.,Im Schreiben wurde kein Mandant gefunden. Bitte suchen Sie ihn.
+Please choose the Mandant.,Bitte wählen Sie den Mandanten.
+Chosen by search,Über die Suche gewählt
+Read-only Mandant; selection requires write access.,Mandant nur lesbar; die Auswahl erfordert Schreibrechte.
+Search other Mandant,Anderen Mandanten suchen
+No task needed,Keine Aufgabe nötig
+The assistant found no task in the letter.,Der Assistent hat im Schreiben keine Aufgabe gefunden.
+Tasks · {0} of {1} selected,Aufgaben · {0} von {1} ausgewählt
+Accept {0},{0} übernehmen
+p. {0},S. {0}
+Show page {0} of the original,Seite {0} des Originals ansehen
+Enter deadline,Frist selbst eintragen
+DD.MM.YYYY,TT.MM.JJJJ
+Not computed,Wird nicht berechnet
+Enter the date as DD.MM.YYYY.,Geben Sie das Datum als TT.MM.JJJJ ein.
+none,keine
+not stated,nicht genannt
+Work date,Arbeitstermin
+5 working days before the deadline,5 Arbeitstage vor Frist
+No deadline: in 7 days,Ohne Frist: in 7 Tagen
+Calculated from the deadline you enter,Wird aus der eingetragenen Frist berechnet
+Responsible,Zuständig,Posteingang
+Not assigned,Nicht zugewiesen
+uploaded the document,hat hochgeladen
+Change,ändern,Posteingang
+This person has no access to the selected Mandant.,Diese Person hat keinen Zugriff auf den gewählten Mandanten.
+In the letter:,Im Schreiben:
+the selected Mandant,den gewählten Mandanten
+"Creates 1 task for {0}. With “Accept” you confirm Mandant, deadline and task.","Erstellt 1 Aufgabe für {0}. Mit „Übernehmen“ bestätigen Sie Mandant, Frist und Aufgabe."
+"Creates {0} tasks for {1}. With “Accept {0} tasks” you confirm Mandant, deadlines and tasks.","Erstellt {0} Aufgaben für {1}. Mit „{0} Aufgaben übernehmen“ bestätigen Sie Mandant, Fristen und Aufgaben."
+No task selected. The letter is only filed.,Keine Aufgabe ausgewählt. Das Schreiben wird nur abgelegt.
+The letter is filed with {0} without a task.,Das Schreiben wird ohne Aufgabe für {0} abgelegt.
+Still missing:,Noch offen:
+1 task created: {0},1 Aufgabe erstellt: {0}
+{0} tasks created: {1},{0} Aufgaben erstellt: {1}
+Filed without task: {0},Ohne Aufgabe abgelegt: {0}
+Undo,Rückgängig,Posteingang
+Back to proposal,Zurück zum Vorschlag
+1 page,1 Seite
+{0} pages,{0} Seiten
+Create task manually,Aufgabe manuell erstellen
+Create task manually · prefilled from the proposal,Aufgabe manuell erstellen · aus dem Vorschlag vorausgefüllt
+Create task manually · prefilled from the saved draft,Aufgabe manuell erstellen · aus dem gespeicherten Entwurf vorausgefüllt
+Not selected,Nicht ausgewählt
+Search Mandant,Mandant suchen
+Task {0},Aufgabe {0}
+Task title,Aufgabe
+e.g. Check the notice,z. B. Bescheid prüfen
+Description,Beschreibung
+(optional),(optional)
+Deadline from the letter,Frist laut Schreiben
+Only a date stated in the letter,"Nur ein Datum, das im Schreiben steht"
+When the firm works on it; empty: calculated from the deadline,Wann die Kanzlei daran arbeitet; leer: aus der Frist berechnet
+Remove task,Aufgabe entfernen
++ Another task,+ Weitere Aufgabe
+Create task,Aufgabe erstellen
+Create {0} tasks,{0} Aufgaben erstellen
+Cancel,Abbrechen,Posteingang
+Please check the marked fields.,Bitte prüfen Sie die markierten Felder.
+Enter the task title.,Geben Sie den Titel der Aufgabe ein.
+The assistant is reading the letter …,Der Assistent liest das Schreiben …
+Usually under a minute. You can work on other documents meanwhile.,Meist unter einer Minute. Sie können inzwischen andere Dokumente bearbeiten.
+Automatic analysis failed,Automatische Analyse fehlgeschlagen
+The letter could not be read reliably. Please check the original and create the task yourself. This does not mean that no task is needed.,"Das Schreiben konnte nicht zuverlässig gelesen werden. Bitte prüfen Sie das Original und erstellen Sie die Aufgabe selbst. Das heißt nicht, dass keine Aufgabe nötig ist."
+Analyse again,Erneut analysieren
+Not analysed yet,Noch nicht analysiert
+Start the analysis or create the task yourself.,Starten Sie die Analyse oder erstellen Sie die Aufgabe selbst.
+Automatic analysis is not available. Please check the original and create the task yourself.,Die automatische Analyse ist nicht verfügbar. Bitte prüfen Sie das Original und erstellen Sie die Aufgabe selbst.
+Discarded,Verworfen
+1 task created,1 Aufgabe erstellt
+{0} tasks created,{0} Aufgaben erstellt
+Filed without task,Ohne Aufgabe abgelegt
+The document was discarded. No task was created.,Das Dokument wurde verworfen. Es wurde keine Aufgabe erstellt.
+The original is filed with {0} under Documents.,Das Original ist bei {0} unter Dokumente abgelegt.
+The original is filed under Documents.,Das Original ist beim Mandanten unter Dokumente abgelegt.
+Next document,Nächstes Dokument
+Correction,Korrektur
+Accept,Übernehmen
+Accept {0} tasks,{0} Aufgaben übernehmen
+File without task,Ohne Aufgabe ablegen
+Create manually,Manuell erstellen
+Select the Mandant.,Mandant auswählen
+Enter the deadline date from the letter.,Frist aus dem Schreiben eintragen
+Proposal ready,Vorschlag bereit
+Input needed,Angabe fehlt
+Analysing,Wird analysiert
+Check manually,Manuell prüfen
+Not analysed,Nicht analysiert
+5 working days before the deadline (no holiday list),5 Arbeitstage vor Frist (ohne Feiertage)
+Work date is after the deadline.,Der Arbeitstermin liegt nach der Frist.
 (No subject),(Kein Betreff),Email client
 1 attachment,1 Anhang,Email client
 Add Mandant,Mandant hinzufügen,Email client

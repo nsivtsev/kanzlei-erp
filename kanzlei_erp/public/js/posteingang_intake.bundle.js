@@ -91,6 +91,8 @@
   let rows;
   try {rows = await client.recover(key => rpc("get_intake_result", {request_key: key}));}
   catch {frappe.msgprint(__("Browser storage is unavailable; PDF upload cannot start")); return;}
+  // Files dropped onto the Posteingang page arrive preselected; nothing is sent before "Upload PDF".
+  for (const file of optionsUI.files || []) rows.push(client.add(file));
   let running = false;
   const dialog = new frappe.ui.Dialog({title: __("Upload PDF"), fields: [{fieldname: "body", fieldtype: "HTML"}],
    primary_action_label: __("Upload PDF"), primary_action: async () => {

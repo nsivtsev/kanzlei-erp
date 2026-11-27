@@ -162,3 +162,21 @@ test('the form shows proposal uncertainty as text and marks input dirty before b
  context.frappe.posteingang.attach_review(frm);
  assert.equal(frm._review_client.documentFields.summary,'Human summary','same-document refresh must retain the buffer');
 });
+
+test('review_rpc posts one-click operations and names their refusals',async()=>{
+ const calls=[];let body={message:{status:'Completed'}};
+ const context={frappe:{posteingang:{},csrf_token:'token'},crypto:{randomUUID:()=>'request'},setTimeout,clearTimeout,
+  fetch:async(url,options)=>{calls.push({url,options});return {ok:!body.exc,status:417,json:async()=>body};}};
+ vm.createContext(context);
+ vm.runInContext(fs.readFileSync('kanzlei_erp/public/js/posteingang_review.bundle.js','utf8'),context);
+ const {review_rpc:rpc,review_messages:messages}=context.frappe.posteingang;
+ assert.equal((await rpc('confirm_simple',{letter:'letter',tasks:[]})).status,'Completed');
+ assert.equal(calls[0].url,'/api/method/kanzlei_erp.posteingang_confirmation.confirm_simple');
+ assert.equal(calls[0].options.method,'POST');
+ for(const code of ['DEADLINE_REQUIRED','TASK_CHANGED','UNDO_EXPIRED']) {
+  body={exc:'["WorkflowError: '+code+'"]'};
+  await assert.rejects(rpc('undo_confirm',{letter:'letter'}),new RegExp('^Error: '+code+'$'));
+  assert.ok(messages[code]);
+ }
+ assert.equal(calls.at(-1).url,'/api/method/kanzlei_erp.posteingang_confirmation.undo_confirm');
+});

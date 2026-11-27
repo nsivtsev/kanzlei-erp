@@ -1,0 +1,875 @@
+"""Working-date rule and company holiday lookup for the one-click Posteingang."""
+
+import unittest
+from datetime import date
+from unittest.mock import patch
+
+import frappe
+from frappe.tests.utils import FrappeTestCase
+
+from kanzlei_erp.posteingang_simple import company_holidays, working_date
+from kanzlei_erp.tests.posteingang_helpers import PosteingangTestCase
+
+
+class TestWorkingDate(unittest.TestCase):
+	def test_five_working_days_before_deadline(self):
+		self.assertEqual(working_date(date(2026, 12, 15), date(2026, 11, 26), frozenset()), date(2026, 12, 8))
+
+	def test_skips_weekend_and_holidays(self):
+		self.assertEqual(working_date(date(2027, 1, 15), date(2026, 11, 26), frozenset()), date(2027, 1, 8))
+		self.assertEqual(
+			working_date(date(2027, 1, 15), date(2026, 11, 26), frozenset({date(2027, 1, 12)})),
+			date(2027, 1, 7),
+		)
+
+	def test_never_before_today(self):
+		self.assertEqual(working_date(date(2026, 11, 30), date(2026, 11, 26), frozenset()), date(2026, 11, 26))
+		self.assertEqual(working_date(date(2026, 11, 1), date(2026, 11, 26), frozenset()), date(2026, 11, 26))
+
+	def test_no_deadline_is_one_week(self):
+		self.assertEqual(working_date(None, date(2026, 11, 26), frozenset()), date(2026, 12, 3))
+
+
+class TestCompanyHolidays(FrappeTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.previous_default_company = frappe.db.get_single_value("Global Defaults", "default_company")
+
+	def tearDown(self):
+		frappe.db.set_single_value("Global Defaults", "default_company", self.previous_default_company)
+		frappe.db.rollback()
+
+	def test_reads_holidays_of_default_company(self):
+		holiday_list = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "Posteingang Simple Test",
+				"from_date": "2027-01-01",
+				"to_date": "2027-12-31",
+				"holidays": [{"holiday_date": "2027-01-12", "description": "Test"}],
+			}
+		).insert()
+		company = frappe.get_doc(
+			{
+				"doctype": "Company",
+				"company_name": "Posteingang Simple Test GmbH",
+				"abbr": "PST",
+				"default_currency": "EUR",
+				"country": "Germany",
+				"default_holiday_list": holiday_list.name,
+			}
+		)
+		# Company.insert() builds warehouses and accounts a fresh site lacks; only the link is needed.
+		company.db_insert()
+		frappe.db.set_single_value("Global Defaults", "default_company", company.name)
+		self.assertIn(date(2027, 1, 12), company_holidays())
+
+	def test_empty_without_default_company(self):
+		frappe.db.set_single_value("Global Defaults", "default_company", None)
+		self.assertEqual(company_holidays(), frozenset())
+
+
+class SimpleCase(PosteingangTestCase):
+	"""Shared setup and cleanup for one-click tests; holds no tests itself."""
+
+	def setUp(self):
+		delivery = patch("kanzlei_erp.drive_realtime._deliver")
+		delivery.start()
+		self.addCleanup(delivery.stop)
+		from kanzlei_erp.posteingang_setup import DEFAULTS
+
+		self.settings = {key: frappe.db.get_single_value("Posteingang Settings", key) for key in DEFAULTS}
+		super().setUp()
+		from kanzlei_erp import posteingang_confirmation, posteingang_jobs, posteingang_workspace
+
+		self.review, self.jobs, self.workspace = posteingang_confirmation, posteingang_jobs, posteingang_workspace
+		self.committed, self.customers = [], [self.customer.name]
+		# The fixture letters address this name; another name is a matching conflict.
+		self.customer.customer_name = RECIPIENT
+		self.customer.append("kanzlei_identifiers", SYN_0007)
+		self.customer.save()
+		self.share_and_verify(self.customer)
+
+	def share_and_verify(self, customer, write=1):
+		from kanzlei_erp.mandant_identifiers import verify_identifier
+
+		frappe.share.add("Customer", customer.name, self.operator.name, read=1, write=write)
+		frappe.share.add("Customer", customer.name, self.manager.name, read=1, write=1)
+		frappe.set_user(self.manager.name)
+		customer.reload()
+		verify_identifier(customer.name, customer.kanzlei_identifiers[0].name, str(customer.modified), "Synthetic one-click source")
+		frappe.set_user("Administrator")
+
+	def successful(self, case="AP01-01"):
+		from kanzlei_erp.tests.test_posteingang_matching import TestPosteingangMatching
+
+		doc = TestPosteingangMatching.successful_letter(self, case)
+		self.committed.append(doc.name)
+		return doc
+
+	def mutate_result(self, doc, change):
+		import json
+
+		frappe.set_user("Administrator")
+		run = frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, ["name", "result_json"], as_dict=True)
+		result = json.loads(run.result_json)
+		change(result)
+		frappe.db.set_value("Incoming Letter Run", run.name, "result_json", json.dumps(result))
+		return result
+
+	def tearDown(self):
+		# process_run commits everything setUp created; remove it so verified SYN-0007
+		# Customers and open Letters do not pile up for later runs and other modules.
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+		if self.committed:
+			for name in self.committed:
+				frappe.db.delete("File", {"attached_to_doctype": "Incoming Letter", "attached_to_name": name})
+				for kind in ("Incoming Letter Intake Receipt", "Incoming Letter Event", "Incoming Letter Run"):
+					frappe.db.delete(kind, {"letter": name})
+				frappe.db.delete("Incoming Letter Action", {"parent": name})
+				frappe.db.delete("Incoming Letter", {"name": name})
+			for name in self.customers:
+				frappe.db.delete("DocShare", {"share_doctype": "Customer", "share_name": name})
+				frappe.delete_doc("Customer", name, force=True, ignore_permissions=True)
+			for user in (self.operator, self.reader, self.stranger, self.manager, self.website):
+				frappe.delete_doc("User", user.name, force=True, ignore_permissions=True)
+			frappe.db.set_single_value("Posteingang Settings", self.settings)
+			frappe.db.commit()
+		super().tearDown()
+
+	def card(self, doc, user=None):
+		frappe.set_user(user or self.operator.name)
+		return self.workspace.get_letter_workspace(doc.name)["card"]
+
+	def status(self, doc, status):
+		frappe.set_user("Administrator")
+		frappe.db.set_value("Incoming Letter", doc.name, "status", status, update_modified=False)
+
+	def manual_review(self, doc):
+		frappe.set_user(self.operator.name)
+		self.jobs.manual_review(doc.name, doc.revision, frappe.generate_hash())
+
+	def add_action(self, doc):
+		frappe.set_user(self.operator.name)
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		self.review.add_manual_action(doc.name, "Synthetic work", "Synthetic description", revision, frappe.generate_hash())
+
+
+class TestSimpleCard(SimpleCase):
+	def test_queued_and_processing_are_analyzing(self):
+		doc = self.letter()
+		for status in ("Queued", "Processing"):
+			self.status(doc, status)
+			card = self.card(doc)
+			self.assertEqual(card["state"], "analyzing")
+			self.assertEqual(card["tasks"], [])
+			self.assertEqual(card["customer"], {"suggested": None, "candidates": [], "ambiguity": None})
+			self.assertIsNone(card["undo_until"])
+
+	def test_error_is_failed(self):
+		doc = self.letter()
+		self.status(doc, "Error")
+		self.assertEqual(self.card(doc)["state"], "failed")
+
+	def test_unreadable_extraction_is_failed(self):
+		doc = self.successful("AP01-11")
+		self.assertIn(doc.status, ("Needs Review", "Needs Clarification"))
+		card = self.card(doc)
+		self.assertEqual(card["state"], "failed")
+		self.assertEqual(card["tasks"], [])
+
+	def test_received_and_review_without_run_are_not_started(self):
+		doc = self.letter()
+		self.assertEqual(self.card(doc)["state"], "not_started")
+		self.manual_review(doc)
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "status"), "Needs Review")
+		card = self.card(doc)
+		self.assertEqual(card["state"], "not_started")
+		self.assertIsNone(card["run"])
+		self.assertEqual(card["tasks"], [])
+
+	def test_stored_actions_are_a_draft_even_with_a_run(self):
+		doc = self.successful()
+		self.add_action(doc)
+		card = self.card(doc)
+		self.assertEqual(card["state"], "draft")
+		self.assertTrue(card["run"])
+		self.assertEqual([task["title"] for task in card["tasks"]], ["Synthetic work"])
+		task = card["tasks"][0]
+		self.assertIsNone(task["source_index"])
+		self.assertEqual(task["description"], "Synthetic description")
+		self.assertEqual(task["deadline"], {"kind": "not_found", "date": None, "wording": None, "page": None, "quote": None, "verified": False})
+		self.assertEqual(task["internal_date"], str(working_date(None, frappe.utils.getdate(), company_holidays())))
+		self.assertEqual(task["assigned_to"], self.operator.name)
+
+	def test_needs_clarification_with_actions_is_a_draft(self):
+		doc = self.letter()
+		self.manual_review(doc)
+		self.add_action(doc)
+		self.status(doc, "Needs Clarification")
+		self.assertEqual(self.card(doc)["state"], "draft")
+
+	def test_successful_run_without_actions_is_a_proposal(self):
+		doc = self.successful()
+		card = self.card(doc)
+		self.assertEqual(card["state"], "proposal")
+		self.assertEqual(card["run"], frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, "name"))
+		self.assertEqual(card["customer"]["ambiguity"], "none")
+		self.assertEqual(card["customer"]["suggested"], {"customer": self.customer.name, "customer_name": self.customer.customer_name,
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "conflicts": [], "page": 1})
+		self.assertEqual(card["customer"]["candidates"], [{"customer": self.customer.name, "customer_name": self.customer.customer_name,
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True, "conflicts": []}])
+		self.assertEqual(card["tasks"], [{"source_index": 0, "title": "Unterlagen einreichen", "description": "Bitte die angeforderten Unterlagen einreichen.",
+			"deadline": {"kind": "explicit_date", "date": "2026-11-20", "wording": "Bitte bis zum 20.11.2026 einreichen.", "page": 1, "quote": "Bitte bis zum 20.11.2026 einreichen.", "verified": True},
+			"internal_date": str(working_date(date(2026, 11, 20), frappe.utils.getdate(), company_holidays())),
+			"assigned_to": self.operator.name, "assigned_to_name": self.operator.full_name}])
+		self.assertIsNone(card["no_task_reason"])
+		self.assertIsNone(card["undo_until"])
+
+	def test_unknown_action_assessment_is_failed_not_no_task(self):
+		# Test-side state: a readable letter whose actions the assistant could not assess.
+		doc = self.successful("AP01-03")
+		result = self.mutate_result(doc, lambda value: value.update(action_assessment="unknown"))
+		self.assertNotEqual(result["readability"], "unreadable")
+		card = self.card(doc)
+		self.assertEqual((card["state"], card["tasks"], card["no_task_reason"]), ("failed", [], None))
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
+			TestConfirmSimple.run_confirm(self, doc, [])
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "status"), "Needs Review")
+
+	def test_name_mismatch_is_suggested_with_its_warning(self):
+		frappe.set_user("Administrator")
+		# Test-side state: the letter names another company than the verified identifier's Customer.
+		frappe.db.set_value("Customer", self.customer.name, "customer_name", "Synthetic Other Name GmbH", update_modified=False)
+		doc = self.successful()
+		customer = self.card(doc)["customer"]
+		self.assertEqual(customer["ambiguity"], "none")
+		self.assertEqual((customer["suggested"]["customer"], customer["suggested"]["conflicts"]), (self.customer.name, ["name_mismatch"]))
+		self.assertEqual([c["conflicts"] for c in customer["candidates"]], [["name_mismatch"]])
+		TestConfirmSimple.run_confirm(self, doc, TestConfirmSimple.proposal_tasks(self, doc))
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "customer_reason"), "Vorschlag übernommen")
+
+	def test_identifier_conflict_is_not_suggested(self):
+		frappe.set_user("Administrator")
+		# Test-side state: the Customer's verified reference differs from the one in the letter;
+		# only the matching name (RECIPIENT, see setUp) makes it a candidate.
+		frappe.db.set_value("Mandant Identifier", self.customer.kanzlei_identifiers[0].name, "raw_value", "SYN-0008", update_modified=False)
+		doc = self.successful()
+		customer = self.card(doc)["customer"]
+		self.assertEqual(customer["ambiguity"], "none")
+		self.assertIsNone(customer["suggested"])
+		self.assertEqual([(c["customer"], c["conflicts"]) for c in customer["candidates"]], [(self.customer.name, ["identifier_conflict"])])
+		TestConfirmSimple.run_confirm(self, doc, TestConfirmSimple.proposal_tasks(self, doc))
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "customer_reason"), "Manuell gewählt")
+
+	def test_card_says_whether_holidays_are_known(self):
+		doc = self.successful()
+		for holidays, known in ((frozenset(), False), (frozenset({date(2026, 11, 18)}), True)):
+			with self.subTest(known=known), patch("kanzlei_erp.posteingang_simple.company_holidays", return_value=holidays):
+				self.assertIs(self.card(doc)["holidays_known"], known)
+
+	def test_completed_is_done(self):
+		doc = self.confirm_fixture(self.letter())
+		card = self.card(doc)
+		self.assertEqual(card["state"], "done")
+		self.assertEqual(card["tasks"], [])
+
+	def test_multiple_matches_suggest_nothing(self):
+		frappe.set_user("Administrator")
+		other = frappe.copy_doc(self.customer)
+		other.customer_name += " other"
+		other.insert()
+		self.customers.append(other.name)
+		self.share_and_verify(other)
+		card = self.card(self.successful())
+		self.assertEqual(card["customer"]["ambiguity"], "multiple_matches")
+		self.assertIsNone(card["customer"]["suggested"])
+		self.assertEqual({c["customer"] for c in card["customer"]["candidates"]}, {self.customer.name, other.name})
+
+	def test_read_only_candidate_is_not_suggested(self):
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		frappe.share.add("Customer", self.customer.name, self.operator.name, read=1)
+		card = self.card(self.successful())
+		self.assertEqual(card["customer"]["ambiguity"], "none")
+		self.assertIsNone(card["customer"]["suggested"])
+		self.assertFalse(card["customer"]["candidates"][0]["can_select"])
+
+	def test_relative_deadline_has_no_internal_date(self):
+		task = self.card(self.successful("AP01-07"))["tasks"][0]
+		self.assertIsNone(task["internal_date"])
+		self.assertEqual(task["deadline"], {"kind": "relative", "date": None, "wording": "Bitte innerhalb eines Monats nach Zustellung einreichen.",
+			"page": 1, "quote": "Bitte innerhalb eines Monats nach Zustellung einreichen.", "verified": True})
+
+	def test_no_actions_found_gives_a_reason(self):
+		card = self.card(self.successful("AP01-03"))
+		self.assertEqual(card["state"], "proposal")
+		self.assertEqual(card["tasks"], [])
+		self.assertEqual(card["no_task_reason"], "Reine Information ohne Handlungsbedarf.")
+
+	def test_inactive_uploader_falls_back_to_current_user(self):
+		doc = self.successful()
+		frappe.db.set_value("User", self.operator.name, "enabled", 0)
+		task = self.card(doc, self.manager.name)["tasks"][0]
+		self.assertEqual(task["assigned_to"], self.manager.name)
+		self.assertEqual(task["assigned_to_name"], self.manager.full_name)
+
+	def apply(self, doc):
+		frappe.set_user(self.operator.name)
+		state = self.review.get_review_state(doc.name)
+		self.review.apply_result(doc.name, state["proposal"]["run"], state["revision"], frappe.generate_hash(), False)
+
+	def test_applied_run_keeps_proposed_deadlines_in_the_draft(self):
+		doc = self.successful("AP01-40")
+		self.apply(doc)
+		card = self.card(doc)
+		self.assertEqual(card["state"], "draft")
+		explicit, relative = card["tasks"]
+		self.assertEqual(explicit["source_index"], 0)
+		self.assertEqual(explicit["deadline"], {"kind": "explicit_date", "date": "2026-12-22", "wording": "Spätester Eingang: 22.12.2026.",
+			"page": 2, "quote": "Spätester Eingang: 22.12.2026.", "verified": True})
+		self.assertEqual(explicit["internal_date"], str(working_date(date(2026, 12, 22), frappe.utils.getdate(), company_holidays())))
+		self.assertEqual(relative["deadline"]["kind"], "relative")
+		self.assertEqual(relative["deadline"]["wording"], "Antwort innerhalb von sieben Tagen nach der Musterfreigabe.")
+		self.assertIsNone(relative["deadline"]["date"])
+		self.assertIsNone(relative["internal_date"])
+
+	def test_draft_keeps_human_decisions_and_drops_rejected_rows(self):
+		doc = self.successful("AP01-40")
+		self.apply(doc)
+		frappe.set_user("Administrator")
+		first, second = self.review._actions(doc.name)
+		# Test-side state: decisions a human saved earlier in the multi-step review.
+		frappe.db.set_value("Incoming Letter Action", first.name, {"scheduling_decision": "unscheduled", "assignment_decision": "unassigned"})
+		frappe.db.set_value("Incoming Letter Action", second.name, "decision", "reject")
+		card = self.card(doc)
+		self.assertEqual([task["title"] for task in card["tasks"]], [first.title])
+		task = card["tasks"][0]
+		self.assertIsNone(task["internal_date"])
+		self.assertIsNone(task["assigned_to"])
+		self.assertIsNone(task["assigned_to_name"])
+
+	def test_uploader_without_mandant_access_falls_back_to_current_user(self):
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		card = self.card(doc, self.manager.name)
+		self.assertEqual(card["customer"]["suggested"]["customer"], self.customer.name)
+		self.assertEqual(card["tasks"][0]["assigned_to"], self.manager.name)
+
+	def test_cancelled_is_done(self):
+		doc = self.letter()
+		self.status(doc, "Cancelled")
+		card = self.card(doc)
+		self.assertEqual(card["state"], "done")
+		self.assertEqual(card["tasks"], [])
+
+
+RECIPIENT = "Beispielbetrieb Alpha GmbH"
+SYN_0007 = {"identifier_type": "other", "raw_value": "SYN-0007", "jurisdiction": "SYNTHETIC",
+	"authority": "Fiktive Beispielstelle", "other_type": "synthetic_client_reference"}
+
+
+class TestConfirmSimple(SimpleCase):
+	def run_confirm(self, doc, tasks, origin="proposal", customer=None, key=None, revision=None, user=None):
+		frappe.set_user(user or self.operator.name)
+		revision = revision or frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		return self.review.confirm_simple(doc.name, revision, key or frappe.generate_hash(), origin, customer or self.customer.name, tasks)
+
+	def proposal_tasks(self, doc, indices=None, **changes):
+		tasks = []
+		for task in self.card(doc)["tasks"]:
+			if indices is None or task["source_index"] in indices:
+				explicit = task["deadline"]["kind"] == "explicit_date"
+				tasks.append({"source_index": task["source_index"], "title": task["title"], "description": task["description"],
+					"external_date": task["deadline"]["date"] if explicit else None, "internal_date": None,
+					"assigned_to": task["assigned_to"], **changes})
+		return tasks
+
+	def manual_task(self, **changes):
+		return {"source_index": None, "title": "Synthetic manual work", "description": "", "external_date": None,
+			"internal_date": None, "assigned_to": self.operator.name, **changes}
+
+	def written(self, doc):
+		frappe.set_user("Administrator")
+		row = frappe.db.get_value("Incoming Letter", doc.name, ["revision", "status", "selected_customer", "customer_reason", "applied_run"], as_dict=True)
+		return (dict(row), len(self.review._actions(doc.name)), frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}))
+
+	def letter_row(self, doc):
+		return frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True)
+
+	def event(self, doc):
+		return frappe.db.get_value("Incoming Letter Event", {"letter": doc.name, "event_type": "confirm_simple"}, "*", as_dict=True)
+
+	def working(self, deadline):
+		return str(working_date(frappe.utils.getdate(deadline) if deadline else None, frappe.utils.getdate(), company_holidays()))
+
+	def test_proposal_creates_one_task_with_working_date(self):
+		import json
+
+		doc = self.successful()
+		card = self.card(doc)
+		tasks = self.proposal_tasks(doc)
+		result = self.run_confirm(doc, tasks)
+		self.assertEqual(result["status"], "Completed")
+		self.assertFalse(result["replayed"])
+		self.assertEqual(len(result["actions"]), 1)
+		task = frappe.get_doc("Task", result["actions"][0]["task"])
+		self.assertEqual(task.subject, "Unterlagen einreichen")
+		self.assertEqual(task.kanzlei_customer, card["customer"]["suggested"]["customer"])
+		self.assertEqual(str(frappe.utils.getdate(task.exp_end_date)), self.working("2026-11-20"))
+		self.assertEqual(result["tasks_modified"], {task.name: str(task.modified)})
+		self.assertEqual(frappe.db.count("ToDo", {"reference_type": "Task", "reference_name": task.name, "allocated_to": self.operator.name}), 1)
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.status, letter.customer_reason, letter.confirmed_customer), ("Completed", "Vorschlag übernommen", self.customer.name))
+		self.assertEqual(letter.applied_run, card["run"])
+		self.assertTrue(letter.sender)
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual((row.decision, row.external_date_basis, row.source_run), ("accept", "Vorschlag übernommen (Fundstelle S. 1)", card["run"]))
+		self.assertEqual(str(row.external_date), "2026-11-20")
+		event = self.event(doc)
+		payload = json.loads(event.payload_json)
+		self.assertEqual(payload["origin"], "proposal")
+		self.assertEqual(payload["customer"], self.customer.name)
+		self.assertEqual(payload["tasks"], tasks)
+		self.assertIs(payload["review"]["human_verified"], True)
+		self.assertEqual(payload["before"]["review"]["actions"], [])
+		self.assertIn("fact_evidence_json", payload["before"])
+
+	def test_unselected_proposal_action_is_rejected(self):
+		doc = self.successful("AP01-40")
+		result = self.run_confirm(doc, self.proposal_tasks(doc, {0}))
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 1)
+		self.assertEqual(len(result["actions"]), 1)
+		first, second = self.review._actions(doc.name)
+		self.assertEqual((first.source_index, first.decision, first.created_task), (0, "accept", result["actions"][0]["task"]))
+		self.assertEqual((second.source_index, second.decision, second.rejection_reason), (1, "reject", "Nicht ausgewählt"))
+		self.assertFalse(second.created_task)
+
+	def test_changed_proposal_date_is_marked_as_entered(self):
+		doc = self.successful()
+		self.run_confirm(doc, self.proposal_tasks(doc, external_date="2026-12-01"))
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual((str(row.external_date), row.external_date_basis), ("2026-12-01", "Manuell eingetragen"))
+
+	def test_unverified_deadline_evidence_cites_no_page(self):
+		import json
+
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		run = frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, ["name", "result_json"], as_dict=True)
+		result = json.loads(run.result_json)
+		# Test-side state: a quote that does not occur on the OCR page is stamped "unverified".
+		result["actions"][0]["deadline"]["evidence"][0]["quote"] = "Synthetic quote absent from the letter"
+		frappe.db.set_value("Incoming Letter Run", run.name, "result_json", json.dumps(result))
+		deadline = self.card(doc)["tasks"][0]["deadline"]
+		self.assertEqual((deadline["page"], deadline["quote"], deadline["verified"]), (None, "Synthetic quote absent from the letter", False))
+		self.run_confirm(doc, self.proposal_tasks(doc))
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual(row.external_date_basis, "Vorschlag übernommen (ohne geprüfte Fundstelle)")
+
+	def test_archive_without_tasks_states_why(self):
+		doc = self.successful("AP01-03")
+		self.run_confirm(doc, [])
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.status, letter.review_outcome), ("Completed", "no_actions"))
+		self.assertEqual(letter.no_actions_reason, "Vom Assistenten: keine Handlung erforderlich, übernommen")
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 0)
+
+	def test_archive_with_proposed_tasks_rejects_them(self):
+		doc = self.successful()
+		self.run_confirm(doc, [])
+		self.assertEqual(self.letter_row(doc).no_actions_reason, "Ohne Aufgabe abgelegt")
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual((row.decision, row.rejection_reason), ("reject", "Nicht ausgewählt"))
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 0)
+
+	def test_relative_deadline_requires_a_human_date(self):
+		doc = self.successful("AP01-07")
+		before = self.written(doc)
+		with self.assertRaisesRegex(frappe.ValidationError, "DEADLINE_REQUIRED"):
+			self.run_confirm(doc, self.proposal_tasks(doc))
+		self.assertEqual(self.written(doc), before)
+		result = self.run_confirm(doc, self.proposal_tasks(doc, external_date="2026-12-10"))
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual(row.external_date_basis, "Vom Benutzer eingetragen: „Bitte innerhalb eines Monats nach Zustellung einreichen.“")
+		self.assertTrue(row.external_date_basis.startswith("Vom Benutzer eingetragen"))
+		task = frappe.get_doc("Task", result["actions"][0]["task"])
+		self.assertEqual(str(frappe.utils.getdate(task.exp_end_date)), self.working("2026-12-10"))
+
+	def test_multiple_addressees_with_explicit_customer(self):
+		doc = self.successful("AP01-06")
+		self.assertEqual(self.card(doc)["customer"]["ambiguity"], "multiple_addressees")
+		result = self.run_confirm(doc, self.proposal_tasks(doc))
+		self.assertEqual(result["status"], "Completed")
+		self.assertEqual(self.letter_row(doc).customer_reason, "Mehrere Empfänger, Mandant manuell gewählt")
+
+	def test_error_letter_only_confirms_manually(self):
+		doc = self.letter()
+		self.status(doc, "Error")
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_TRANSITION"):
+			self.run_confirm(doc, [self.manual_task()])
+		for tasks in (None, [self.manual_task(assigned_to="")], [self.manual_task(source_index=0)], [self.manual_task(external_date="10.12.2026")], [self.manual_task(external_date="2026-W48-4")]):
+			with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
+				self.run_confirm(doc, tasks, "manual")
+		result = self.run_confirm(doc, [self.manual_task()], "manual")
+		self.assertEqual(result["status"], "Completed")
+		task = frappe.get_doc("Task", result["actions"][0]["task"])
+		self.assertEqual((task.subject, task.description), ("Synthetic manual work", "Synthetic manual work"))
+		self.assertEqual(str(frappe.utils.getdate(task.exp_end_date)), self.working(None))
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.status, letter.customer_reason), ("Completed", "Manuell gewählt"))
+		self.assertIsNone(self.review._actions(doc.name)[0].external_date_basis)
+
+	def test_received_letter_archives_manually(self):
+		doc = self.letter()
+		self.assertEqual(self.letter_row(doc).status, "Received")
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_TRANSITION"):
+			self.run_confirm(doc, [])
+		self.run_confirm(doc, [], "manual")
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.status, letter.no_actions_reason), ("Completed", "Ohne Aufgabe abgelegt"))
+
+	def test_manual_confirm_on_an_analyzed_letter_keeps_its_document_fields(self):
+		import json
+
+		doc = self.successful()
+		card = self.card(doc)
+		frappe.set_user("Administrator")
+		self.assertFalse(any(self.letter_row(doc)[key] for key in self.review.DOCUMENT_FIELDS))
+		extraction = self.review._latest_successful(frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True))[1]
+		self.run_confirm(doc, [self.manual_task()], "manual")
+		letter = self.letter_row(doc)
+		self.assertEqual(letter.sender, extraction["sender"]["value"])
+		self.assertEqual(letter.letter_type, extraction["letter_type"]["value"])
+		self.assertTrue(letter.sender)
+		self.assertEqual(letter.applied_run, card["run"])
+		self.assertEqual(json.loads(letter.fact_evidence_json)["sender"], extraction["sender"]["evidence"])
+		(row,) = self.review._actions(doc.name)
+		self.assertFalse(row.source_run)
+		self.assertIsNone(row.source_index)
+		payload = json.loads(self.event(doc).payload_json)
+		self.assertFalse(any(payload["before"]["document_fields"].values()))
+		self.assertIsNone(payload["before"]["applied_run"])
+
+	def test_manual_confirm_keeps_fields_a_human_already_has(self):
+		doc = self.letter()
+		self.manual_review(doc)
+		self.run_confirm(doc, [self.manual_task()], "manual")
+		letter = self.letter_row(doc)
+		self.assertFalse(letter.applied_run)
+		self.assertFalse(letter.sender)
+
+	def test_manual_dates_are_marked_as_entered(self):
+		doc = self.letter()
+		self.manual_review(doc)
+		result = self.run_confirm(doc, [self.manual_task(external_date="2027-01-15", internal_date="2027-01-04")], "manual")
+		(row,) = self.review._actions(doc.name)
+		self.assertEqual((row.external_date_basis, str(row.internal_date)), ("Manuell eingetragen", "2027-01-04"))
+		self.assertEqual(str(frappe.utils.getdate(frappe.db.get_value("Task", result["actions"][0]["task"], "exp_end_date"))), "2027-01-04")
+
+	def test_proposal_refuses_a_letter_with_a_draft(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc)
+		self.add_action(doc)
+		before = self.written(doc)
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
+			self.run_confirm(doc, tasks)
+		self.assertEqual(self.written(doc), before)
+
+	def test_unknown_source_index_is_refused(self):
+		doc = self.successful()
+		for index in (1, None):
+			with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
+				self.run_confirm(doc, self.proposal_tasks(doc, source_index=index))
+
+	def test_same_request_key_replays(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc)
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		first = self.run_confirm(doc, tasks, key="double-click", revision=revision)
+		second = self.run_confirm(doc, tasks, key="double-click", revision=revision)
+		self.assertTrue(second["replayed"])
+		self.assertEqual(second["actions"], first["actions"])
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 1)
+
+	def test_stale_revision_creates_nothing(self):
+		doc = self.successful()
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		self.assertGreater(revision, 1)
+		with self.assertRaisesRegex(frappe.ValidationError, "REVISION_CONFLICT"):
+			self.run_confirm(doc, self.proposal_tasks(doc), revision=revision - 1)
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 0)
+
+	def test_assignee_without_customer_read_writes_nothing(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc, assigned_to=self.stranger.name)
+		before = self.written(doc)
+		with self.assertRaisesRegex(frappe.ValidationError, "ASSIGNEE_NOT_ALLOWED"):
+			self.run_confirm(doc, tasks)
+		self.assertEqual(self.written(doc), before)
+
+	def test_read_only_customer_writes_nothing(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc)
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		frappe.share.add("Customer", self.customer.name, self.operator.name, read=1)
+		before = self.written(doc)
+		with self.assertRaises(frappe.PermissionError):
+			self.run_confirm(doc, tasks)
+		self.assertEqual(self.written(doc), before)
+
+
+class TestSearchAssignees(SimpleCase):
+	def search(self, doc, **kwargs):
+		frappe.set_user(self.operator.name)
+		return {row["user"] for row in self.review.search_assignees(doc.name, "", **kwargs)["rows"]}
+
+	def test_candidate_customer_lists_staff_who_can_read_it(self):
+		doc = self.successful()
+		self.assertFalse(frappe.db.get_value("Incoming Letter", doc.name, "selected_customer"))
+		self.assertEqual(self.search(doc), set())
+		users = self.search(doc, customer=self.customer.name)
+		self.assertTrue({self.operator.name, self.reader.name, self.manager.name} <= users)
+		self.assertNotIn(self.stranger.name, users)
+		self.assertNotIn(self.website.name, users)
+
+	def test_candidate_customer_must_be_selectable(self):
+		doc = self.successful()
+		frappe.set_user("Administrator")
+		frappe.share.remove("Customer", self.customer.name, self.operator.name)
+		frappe.share.add("Customer", self.customer.name, self.operator.name, read=1)
+		with self.assertRaises(frappe.PermissionError):
+			self.search(doc, customer=self.customer.name)
+		with self.assertRaises(frappe.PermissionError):
+			self.search(doc, customer="SYN-NO-SUCH-CUSTOMER")
+
+
+class TestReceiptProjection(unittest.TestCase):
+	def test_hides_tasks_the_reader_cannot_read(self):
+		from kanzlei_erp.posteingang_confirmation import _receipt_projection
+
+		result = {"actions": [{"action_id": "a", "task": "TASK-OPEN"}, {"action_id": "b", "task": "TASK-HIDDEN"}, {"action_id": "c", "task": "TASK-GONE"}],
+			"tasks_modified": {"TASK-OPEN": "2026-11-26 10:00:00", "TASK-HIDDEN": "2026-11-26 10:00:01", "TASK-GONE": "2026-11-26 10:00:02"}}
+
+		def read(doctype, ptype, doc=None, **kw):
+			if doc == "TASK-GONE":
+				raise frappe.DoesNotExistError
+			return doc != "TASK-HIDDEN"
+
+		# A Task deleted by undo_confirm is neither readable nor an error.
+		with patch("frappe.has_permission", side_effect=read), patch("frappe.db.exists", side_effect=lambda doctype, name=None, *a, **kw: name != "TASK-GONE"):
+			projected = _receipt_projection(result)
+		self.assertEqual([row["task"] for row in projected["actions"]], ["TASK-OPEN", None, None])
+		self.assertEqual(projected["tasks_modified"], {"TASK-OPEN": "2026-11-26 10:00:00"})
+		self.assertEqual(len(result["tasks_modified"]), 3)
+
+
+class TestQueueRow(SimpleCase):
+	def row(self, doc):
+		# get_queue scans every Letter of the shared test site; the row projection is what changed.
+		from kanzlei_erp.posteingang_documents import original
+
+		frappe.set_user(self.operator.name)
+		letter = frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True)
+		return self.workspace._row(letter, original(letter))
+
+	def test_rail_row_carries_the_card_state_and_proposed_document_fields(self):
+		doc = self.successful()
+		self.assertFalse(frappe.db.get_value("Incoming Letter", doc.name, "sender"))
+		extraction = self.review._latest_successful(frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True))[1]
+		row = self.row(doc)
+		self.assertEqual((row["card_state"], row["sender"], row["letter_type"]), ("proposal", extraction["sender"]["value"], extraction["letter_type"]["value"]))
+		self.assertTrue(row["sender"])
+		self.add_action(doc)
+		self.assertEqual(self.row(doc)["card_state"], "draft")
+
+	def test_rail_row_of_an_unassessed_letter_is_failed(self):
+		doc = self.successful("AP01-03")
+		self.mutate_result(doc, lambda value: value.update(action_assessment="unknown"))
+		self.assertEqual(self.row(doc)["card_state"], "failed")
+
+	def test_rail_row_without_analysis(self):
+		doc = self.letter()
+		self.assertEqual(self.row(doc)["card_state"], "not_started")
+		self.status(doc, "Completed")
+		self.assertEqual(self.row(doc)["card_state"], "done")
+
+
+class TestUndoConfirm(SimpleCase):
+	run_confirm = TestConfirmSimple.run_confirm
+	proposal_tasks = TestConfirmSimple.proposal_tasks
+	letter_row = TestConfirmSimple.letter_row
+
+	def undo(self, doc, key=None, user=None):
+		frappe.set_user(user or self.operator.name)
+		revision = frappe.db.get_value("Incoming Letter", doc.name, "revision")
+		return self.review.undo_confirm(doc.name, revision, key or frappe.generate_hash())
+
+	def later(self, doc, seconds):
+		from datetime import timedelta
+
+		moment = frappe.utils.get_datetime(self.letter_row(doc).confirmed_at) + timedelta(seconds=seconds)
+		return patch("kanzlei_erp.posteingang_confirmation.now_datetime", return_value=moment)
+
+	def confirmed(self, case="AP01-01"):
+		doc = self.successful(case)
+		result = self.run_confirm(doc, self.proposal_tasks(doc))
+		return doc, result["actions"][0]["task"]
+
+	def assert_refused(self, doc, task, code, user=None):
+		revision = self.letter_row(doc).revision
+		with self.assertRaisesRegex(frappe.ValidationError, code):
+			self.undo(doc, user=user)
+		frappe.set_user("Administrator")
+		self.assertEqual((self.letter_row(doc).status, self.letter_row(doc).revision), ("Completed", revision))
+		self.assertTrue(frappe.db.exists("Task", task))
+
+	def test_undo_within_window_reopens_the_proposal(self):
+		import json
+		from datetime import timedelta
+
+		doc = self.successful()
+		fields = ("sender", "document_date", "letter_type", "summary", "fact_evidence_json", "applied_run")
+		before = {key: self.letter_row(doc)[key] for key in fields}
+		result = self.run_confirm(doc, self.proposal_tasks(doc))
+		task = result["actions"][0]["task"]
+		confirmed = self.letter_row(doc)
+		self.assertNotEqual(confirmed.sender, before["sender"])
+		self.assertNotEqual(confirmed.fact_evidence_json, before["fact_evidence_json"])
+		self.assertEqual(self.card(doc)["undo_until"], (frappe.utils.get_datetime(confirmed.confirmed_at) + timedelta(seconds=600)).isoformat())
+		with patch("frappe.delete_doc", wraps=frappe.delete_doc) as deleted:
+			undone = self.undo(doc, key="undo-once")
+		self.assertEqual({call.args[0] for call in deleted.call_args_list}, {"ToDo", "Task"})
+		self.assertEqual((undone["status"], undone["replayed"]), ("Needs Review", False))
+		frappe.set_user("Administrator")
+		self.assertFalse(frappe.db.exists("Task", task))
+		self.assertEqual(frappe.db.count("ToDo", {"reference_type": "Task", "reference_name": task}), 0)
+		self.assertTrue(frappe.db.exists("Deleted Document", {"deleted_doctype": "Task", "deleted_name": task}))
+		self.assertEqual(self.review._actions(doc.name), [])
+		letter = self.letter_row(doc)
+		self.assertEqual({key: letter[key] for key in fields}, before)
+		self.assertEqual((letter.status, letter.review_outcome, letter.revision), ("Needs Review", "pending", confirmed.revision + 1))
+		for key in ("selected_customer", "customer_reason", "confirmed_customer", "confirmed_by", "confirmed_at", "confirmation_receipt_json", "no_actions_reason"):
+			self.assertFalse(letter[key], key)
+		event = frappe.db.get_value("Incoming Letter Event", {"letter": doc.name, "event_type": "undo_confirm"}, ["actor", "payload_json"], as_dict=True)
+		payload = json.loads(event.payload_json)
+		self.assertEqual((event.actor, payload["tasks"], payload["before"]["status"]), (self.operator.name, [task], "Completed"))
+		card = self.card(doc)
+		self.assertEqual((card["state"], card["undo_until"]), ("proposal", None))
+		self.assertTrue(self.undo_replay(doc, "undo-once")["replayed"])
+		again = self.run_confirm(doc, self.proposal_tasks(doc))
+		# A deleted Task name is never handed out again (its after-commit link cleanup would hit it).
+		self.assertNotEqual(again["actions"][0]["task"], task)
+		self.assertEqual(frappe.db.get_value("Task", again["actions"][0]["task"], "kanzlei_incoming_action_id"), again["actions"][0]["action_id"])
+		self.assertEqual(frappe.db.count("Task", {"kanzlei_incoming_letter": doc.name}), 1)
+
+	def undo_replay(self, doc, key):
+		frappe.set_user(self.operator.name)
+		event = frappe.db.get_value("Incoming Letter Event", {"letter": doc.name, "event_type": "undo_confirm"}, "revision_before")
+		return self.review.undo_confirm(doc.name, event, key)
+
+	def test_undo_expires_after_ten_minutes(self):
+		doc, task = self.confirmed()
+		with self.later(doc, 601):
+			self.assertIsNone(self.card(doc)["undo_until"])
+			self.assert_refused(doc, task, "UNDO_EXPIRED")
+		with self.later(doc, 600):
+			self.assertIsNotNone(self.card(doc)["undo_until"])
+			self.assertEqual(self.undo(doc)["status"], "Needs Review")
+
+	def test_changed_task_cannot_be_undone(self):
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		item = frappe.get_doc("Task", task)
+		item.status = "Working"
+		item.save()
+		self.assertIsNone(self.card(doc)["undo_until"])
+		self.assert_refused(doc, task, "TASK_CHANGED")
+
+	def test_reassigned_task_cannot_be_undone(self):
+		from frappe.desk.form import assign_to
+
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		assign_to.add({"doctype": "Task", "name": task, "assign_to": [self.manager.name]})
+		self.assertIsNone(self.card(doc)["undo_until"])
+		self.assert_refused(doc, task, "TASK_CHANGED")
+
+	def test_other_operator_cannot_undo(self):
+		doc, task = self.confirmed()
+		self.assertIsNone(self.card(doc, self.manager.name)["undo_until"])
+		self.assert_refused(doc, task, "UNDO_EXPIRED", user=self.manager.name)
+		self.assertIsNotNone(self.card(doc)["undo_until"])
+
+	def test_task_delete_outside_undo_is_still_denied(self):
+		from kanzlei_erp.posteingang_task_access import undoing_confirmation
+
+		doc, task = self.confirmed()
+		frappe.set_user(self.operator.name)
+		for context in (None, (doc.name, {"TASK-OTHER"}), ("OTHER-LETTER", {task})):
+			with self.subTest(context=context), self.assertRaises(frappe.PermissionError):
+				if context:
+					with undoing_confirmation(*context):
+						frappe.delete_doc("Task", task)
+				else:
+					frappe.delete_doc("Task", task)
+		self.assertTrue(frappe.db.exists("Task", task))
+		self.assertEqual(self.undo(doc)["status"], "Needs Review")
+
+	def test_legacy_confirm_cannot_be_undone(self):
+		from kanzlei_erp import posteingang_matching as matching
+
+		doc = self.letter()
+		frappe.set_user(self.operator.name)
+		matching.select_customer(doc.name, self.customer.name, "Synthetic legacy review", 1, frappe.generate_hash())
+		self.jobs.manual_review(doc.name, 2, frappe.generate_hash())
+		state = self.review.get_review_state(doc.name)
+		review = state["review"]
+		review.update(mode="confirm", human_verified=True, no_actions_reason="Synthetic legacy archive")
+		self.assertEqual(self.review.confirm(doc.name, review, state["document_fields"], frappe.generate_hash())["status"], "Completed")
+		self.assertIsNone(self.card(doc)["undo_until"])
+		revision = self.letter_row(doc).revision
+		with self.assertRaisesRegex(frappe.ValidationError, "UNDO_EXPIRED"):
+			self.undo(doc)
+		self.assertEqual((self.letter_row(doc).status, self.letter_row(doc).revision), ("Completed", revision))
+
+	def test_undo_restores_the_status_before_confirm(self):
+		for status in ("Error", "Needs Clarification"):
+			with self.subTest(status=status):
+				doc = self.successful()
+				self.status(doc, status)
+				self.run_confirm(doc, [], "manual")
+				self.assertEqual(self.undo(doc)["status"], status)
+				self.assertEqual(self.letter_row(doc).status, status)
+
+	def test_undo_of_a_manual_confirm_restores_the_empty_document_fields(self):
+		doc = self.successful()
+		fields = (*self.review.DOCUMENT_FIELDS, "applied_run", "fact_evidence_json")
+		before = {key: self.letter_row(doc)[key] for key in fields}
+		self.assertFalse(before["sender"])
+		self.run_confirm(doc, [TestConfirmSimple.manual_task(self)], "manual")
+		self.assertTrue(self.letter_row(doc).sender)
+		self.undo(doc)
+		self.assertEqual({key: self.letter_row(doc)[key] for key in fields}, before)
+
+	def test_stale_confirm_replay_after_undo_hides_the_deleted_task(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc)
+		revision = self.letter_row(doc).revision
+		first = self.run_confirm(doc, tasks, key="confirm-once", revision=revision)
+		self.undo(doc)
+		self.assertFalse(frappe.db.exists("Task", first["actions"][0]["task"]))
+		replay = self.run_confirm(doc, tasks, key="confirm-once", revision=revision)
+		self.assertTrue(replay["replayed"])
+		self.assertEqual(([row["task"] for row in replay["actions"]], replay["tasks_modified"]), ([None], {}))
+
+	def test_archive_without_tasks_can_be_undone(self):
+		doc = self.successful("AP01-03")
+		self.run_confirm(doc, [])
+		self.assertIsNotNone(self.card(doc)["undo_until"])
+		self.assertEqual(self.undo(doc)["status"], "Needs Review")
+		letter = self.letter_row(doc)
+		self.assertEqual((letter.review_outcome, letter.no_actions_reason), ("pending", None))
+		self.assertEqual(self.card(doc)["state"], "proposal")
