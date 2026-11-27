@@ -441,12 +441,12 @@ test('page search waits for the shown dialog before reading a fast result',async
  dialogs[0].visible=true;await dialogs[0].on_page_show();assert.equal(reads,1);assert.ok(root.rows.includes('Synthetic'));
 });
 
-test('a conflicted single candidate is not preselected and says why',async()=>{
+test('an identifier conflict is not preselected and says why',async()=>{
  const candidate=(customer,code)=>({customer,customer_name:'Muster '+customer,why:'Steuernummer im Schreiben',can_select:true,conflicts:[code]});
- const one=workspace('one',{card:{customer:{suggested:null,candidates:[candidate('C1','name_mismatch')],ambiguity:'none'}}});
+ const one=workspace('one',{card:{customer:{suggested:null,candidates:[candidate('C1','identifier_conflict')],ambiguity:'none'}}});
  const h=await shown({letters:{one}});
  const radios=all(h.main()).filter(n=>n.type==='radio');assert.equal(radios.length,1);assert.equal(radios[0].checked,false);
- assert.ok(text(h.main()).includes('The extracted name differs from this Customer.'));
+ assert.ok(text(h.main()).includes('Conflicting identifiers require review.'));
  button(h.main(),'Accept').click();await settle();assert.equal(h.writes().length,0);assert.ok(text(h.main()).includes('Select the Mandant.'));
  const two=workspace('one',{card:{customer:{suggested:null,candidates:[candidate('C1','identifier_conflict'),candidate('C2','name_mismatch')],ambiguity:'multiple_matches'}}});
  const k=await shown({letters:{one:two}});
@@ -491,4 +491,15 @@ test('a changed task points to the Task itself, not to the administrative correc
  const h=await shown();
  const message=h.page.message(Error('TASK_CHANGED'));
  assert.ok(!message.includes('Create correction'),message);assert.match(message,/edit or close/i);
+});
+
+test('a name mismatch keeps the suggested Mandant and warns under it before Accept',async()=>{
+ const suggested={customer:'C1',customer_name:'Muster GmbH',why:'Steuernummer im Schreiben',page:1,conflicts:['name_mismatch']};
+ const one=workspace('one',{card:{customer:{suggested,candidates:[{...suggested,can_select:true}],ambiguity:'none'}}});
+ const h=await shown({letters:{one}});
+ const who=all(h.main()).find(n=>n.className==='pe-who');
+ assert.ok(who.textContent.includes('Muster GmbH'));
+ const warning=all(who).find(n=>n.className.includes('pe-conflict'));assert.equal(warning.textContent,'The extracted name differs from this Customer.');
+ assert.equal(all(h.main()).filter(n=>n.type==='radio').length,0);
+ button(h.main(),'Accept').click();await settle();assert.equal(h.writes()[0].args.customer,'C1');
 });

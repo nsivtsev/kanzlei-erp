@@ -97,7 +97,8 @@ test('listChip follows the card state of each row',()=>{
  assert.deepEqual(t({status:'Needs Review',card_state:'not_started',matching:null,deadline:null}),{tone:'need',text:'Not analysed'});
  assert.deepEqual(t({...ok,matching:{ambiguity:'multiple_matches',candidates:[]}}),{tone:'need',text:'Input needed'});
  assert.equal(t({...ok,deadline:{relative_count:1,uncertain_count:0}}).tone,'need');
- assert.equal(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[{code:'name_mismatch',identifier_type:null,evidence:[]}]}]}}).tone,'need','a conflicted Mandant is not preselected');
+ assert.equal(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[{code:'identifier_conflict',identifier_type:'other',evidence:[]}]}]}}).tone,'need','an identifier conflict is not preselected');
+ assert.deepEqual(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[{code:'name_mismatch',identifier_type:null,evidence:[]}]}]}}),{tone:'ready',text:'Proposal ready'},'a name mismatch keeps the suggestion');
  assert.equal(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:false,conflicts:[]}]}}).tone,'need');
  assert.equal(t({...ok,result_error:'x'}).tone,'fail');
 });

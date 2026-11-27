@@ -77,10 +77,10 @@
    return a==="queued" || a==="processing"?{tone:"busy",text:"Analysing"}:{tone:"need",text:"Not analysed"};
   }
   if(state==="draft")return {tone:"need",text:"Draft"};
-  // A proposal: the card preselects only one selectable, conflict-free Mandant.
+  // A proposal: the card preselects one selectable Mandant without an identifier conflict.
   const m=row.matching,only=m?.ambiguity==="none" && m.candidates?.length===1 ? m.candidates[0] : null;
   const dl=row.deadline||{};
-  if(!only || only.can_select===false || only.conflicts?.length || (dl.relative_count||0)+(dl.uncertain_count||0)>0)return {tone:"need",text:"Input needed"};
+  if(!only || only.can_select===false || (only.conflicts||[]).some(c=>c.code==="identifier_conflict") || (dl.relative_count||0)+(dl.uncertain_count||0)>0)return {tone:"need",text:"Input needed"};
   return {tone:"ready",text:"Proposal ready"};
  }
  frappe.posteingang=Object.assign(frappe.posteingang||{},{cardChoice,missingFields,primaryAction,simplePayload,manualPayload,listChip});

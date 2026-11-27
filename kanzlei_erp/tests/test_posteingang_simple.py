@@ -217,7 +217,7 @@ class TestSimpleCard(SimpleCase):
 		self.assertEqual(card["run"], frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, "name"))
 		self.assertEqual(card["customer"]["ambiguity"], "none")
 		self.assertEqual(card["customer"]["suggested"], {"customer": self.customer.name, "customer_name": self.customer.customer_name,
-			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "page": 1})
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "conflicts": [], "page": 1})
 		self.assertEqual(card["customer"]["candidates"], [{"customer": self.customer.name, "customer_name": self.customer.customer_name,
 			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True, "conflicts": []}])
 		self.assertEqual(card["tasks"], [{"source_index": 0, "title": "Unterlagen einreichen", "description": "Bitte die angeforderten Unterlagen einreichen.",
@@ -238,15 +238,28 @@ class TestSimpleCard(SimpleCase):
 			TestConfirmSimple.run_confirm(self, doc, [])
 		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "status"), "Needs Review")
 
-	def test_conflicting_candidate_is_not_suggested(self):
+	def test_name_mismatch_is_suggested_with_its_warning(self):
 		frappe.set_user("Administrator")
 		# Test-side state: the letter names another company than the verified identifier's Customer.
 		frappe.db.set_value("Customer", self.customer.name, "customer_name", "Synthetic Other Name GmbH", update_modified=False)
 		doc = self.successful()
-		card = self.card(doc)
-		self.assertEqual(card["customer"]["ambiguity"], "none")
-		self.assertIsNone(card["customer"]["suggested"])
-		self.assertEqual([(c["customer"], c["conflicts"]) for c in card["customer"]["candidates"]], [(self.customer.name, ["name_mismatch"])])
+		customer = self.card(doc)["customer"]
+		self.assertEqual(customer["ambiguity"], "none")
+		self.assertEqual((customer["suggested"]["customer"], customer["suggested"]["conflicts"]), (self.customer.name, ["name_mismatch"]))
+		self.assertEqual([c["conflicts"] for c in customer["candidates"]], [["name_mismatch"]])
+		TestConfirmSimple.run_confirm(self, doc, TestConfirmSimple.proposal_tasks(self, doc))
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "customer_reason"), "Vorschlag übernommen")
+
+	def test_identifier_conflict_is_not_suggested(self):
+		frappe.set_user("Administrator")
+		# Test-side state: the Customer's verified reference differs from the one in the letter;
+		# only the matching name (RECIPIENT, see setUp) makes it a candidate.
+		frappe.db.set_value("Mandant Identifier", self.customer.kanzlei_identifiers[0].name, "raw_value", "SYN-0008", update_modified=False)
+		doc = self.successful()
+		customer = self.card(doc)["customer"]
+		self.assertEqual(customer["ambiguity"], "none")
+		self.assertIsNone(customer["suggested"])
+		self.assertEqual([(c["customer"], c["conflicts"]) for c in customer["candidates"]], [(self.customer.name, ["identifier_conflict"])])
 		TestConfirmSimple.run_confirm(self, doc, TestConfirmSimple.proposal_tasks(self, doc))
 		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "customer_reason"), "Manuell gewählt")
 

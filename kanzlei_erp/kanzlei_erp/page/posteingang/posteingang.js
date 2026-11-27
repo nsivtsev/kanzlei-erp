@@ -19,7 +19,7 @@ class PosteingangWorkspace {
  static CHIPS={ready:'check',need:'alert',busy:'spin',fail:'alert',done:'check'};
  static AMBIGUITY={multiple_matches:'Several Mandants match the letter. Please choose one.',multiple_addressees:'The letter is addressed to several recipients. Please choose one Mandant.',not_found:'No Mandant was found in the letter. Please search for it.'};
  static CONFLICTS=['REVISION_CONFLICT','CUSTOMER_CHANGED','STALE_RUN'];
- // Matching conflicts of a candidate; the server then preselects nothing.
+ // Matching conflicts of a candidate; an identifier conflict removes the suggestion.
  static MATCH_CONFLICTS={identifier_conflict:'Conflicting identifiers require review.',name_mismatch:'The extracted name differs from this Customer.'};
  // TT.MM.JJJJ (ISO only when allowed) -> ISO; null when empty; false when invalid.
  static date(text,iso=false){
@@ -413,6 +413,8 @@ class PosteingangWorkspace {
   if(suggested){
    const who=this.node(section,'div');who.className='pe-who';this.node(who,'strong',suggested.customer_name);
    const why=this.node(who,'span',suggested.why);why.className='pe-why';if(suggested.page){why.append(' · ');this.pageLink(why,suggested.page);}
+   // A name mismatch keeps the suggestion; the warning is read before "Accept".
+   for(const code of suggested.conflicts || [])this.node(who,'span',__(PosteingangWorkspace.MATCH_CONFLICTS[code] || 'Conflicting identifiers require review.')).className='pe-why pe-conflict';
    return;
   }
   const missing=ui.showMissing && !ui.choice.customer,need=this.node(section,'div');need.className='pe-need';

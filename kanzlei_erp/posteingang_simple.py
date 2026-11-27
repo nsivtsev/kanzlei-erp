@@ -75,9 +75,9 @@ def _customer_block(extraction):
 		candidates.append({"customer": item["customer"], "customer_name": item["customer_name"], "why": why, "can_select": item["can_select"],
 			"conflicts": [conflict["code"] for conflict in item["conflicts"]]})
 		pages.append(page)
-	# A name mismatch or a conflicting identifier is never offered for one click.
-	if result["ambiguity"] == "none" and len(candidates) == 1 and candidates[0]["can_select"] and not candidates[0]["conflicts"]:
-		suggested = {**{k: candidates[0][k] for k in ("customer", "customer_name", "why")}, "page": pages[0]}
+	# A conflicting identifier is never offered for one click; a name mismatch is, with its warning shown.
+	if result["ambiguity"] == "none" and len(candidates) == 1 and candidates[0]["can_select"] and "identifier_conflict" not in candidates[0]["conflicts"]:
+		suggested = {**{k: candidates[0][k] for k in ("customer", "customer_name", "why", "conflicts")}, "page": pages[0]}
 	return {"suggested": suggested, "candidates": candidates, "ambiguity": result["ambiguity"]}
 
 
