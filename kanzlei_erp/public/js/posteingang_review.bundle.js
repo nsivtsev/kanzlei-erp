@@ -16,7 +16,7 @@
   ASSIGNEE_NOT_ALLOWED:"The assignee must be an active system user with access to this Mandant.",TASK_CREATION_FAILED:"The tasks could not be created. Nothing was confirmed.",
   CORRECTION_REVIEW_REQUIRED:"An administrator must resolve every task of the original letter before confirmation.",CORRECTION_EXISTS:"A replacement already exists for this letter.",
   ALREADY_COMPLETED:"This letter was already confirmed with different decisions.",DEADLINE_REQUIRED:"Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.",
-  TASK_CHANGED:"A created task was already changed. Use Create correction instead of undo.",UNDO_EXPIRED:"Undo is no longer available for this letter.",PERMISSION:"Posteingang operation is not permitted",
+  TASK_CHANGED:"A created task was already changed, so undo is no longer possible. Edit or close the task itself.",UNDO_EXPIRED:"Undo is no longer available for this letter.",PERMISSION:"Posteingang operation is not permitted",
   NETWORK:"The result is unknown; check the request before retrying",INTERNAL_ERROR:"The review operation could not finish. Reload and try again."
  };
  async function rpc(operation,args) {

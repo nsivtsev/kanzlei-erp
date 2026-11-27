@@ -716,7 +716,7 @@ An administrator must resolve every task of the original letter before confirmat
 A replacement already exists for this letter.,Для этого письма уже создана замена.
 This letter was already confirmed with different decisions.,Это письмо уже подтверждено с другими решениями.
 Enter the deadline date from the letter for every selected task with a relative or uncertain deadline.,Укажите дату срока из письма для каждой выбранной задачи с относительным или неточным сроком.
-A created task was already changed. Use Create correction instead of undo.,Созданная задача уже была изменена. Вместо отмены используйте «Создать исправление».
+"A created task was already changed, so undo is no longer possible. Edit or close the task itself.","Созданная задача уже была изменена, поэтому отмена невозможна. Измените или закройте саму задачу."
 Undo is no longer available for this letter.,Отмена для этого письма больше недоступна.
 The review operation could not finish. Reload and try again.,Не удалось завершить операцию проверки. Перечитайте форму и повторите попытку.
 Human review,Проверка сотрудником
@@ -976,3 +976,5 @@ Input needed,Нужны данные
 Analysing,Анализируется
 Check manually,Проверить вручную
 Not analysed,Не проанализировано
+5 working days before the deadline (no holiday list),За 5 рабочих дней до срока (без учёта праздников)
+Work date is after the deadline.,Дата работы позже срока.

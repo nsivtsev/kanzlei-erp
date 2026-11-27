@@ -66,18 +66,21 @@
    external_date:toIso(r.external_date,true),internal_date:toIso(r.internal_date,true),assigned_to:r.assigned_to ?? null,
   }))};
  }
+ // Keyed off the server's card state, so the rail never calls a failed analysis "ready".
  function listChip(row) {
-  const status=row.status;
-  if(row.result_error || status==="Error")return {tone:"fail",text:"Check manually"};
-  if(status==="Completed" || status==="Cancelled")return {tone:"done",text:"Done"};
-  if(status==="Queued" || status==="Processing")return {tone:"busy",text:"Analysing"};
-  if(status==="Received") {
+  const state=row.card_state;
+  if(row.result_error || state==="failed")return {tone:"fail",text:"Check manually"};
+  if(state==="done")return {tone:"done",text:"Done"};
+  if(state==="analyzing")return {tone:"busy",text:"Analysing"};
+  if(state==="not_started"){
    const a=row.analysis?.status;
    return a==="queued" || a==="processing"?{tone:"busy",text:"Analysing"}:{tone:"need",text:"Not analysed"};
   }
-  const amb=row.matching?.ambiguity;
+  if(state==="draft")return {tone:"need",text:"Draft"};
+  // A proposal: the card preselects only one selectable, conflict-free Mandant.
+  const m=row.matching,only=m?.ambiguity==="none" && m.candidates?.length===1 ? m.candidates[0] : null;
   const dl=row.deadline||{};
-  if((amb && amb!=="none") || (dl.relative_count||0)+(dl.uncertain_count||0)>0)return {tone:"need",text:"Input needed"};
+  if(!only || only.can_select===false || only.conflicts?.length || (dl.relative_count||0)+(dl.uncertain_count||0)>0)return {tone:"need",text:"Input needed"};
   return {tone:"ready",text:"Proposal ready"};
  }
  frappe.posteingang=Object.assign(frappe.posteingang||{},{cardChoice,missingFields,primaryAction,simplePayload,manualPayload,listChip});

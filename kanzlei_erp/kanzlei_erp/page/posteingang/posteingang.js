@@ -19,6 +19,8 @@ class PosteingangWorkspace {
  static CHIPS={ready:'check',need:'alert',busy:'spin',fail:'alert',done:'check'};
  static AMBIGUITY={multiple_matches:'Several Mandants match the letter. Please choose one.',multiple_addressees:'The letter is addressed to several recipients. Please choose one Mandant.',not_found:'No Mandant was found in the letter. Please search for it.'};
  static CONFLICTS=['REVISION_CONFLICT','CUSTOMER_CHANGED','STALE_RUN'];
+ // Matching conflicts of a candidate; the server then preselects nothing.
+ static MATCH_CONFLICTS={identifier_conflict:'Conflicting identifiers require review.',name_mismatch:'The extracted name differs from this Customer.'};
  // TT.MM.JJJJ (ISO only when allowed) -> ISO; null when empty; false when invalid.
  static date(text,iso=false){
   const value=String(text ?? '').trim();if(!value)return null;
@@ -426,6 +428,7 @@ class PosteingangWorkspace {
    this.lockable(input);if(candidate.can_select)first||=input;
    const text=this.node(option,'span');this.node(text,'strong',candidate.customer_name);this.node(text,'span',candidate.why).className='pe-why';
    if(!candidate.can_select)this.node(text,'span',__('Read-only Mandant; selection requires write access.')).className='pe-why';
+   for(const code of candidate.conflicts || [])this.node(text,'span',__(PosteingangWorkspace.MATCH_CONFLICTS[code] || 'Conflicting identifiers require review.')).className='pe-why pe-conflict';
   }
   const search=this.button(need,'Search other Mandant',()=>this.search('customers',row=>{ui.choice.customer=row.customer;ui.customerName=row.customer_name;ui.extra={customer:row.customer,customer_name:row.customer_name};this.draw();}),{link:true});
   if(missing){const error=this.node(need,'p',__('Select the Mandant.'));error.className='pe-error';error.id=this.id(state,'customer-error');group.setAttribute('aria-describedby',error.id);}
@@ -472,7 +475,8 @@ class PosteingangWorkspace {
    input.setAttribute('aria-describedby',[hint.id,error && id+'-error'].filter(Boolean).join(' '));
    this.targets['deadline:'+i]={box:fact,input};
   }else this.fact(facts,'flag','Deadline in the letter',__('none'),'not stated');
-  const planned=deadline.kind==='explicit_date' ? '5 working days before the deadline' : deadline.kind==='not_found' ? 'No deadline: in 7 days' : 'Calculated from the deadline you enter';
+  // Without a company Holiday List only weekends are skipped; say so next to the date.
+  const planned=deadline.kind==='explicit_date' ? (state.card.holidays_known===false ? '5 working days before the deadline (no holiday list)' : '5 working days before the deadline') : deadline.kind==='not_found' ? 'No deadline: in 7 days' : 'Calculated from the deadline you enter';
   this.fact(facts,'cal','Work date',task.internal_date ? frappe.datetime.str_to_user(task.internal_date) : '–',planned);
   const who={...task,...ui.assignees[i]},responsible=this.fact(facts,'user','Responsible',this.person(who.assigned_to,who.assigned_to_name),who.assigned_to && who.assigned_to===this.uploader(state) ? 'uploaded the document' : null);
   responsible.hint.append(responsible.hint.textContent ? ' · ' : '');this.lockable(this.button(responsible.hint,'Change',()=>this.pickAssignee(i),{link:true}));
@@ -541,6 +545,8 @@ class PosteingangWorkspace {
   return {title:task?.title || '',description:task?.description || '',
    external_date:entered || (deadline?.kind==='explicit_date' ? PosteingangWorkspace.german(deadline.date) : ''),
    internal_date:PosteingangWorkspace.german(task?.internal_date),
+   // A prefilled work date follows the deadline until the user types one.
+   internalAuto:!!task?.internal_date,
    // The server requires an assignee; without one the current user is responsible.
    assigned_to:task?.assigned_to || frappe.session.user,assigned_to_name:task?.assigned_to ? task.assigned_to_name : null};
  }
@@ -572,10 +578,15 @@ class PosteingangWorkspace {
    if(form.rows.length>1)this.node(group,'legend',__('Task {0}',[i+1]));
    const inner=this.node(group,'div');inner.className='pe-form';
    const edit=key=>value=>{row[key]=value;form.dirty=true;};
+   const deadlineEdit=value=>{
+    edit('external_date')(value);
+    // The server computes the work date from the new deadline; no redraw, the caret stays.
+    if(row.internalAuto && row.internal_date){row.internal_date='';const field=this.targets['internal-'+i]?.input;if(field)field.value='';}
+   };
    this.formField(inner,state,'title-'+i,'Task title',{full:true,value:row.title,onInput:edit('title'),error:errors['title-'+i],placeholder:'e.g. Check the notice'});
    this.formField(inner,state,'description-'+i,'Description',{full:true,optional:true,control:'textarea',value:row.description,onInput:edit('description')});
-   this.formField(inner,state,'external-'+i,'Deadline from the letter',{optional:true,hint:'Only a date stated in the letter',value:row.external_date,onInput:edit('external_date'),error:errors['external-'+i],placeholder:'DD.MM.YYYY'});
-   this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:edit('internal_date'),error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
+   this.formField(inner,state,'external-'+i,'Deadline from the letter',{optional:true,hint:'Only a date stated in the letter',value:row.external_date,onInput:deadlineEdit,error:errors['external-'+i],placeholder:'DD.MM.YYYY'});
+   this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:value=>{row.internalAuto=false;edit('internal_date')(value);},error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
    const who=this.formField(inner,state,'assignee-'+i,'Responsible',{control:null}),value=this.node(who.wrap,'div');value.className='pe-picked';
    this.node(value,'span',this.person(row.assigned_to,row.assigned_to_name));
    if(row.assigned_to && row.assigned_to===this.uploader(state))this.node(value,'span',__('uploaded the document')).className='pe-muted';
@@ -600,7 +611,9 @@ class PosteingangWorkspace {
   if(withTasks)form.rows.forEach((row,i)=>{
    if(!row.title.trim())errors['title-'+i]='Enter the task title.';
    if(PosteingangWorkspace.date(row.external_date,true)===false)errors['external-'+i]='Enter the date as DD.MM.YYYY.';
-   if(PosteingangWorkspace.date(row.internal_date,true)===false)errors['internal-'+i]='Enter the date as DD.MM.YYYY.';
+   const external=PosteingangWorkspace.date(row.external_date,true),internal=PosteingangWorkspace.date(row.internal_date,true);
+   if(internal===false)errors['internal-'+i]='Enter the date as DD.MM.YYYY.';
+   else if(internal && external && internal>external)errors['internal-'+i]='Work date is after the deadline.';
   });
   form.errors=errors;const first=Object.keys(errors)[0];
   if(first){this.draw();this.jump(first);return null;}

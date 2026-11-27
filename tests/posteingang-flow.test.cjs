@@ -42,6 +42,7 @@ function all(root){const out=[];const walk=n=>{for(const c of n.children){out.pu
 const text=root=>root.textContent;
 const buttons=(root,label)=>all(root).filter(n=>n.tagName==='BUTTON' && n.textContent.trim()===label);
 const button=(root,label)=>{const found=buttons(root,label);assert.equal(found.length,1,`one button "${label}" expected, found ${found.length} in: ${text(root)}`);return found[0];};
+const READY={ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[]}]};
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
 const deadline=(kind,over={})=>({kind,date:kind==='explicit_date' ? '2026-12-01' : null,wording:kind==='relative' ? 'innerhalb eines Monats nach Bekanntgabe' : null,page:1,quote:'bis zum 01.12.2026',verified:true,...over});
@@ -309,7 +310,7 @@ test('a revision conflict reloads the letter and says so',async()=>{
 
 test('a permission failure clears every protected view',async()=>{
  const h=await shown({handler:operation=>{if(operation==='review.confirm_simple')throw Error('PERMISSION');}});
- h.queue.open=[{letter:'one',status:'Needs Review',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}}];await h.page.loadQueue();
+ h.queue.open=[{letter:'one',status:'Needs Review',card_state:'proposal',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:READY,deadline:{}}];await h.page.loadQueue();
  assert.ok(text(h.page.rail).includes('Finanzamt one'));
  button(h.main(),'Accept').click();await settle();
  assert.equal(h.page.client.state,null);assert.equal(text(h.main()),'');assert.ok(!text(h.page.rail).includes('Finanzamt'));assert.equal(h.page.letters.size,0);
@@ -318,9 +319,9 @@ test('a permission failure clears every protected view',async()=>{
 
 test('the rail lists open and done letters with a text status chip',async()=>{
  const h=harness();
- h.queue.open=[{letter:'one',status:'Needs Review',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}},
-  {letter:'two',status:'Processing',sender:null,letter_type:null,file_name:'scan.pdf',analysis:{},matching:null,deadline:null}];
- h.queue.history=[{letter:'old',status:'Completed',sender:'Stadt',letter_type:'Bescheid',file_name:'old.pdf',analysis:{},matching:null,deadline:null}];
+ h.queue.open=[{letter:'one',status:'Needs Review',card_state:'proposal',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:READY,deadline:{}},
+  {letter:'two',status:'Processing',card_state:'analyzing',sender:null,letter_type:null,file_name:'scan.pdf',analysis:{},matching:null,deadline:null}];
+ h.queue.history=[{letter:'old',status:'Completed',card_state:'done',sender:'Stadt',letter_type:'Bescheid',file_name:'old.pdf',analysis:{},matching:null,deadline:null}];
  await h.page.show();await settle();
  const rail=text(h.page.rail);
  for(const part of ['Drop PDF here','Choose PDF','Open · 2','Done','Proposal ready','scan.pdf','Analysing','Stadt'])assert.ok(rail.includes(part),part);
@@ -339,7 +340,7 @@ test('Choose PDF and a dropped file open the intake dialog with those files',asy
 
 test('Next document opens the next open letter only on request',async()=>{
  const h=await shown({letters:{one:workspace('one',{status:'Completed',card:{state:'done',tasks:[]},review:{receipt:{actions:[]}}})}});
- h.queue.open=[{letter:'two',status:'Needs Review',sender:'Zwei',file_name:'two.pdf',analysis:{},matching:null,deadline:null}];await h.page.loadQueue();h.page.draw();
+ h.queue.open=[{letter:'two',status:'Needs Review',card_state:'proposal',sender:'Zwei',file_name:'two.pdf',analysis:{},matching:null,deadline:null}];await h.page.loadQueue();h.page.draw();
  assert.equal(h.routes.length,0);button(h.main(),'Next document').click();assert.deepEqual(h.routes.at(-1),['posteingang','two']);
 });
 
@@ -354,17 +355,17 @@ test('status polling never draws a letter card over the list view',async()=>{
 
 test('a polled status change refreshes the rail chip',async()=>{
  const h=harness({letters:{one:workspace('one',{status:'Queued',card:{state:'analyzing',tasks:[]}})}});
- h.queue.open=[{letter:'one',status:'Queued',sender:null,letter_type:null,file_name:'one.pdf',analysis:{},matching:{},deadline:{}}];
+ h.queue.open=[{letter:'one',status:'Queued',card_state:'analyzing',sender:null,letter_type:null,file_name:'one.pdf',analysis:{},matching:{},deadline:{}}];
  await h.page.show();await settle();
  assert.ok(text(h.page.rail).includes('Analysing'));
  h.letters.one=workspace('one',{revision:2});
- h.queue.open=[{letter:'one',status:'Needs Review',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}}];
+ h.queue.open=[{letter:'one',status:'Needs Review',card_state:'proposal',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:READY,deadline:{}}];
  const poll=h.timers.filter(t=>t.ms===5000).at(-1);await poll.fn();await settle();await settle();
  assert.ok(text(h.page.rail).includes('Proposal ready'),'the rail follows the polled letter without waiting for the 15 s refresh');
  assert.ok(!text(h.page.rail).includes('Analysing'));
 });
 
-const queueRow=n=>({letter:'L'+n,status:'Needs Review',sender:'Sender '+n,letter_type:'Typ',file_name:n+'.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}});
+const queueRow=n=>({letter:'L'+n,status:'Needs Review',card_state:'proposal',sender:'Sender '+n,letter_type:'Typ',file_name:n+'.pdf',analysis:{},matching:READY,deadline:{}});
 const pagedQueue=(open,gate)=>async(operation,args)=>{
  if(operation!=='get_queue')return undefined;
  if(args.filters.state==='history')return {user:'operator',items:[],next_cursor:null};
@@ -438,4 +439,56 @@ test('page search waits for the shown dialog before reading a fast result',async
  const page={client:{state:{letter:'one'},sequence:1},dialogs:new Set(),capture:()=>()=>true,transport:async()=>{reads++;return {rows:[{customer:'customer',customer_name:'Synthetic',can_select:true}]};},node:(_p,_t,s)=>{root.rows.push(s);return {};},button(){},failure:assert.fail};
  await proto.search.call(page,'customers',()=>{});assert.equal(reads,0);
  dialogs[0].visible=true;await dialogs[0].on_page_show();assert.equal(reads,1);assert.ok(root.rows.includes('Synthetic'));
+});
+
+test('a conflicted single candidate is not preselected and says why',async()=>{
+ const candidate=(customer,code)=>({customer,customer_name:'Muster '+customer,why:'Steuernummer im Schreiben',can_select:true,conflicts:[code]});
+ const one=workspace('one',{card:{customer:{suggested:null,candidates:[candidate('C1','name_mismatch')],ambiguity:'none'}}});
+ const h=await shown({letters:{one}});
+ const radios=all(h.main()).filter(n=>n.type==='radio');assert.equal(radios.length,1);assert.equal(radios[0].checked,false);
+ assert.ok(text(h.main()).includes('The extracted name differs from this Customer.'));
+ button(h.main(),'Accept').click();await settle();assert.equal(h.writes().length,0);assert.ok(text(h.main()).includes('Select the Mandant.'));
+ const two=workspace('one',{card:{customer:{suggested:null,candidates:[candidate('C1','identifier_conflict'),candidate('C2','name_mismatch')],ambiguity:'multiple_matches'}}});
+ const k=await shown({letters:{one:two}});
+ assert.ok(text(k.main()).includes('Conflicting identifiers require review.'));assert.ok(text(k.main()).includes('The extracted name differs from this Customer.'));
+});
+
+test('the work-date hint says when no holiday list is known',async()=>{
+ let h=await shown({letters:{one:workspace('one',{card:{holidays_known:false}})}});
+ assert.ok(text(h.main()).includes('5 working days before the deadline (no holiday list)'));
+ h=await shown({letters:{one:workspace('one',{card:{holidays_known:true}})}});
+ assert.ok(text(h.main()).includes('5 working days before the deadline'));assert.ok(!text(h.main()).includes('no holiday list'));
+});
+
+test('a changed deadline in the manual form clears the prefilled work date',async()=>{
+ const h=await shown();
+ button(h.main(),'Create manually').click();
+ const input=key=>all(h.main()).find(n=>n.tagName==='INPUT' && n.id.endsWith('-'+key+'-0'));
+ assert.equal(input('internal').value,'24.11.2026');
+ const external=input('external');external.value='15.12.2026';external.fire('input');
+ assert.equal(input('internal').value,'','the work date no longer follows the old deadline');
+ button(h.main(),'Create task').click();await settle();
+ const {args}=h.writes()[0];assert.equal(args.tasks[0].external_date,'2026-12-15');assert.equal(args.tasks[0].internal_date,null);
+});
+
+test('a typed work date survives a deadline edit but may not lie after the deadline',async()=>{
+ const h=await shown();
+ button(h.main(),'Create manually').click();
+ const input=key=>all(h.main()).find(n=>n.tagName==='INPUT' && n.id.endsWith('-'+key+'-0'));
+ const internal=input('internal');internal.value='20.12.2026';internal.fire('input');
+ const external=input('external');external.value='15.12.2026';external.fire('input');
+ assert.equal(input('internal').value,'20.12.2026');
+ button(h.main(),'Create task').click();await settle();
+ assert.equal(h.writes().length,0);
+ const field=input('internal');assert.equal(field.getAttribute('aria-invalid'),'true');
+ assert.ok(text(h.main()).includes('Work date is after the deadline.'));
+ field.value='10.12.2026';field.fire('input');
+ button(h.main(),'Create task').click();await settle();
+ const {args}=h.writes()[0];assert.equal(args.tasks[0].internal_date,'2026-12-10');assert.equal(args.tasks[0].external_date,'2026-12-15');
+});
+
+test('a changed task points to the Task itself, not to the administrative correction',async()=>{
+ const h=await shown();
+ const message=h.page.message(Error('TASK_CHANGED'));
+ assert.ok(!message.includes('Create correction'),message);assert.match(message,/edit or close/i);
 });

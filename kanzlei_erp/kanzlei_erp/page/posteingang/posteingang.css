@@ -69,6 +69,7 @@
 .posteingang-workspace .pe-sec-h { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
 .posteingang-workspace .pe-who strong { display: block; font-size: var(--text-md); }
 .posteingang-workspace .pe-why { display: block; font-size: var(--text-sm); color: var(--text-muted); }
+.posteingang-workspace .pe-conflict { font-weight: 600; color: var(--text-on-orange); }
 .posteingang-workspace .pe-need { border: 1px solid var(--text-on-orange); background: var(--bg-orange); border-radius: var(--border-radius-md); padding: 12px 14px; }
 .posteingang-workspace .pe-need-label { font-weight: 600; color: var(--text-on-orange); margin: 0 0 8px; }
 .posteingang-workspace .pe-flash { animation: pe-flash .6s ease 2; }

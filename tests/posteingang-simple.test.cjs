@@ -80,19 +80,24 @@ test('manualPayload maps rows',()=>{
  assert.throws(()=>p.manualPayload({customer:null,rows:[]}),/MISSING/);
 });
 
-test('listChip per status',()=>{
+test('listChip follows the card state of each row',()=>{
  const p=load();
- const ok={matching:{ambiguity:'none'},deadline:{relative_count:0,uncertain_count:0}};
+ const one={ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[]}]};
+ const ok={card_state:'proposal',matching:one,deadline:{relative_count:0,uncertain_count:0}};
  const t=row=>clone(p.listChip(row));
- assert.deepEqual(t({status:'Queued'}),{tone:'busy',text:'Analysing'});
- assert.equal(t({status:'Processing'}).tone,'busy');
- assert.deepEqual(t({status:'Error'}),{tone:'fail',text:'Check manually'});
- assert.deepEqual(t({status:'Completed'}),{tone:'done',text:'Done'});
- assert.equal(t({status:'Cancelled'}).tone,'done');
- assert.deepEqual(t({status:'Received'}),{tone:'need',text:'Not analysed'});
- assert.equal(t({status:'Received',analysis:{status:'processing'}}).tone,'busy');
+ assert.deepEqual(t({status:'Queued',card_state:'analyzing'}),{tone:'busy',text:'Analysing'});
+ assert.deepEqual(t({status:'Error',card_state:'failed'}),{tone:'fail',text:'Check manually'});
+ assert.deepEqual(t({status:'Completed',card_state:'done'}),{tone:'done',text:'Done'});
+ assert.deepEqual(t({status:'Received',card_state:'not_started'}),{tone:'need',text:'Not analysed'});
+ assert.equal(t({status:'Received',card_state:'not_started',analysis:{status:'processing'}}).tone,'busy');
+ assert.deepEqual(t({status:'Needs Review',card_state:'draft'}),{tone:'need',text:'Draft'});
  assert.deepEqual(t({status:'Needs Review',...ok}),{tone:'ready',text:'Proposal ready'});
- assert.deepEqual(t({status:'Needs Review',matching:{ambiguity:'multiple_matches'},deadline:ok.deadline}),{tone:'need',text:'Input needed'});
- assert.equal(t({status:'Needs Review',matching:ok.matching,deadline:{relative_count:1,uncertain_count:0}}).tone,'need');
- assert.equal(t({status:'Needs Review',...ok,result_error:'x'}).tone,'fail');
+ // An unassessed or unreadable letter in Needs Review is failed, never "ready".
+ assert.deepEqual(t({status:'Needs Review',...ok,card_state:'failed'}),{tone:'fail',text:'Check manually'});
+ assert.deepEqual(t({status:'Needs Review',card_state:'not_started',matching:null,deadline:null}),{tone:'need',text:'Not analysed'});
+ assert.deepEqual(t({...ok,matching:{ambiguity:'multiple_matches',candidates:[]}}),{tone:'need',text:'Input needed'});
+ assert.equal(t({...ok,deadline:{relative_count:1,uncertain_count:0}}).tone,'need');
+ assert.equal(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:true,conflicts:[{code:'name_mismatch',identifier_type:null,evidence:[]}]}]}}).tone,'need','a conflicted Mandant is not preselected');
+ assert.equal(t({...ok,matching:{ambiguity:'none',candidates:[{customer:'C1',can_select:false,conflicts:[]}]}}).tone,'need');
+ assert.equal(t({...ok,result_error:'x'}).tone,'fail');
 });
