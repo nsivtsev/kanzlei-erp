@@ -503,3 +503,30 @@ test('a name mismatch keeps the suggested Mandant and warns under it before Acce
  assert.equal(all(h.main()).filter(n=>n.type==='radio').length,0);
  button(h.main(),'Accept').click();await settle();assert.equal(h.writes()[0].args.customer,'C1');
 });
+
+test('a prefilled work date after a past deadline is submitted unchanged',async()=>{
+ // working_date never returns a day before today, so a past deadline yields today as the work date.
+ const one=workspace('one',{card:{tasks:[task({deadline:deadline('explicit_date',{date:'2026-11-10'}),internal_date:'2026-11-27'})]}});
+ const h=await shown({letters:{one}});
+ button(h.main(),'Create manually').click();
+ button(h.main(),'Create task').click();await settle();
+ assert.ok(!text(h.main()).includes('Work date is after the deadline.'));
+ const {args}=h.writes()[0];assert.equal(args.tasks[0].external_date,'2026-11-10');assert.equal(args.tasks[0].internal_date,'2026-11-27');
+});
+
+test('a legacy draft keeps its stored work date when the deadline is edited',async()=>{
+ const one=workspace('one',{card:{state:'draft',tasks:[task({source_index:null,internal_date:'2026-11-24'})]}});
+ const h=await shown({letters:{one}});
+ const input=key=>all(h.main()).find(n=>n.tagName==='INPUT' && n.id.endsWith('-'+key+'-0'));
+ const external=input('external');external.value='15.12.2026';external.fire('input');
+ assert.equal(input('internal').value,'24.11.2026','a stored draft date may have been typed by a person');
+ button(h.main(),'Create task').click();await settle();
+ const {args}=h.writes()[0];assert.equal(args.tasks[0].external_date,'2026-12-15');assert.equal(args.tasks[0].internal_date,'2026-11-24');
+ // An edit that puts the stored date after the new deadline is still caught.
+ const late=workspace('one',{card:{state:'draft',tasks:[task({source_index:null,internal_date:'2026-11-24'})]}});
+ const k=await shown({letters:{one:late}});
+ const field=key=>all(k.main()).find(n=>n.tagName==='INPUT' && n.id.endsWith('-'+key+'-0'));
+ const deadlineField=field('external');deadlineField.value='20.11.2026';deadlineField.fire('input');
+ button(k.main(),'Create task').click();await settle();
+ assert.equal(k.writes().length,0);assert.ok(text(k.main()).includes('Work date is after the deadline.'));
+});

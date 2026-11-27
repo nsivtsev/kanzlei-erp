@@ -534,7 +534,7 @@ class PosteingangWorkspace {
  manualForm(state,ui){
   if(ui.form)return ui.form;
   const card=state.card,choice=ui.choice,picked=card.tasks.filter((_task,i)=>choice.selected[i]!==false);
-  const rows=(picked.length ? picked : [null]).map(task=>this.formRow(task,task && ['relative','uncertain'].includes(task.deadline.kind) ? choice.deadlines[card.tasks.indexOf(task)] : null));
+  const rows=(picked.length ? picked : [null]).map(task=>this.formRow(task,task && ['relative','uncertain'].includes(task.deadline.kind) ? choice.deadlines[card.tasks.indexOf(task)] : null,card.state==='proposal'));
   // A legacy draft already names its Mandant on the letter; that wins over the analysis suggestion.
   const stored=card.state==='draft' && state.matching?.selected_customer?.can_select !== false ? state.matching?.selected_customer : null;
   const customer=stored ? {customer:stored.customer,customer_name:stored.customer_name} : choice.customer ? {customer:choice.customer,customer_name:this.customerName(card,ui)} : null;
@@ -542,13 +542,15 @@ class PosteingangWorkspace {
   ui.form={customer,rows,errors:{},dirty:false};
   return ui.form;
  }
- formRow(task=null,entered=null){
+ formRow(task=null,entered=null,computed=false){
   const deadline=task?.deadline;
   return {title:task?.title || '',description:task?.description || '',
    external_date:entered || (deadline?.kind==='explicit_date' ? PosteingangWorkspace.german(deadline.date) : ''),
    internal_date:PosteingangWorkspace.german(task?.internal_date),
-   // A prefilled work date follows the deadline until the user types one.
-   internalAuto:!!task?.internal_date,
+   // Only a server-computed proposal date follows the deadline; a draft's stored date may be a person's.
+   internalAuto:computed && !!task?.internal_date,
+   // The order of the dates is checked only once the user edits one: a computed date never precedes today.
+   datesEdited:false,
    // The server requires an assignee; without one the current user is responsible.
    assigned_to:task?.assigned_to || frappe.session.user,assigned_to_name:task?.assigned_to ? task.assigned_to_name : null};
  }
@@ -581,14 +583,14 @@ class PosteingangWorkspace {
    const inner=this.node(group,'div');inner.className='pe-form';
    const edit=key=>value=>{row[key]=value;form.dirty=true;};
    const deadlineEdit=value=>{
-    edit('external_date')(value);
+    edit('external_date')(value);row.datesEdited=true;
     // The server computes the work date from the new deadline; no redraw, the caret stays.
     if(row.internalAuto && row.internal_date){row.internal_date='';const field=this.targets['internal-'+i]?.input;if(field)field.value='';}
    };
    this.formField(inner,state,'title-'+i,'Task title',{full:true,value:row.title,onInput:edit('title'),error:errors['title-'+i],placeholder:'e.g. Check the notice'});
    this.formField(inner,state,'description-'+i,'Description',{full:true,optional:true,control:'textarea',value:row.description,onInput:edit('description')});
    this.formField(inner,state,'external-'+i,'Deadline from the letter',{optional:true,hint:'Only a date stated in the letter',value:row.external_date,onInput:deadlineEdit,error:errors['external-'+i],placeholder:'DD.MM.YYYY'});
-   this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:value=>{row.internalAuto=false;edit('internal_date')(value);},error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
+   this.formField(inner,state,'internal-'+i,'Work date',{hint:'When the firm works on it; empty: calculated from the deadline',value:row.internal_date,onInput:value=>{row.internalAuto=false;row.datesEdited=true;edit('internal_date')(value);},error:errors['internal-'+i],placeholder:'DD.MM.YYYY'});
    const who=this.formField(inner,state,'assignee-'+i,'Responsible',{control:null}),value=this.node(who.wrap,'div');value.className='pe-picked';
    this.node(value,'span',this.person(row.assigned_to,row.assigned_to_name));
    if(row.assigned_to && row.assigned_to===this.uploader(state))this.node(value,'span',__('uploaded the document')).className='pe-muted';
@@ -615,7 +617,7 @@ class PosteingangWorkspace {
    if(PosteingangWorkspace.date(row.external_date,true)===false)errors['external-'+i]='Enter the date as DD.MM.YYYY.';
    const external=PosteingangWorkspace.date(row.external_date,true),internal=PosteingangWorkspace.date(row.internal_date,true);
    if(internal===false)errors['internal-'+i]='Enter the date as DD.MM.YYYY.';
-   else if(internal && external && internal>external)errors['internal-'+i]='Work date is after the deadline.';
+   else if(row.datesEdited && internal && external && internal>external)errors['internal-'+i]='Work date is after the deadline.';
   });
   form.errors=errors;const first=Object.keys(errors)[0];
   if(first){this.draw();this.jump(first);return null;}
