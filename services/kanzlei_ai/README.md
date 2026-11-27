@@ -255,8 +255,13 @@ document-based. Unknown citation numbers are removed. The former exact-quote mod
 remains available per question ("Nur wörtliche Belege", `strict: true`). Every
 retrieved source becomes a dependency of the stored answer. With the Mistral
 profile the service checks `assist` before sending the question and `generate`
-before sending excerpts; `AI_CHAT_ASSISTANT_MODEL` selects the model. The shared
-Mistral request gate still allows one request at a time across processes.
+before sending excerpts; `AI_CHAT_ASSISTANT_MODEL` selects the model. A shared
+Redis gate allows `AI_MISTRAL_MAX_CONCURRENT_REQUESTS` (default 4) Mistral
+requests at once across all processes, so several users get answers at the same
+time. OCR and indexing may use only `AI_MISTRAL_BACKGROUND_CONCURRENT_REQUESTS`
+(default 2) of them; chat requests try the remaining slots first and wait up to
+`AI_MISTRAL_REQUEST_WAIT_SECONDS` (default 10) for a free one. A provider 429
+pauses every caller for its `Retry-After`.
 
 The UI uses the ERP browser session to sign in and keeps the short-lived grant
 in memory. A conversation stays in its selected Mandant. History and original

@@ -11,7 +11,7 @@ from email.utils import parsedate_to_datetime
 import httpx
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
-from redis.exceptions import RedisError
+from redis.exceptions import LockError, RedisError
 
 
 class MistralError(RuntimeError):
@@ -33,55 +33,138 @@ class MistralError(RuntimeError):
 
 
 class MistralRequestGate:
-    """One in-flight request across the processes sharing the AI broker."""
+    """Bounded in-flight requests across the processes sharing the AI broker.
 
-    _LOCK = "kanzlei-ai:mistral:request"
+    Each request holds one of ``total`` numbered Redis locks. Background work
+    (OCR and indexing) may use only the first ``background`` slots, so chat
+    always keeps ``total - background`` slots of its own. Interactive callers
+    try their reserved slots first and briefly wait for a free one; background
+    callers fail at once and rely on durable job retries. A provider 429 sets a
+    shared cooldown that every caller obeys.
+    """
+
+    _SLOT = "kanzlei-ai:mistral:request:{}"
     _COOLDOWN = "kanzlei-ai:mistral:cooldown"
+    # Longer than every provider timeout, so a crashed holder frees its slot.
+    _LOCK_SECONDS = 120
+    _POLL_SECONDS = 0.2
+    _BUSY_RETRY_AFTER = 2
 
-    def __init__(self, redis_url: str):
+    def __init__(
+        self,
+        redis_url: str,
+        *,
+        total: int = 1,
+        background: int | None = None,
+        interactive: bool = False,
+        wait_seconds: float = 0.0,
+    ):
+        background = total if background is None else background
+        if total < 1 or not 1 <= background <= total:
+            raise ValueError("Invalid Mistral request slots")
+        if not math.isfinite(wait_seconds) or wait_seconds < 0:
+            raise ValueError("Invalid Mistral request wait")
         self._redis_url = redis_url
+        # Interactive callers start with the slots background work cannot take.
+        self._slots = tuple(reversed(range(total))) if interactive else tuple(range(background))
+        self._wait_seconds = wait_seconds
+
+    @classmethod
+    def from_settings(cls, settings, *, interactive: bool = False) -> "MistralRequestGate":
+        return cls(
+            settings.redis_url.get_secret_value(),
+            total=settings.mistral_max_concurrent_requests,
+            background=settings.mistral_background_concurrent_requests,
+            interactive=interactive,
+            wait_seconds=settings.mistral_request_wait_seconds if interactive else 0.0,
+        )
+
+    def _locks(self, broker):
+        return [
+            broker.lock(self._SLOT.format(slot), timeout=self._LOCK_SECONDS) for slot in self._slots
+        ]
+
+    @classmethod
+    def _busy(cls) -> MistralError:
+        return MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=cls._BUSY_RETRY_AFTER)
+
+    @staticmethod
+    def _cooldown(remaining: int) -> MistralError:
+        return MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=remaining)
 
     @contextmanager
     def request(self):
         try:
-            with (
-                Redis.from_url(
-                    self._redis_url, socket_connect_timeout=2, socket_timeout=2
-                ) as broker,
-                broker.lock(self._LOCK, timeout=120, blocking=False),
-            ):
-                remaining = broker.ttl(self._COOLDOWN)
-                if remaining >= 0:
-                    raise MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=remaining)
+            with Redis.from_url(
+                self._redis_url, socket_connect_timeout=2, socket_timeout=2
+            ) as broker:
+                held = self._acquire(broker)
                 try:
-                    yield
-                except MistralError as error:
-                    if error.status == 429:
-                        broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
-                    raise
+                    try:
+                        yield
+                    except MistralError as error:
+                        if error.status == 429:
+                            broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
+                        raise
+                finally:
+                    try:
+                        held.release()
+                    except LockError:
+                        # The slot expired after the request finished; nothing to free.
+                        pass
         except RedisError:
             raise MistralError("MISTRAL_REQUEST_GATE_UNAVAILABLE") from None
+
+    def _acquire(self, broker):
+        deadline = time.monotonic() + self._wait_seconds
+        locks = self._locks(broker)
+        while True:
+            remaining = broker.ttl(self._COOLDOWN)
+            if remaining >= 0:
+                raise self._cooldown(remaining)
+            for lock in locks:
+                if lock.acquire(blocking=False):
+                    return lock
+            if time.monotonic() + self._POLL_SECONDS > deadline:
+                raise self._busy()
+            time.sleep(self._POLL_SECONDS)
 
     @asynccontextmanager
     async def request_async(self):
         try:
-            async with (
-                AsyncRedis.from_url(
-                    self._redis_url, socket_connect_timeout=2, socket_timeout=2
-                ) as broker,
-                broker.lock(self._LOCK, timeout=120, blocking=False),
-            ):
-                remaining = await broker.ttl(self._COOLDOWN)
-                if remaining >= 0:
-                    raise MistralError("MISTRAL_RATE_LIMITED", status=429, retry_after=remaining)
+            async with AsyncRedis.from_url(
+                self._redis_url, socket_connect_timeout=2, socket_timeout=2
+            ) as broker:
+                held = await self._acquire_async(broker)
                 try:
-                    yield
-                except MistralError as error:
-                    if error.status == 429:
-                        await broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
-                    raise
+                    try:
+                        yield
+                    except MistralError as error:
+                        if error.status == 429:
+                            await broker.set(self._COOLDOWN, "1", ex=max(1, error.retry_after or 1))
+                        raise
+                finally:
+                    try:
+                        await held.release()
+                    except LockError:
+                        pass
         except RedisError:
             raise MistralError("MISTRAL_REQUEST_GATE_UNAVAILABLE") from None
+
+    async def _acquire_async(self, broker):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._wait_seconds
+        locks = self._locks(broker)
+        while True:
+            remaining = await broker.ttl(self._COOLDOWN)
+            if remaining >= 0:
+                raise self._cooldown(remaining)
+            for lock in locks:
+                if await lock.acquire(blocking=False):
+                    return lock
+            if loop.time() + self._POLL_SECONDS > deadline:
+                raise self._busy()
+            await asyncio.sleep(self._POLL_SECONDS)
 
 
 def _retry_after(value: str) -> int | None:
@@ -170,19 +253,18 @@ class _MistralEndpoint:
 
     def post(self, client: httpx.Client, path: str, payload: dict, *, limit: int) -> dict:
         body = bytearray()
-        deadline = time.monotonic() + self.timeout
         try:
-            with (
-                self.gate.request() if self.gate else nullcontext(),
-                client.stream(
+            # Waiting for a free request slot does not count against the timeout.
+            with self.gate.request() if self.gate else nullcontext():
+                deadline = time.monotonic() + self.timeout
+                with client.stream(
                     "POST", f"{self.base}/{path}", headers=self._headers, json=payload
-                ) as response,
-            ):
-                _check_response(response)
-                for chunk in response.iter_bytes():
-                    if time.monotonic() >= deadline:
-                        raise MistralError("MISTRAL_TIMEOUT")
-                    _extend_body(body, chunk, limit)
+                ) as response:
+                    _check_response(response)
+                    for chunk in response.iter_bytes():
+                        if time.monotonic() >= deadline:
+                            raise MistralError("MISTRAL_TIMEOUT")
+                        _extend_body(body, chunk, limit)
         except httpx.TimeoutException:
             raise MistralError("MISTRAL_TIMEOUT") from None
         except httpx.RequestError:
@@ -197,8 +279,9 @@ class _MistralEndpoint:
         body = bytearray()
         try:
             async with (
-                asyncio.timeout(self.timeout),
+                # Waiting for a free request slot does not count against the timeout.
                 self.gate.request_async() if self.gate else nullcontext(),
+                asyncio.timeout(self.timeout),
                 httpx.AsyncClient(
                     timeout=self.timeout,
                     transport=transport,
@@ -227,8 +310,9 @@ class _MistralEndpoint:
         headers = {**self._headers, "Accept": "text/event-stream"}
         try:
             async with (
-                asyncio.timeout(self.timeout),
+                # Waiting for a free request slot does not count against the timeout.
                 self.gate.request_async() if self.gate else nullcontext(),
+                asyncio.timeout(self.timeout),
                 httpx.AsyncClient(
                     timeout=self.timeout,
                     transport=transport,

@@ -1,0 +1,1006 @@
+/* Kanzlei mail: three panes inside Desk. The Mandant "Akte" tab is the one accent. */
+.kanzlei-mail-page .page-body > .container,
+.kanzlei-mail-page .page-head > .container {
+	max-width: none;
+}
+.kanzlei-mail-page .layout-main-section-wrapper,
+.kanzlei-mail-page .layout-main-section {
+	padding: 0;
+	margin: 0;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+}
+
+.kanzlei-mail {
+	--km-canvas: #eceeed;
+	--km-pane: #f7f8f7;
+	--km-paper: #ffffff;
+	--km-ink: #1d2624;
+	--km-muted: #646e6a;
+	--km-faint: #8b9490;
+	--km-line: #dfe3e1;
+	--km-hover: #eef1f0;
+	--km-pine: #26715d;
+	--km-pine-soft: #e3efea;
+	--km-akte: #7a4f0e;
+	--km-akte-bg: #f5e7c8;
+	--km-akte-edge: #e2c88e;
+	--km-danger: #b42318;
+	--km-radius: 10px;
+
+	display: grid;
+	grid-template-columns: 208px minmax(300px, 384px) minmax(0, 1fr);
+	height: calc(100dvh - var(--km-top, 120px) - 12px);
+	min-height: 480px;
+	margin: 0 0 12px;
+	color: var(--km-ink);
+	background: var(--km-canvas);
+	border: 1px solid var(--km-line);
+	border-radius: 14px;
+	overflow: hidden;
+	font-variant-numeric: tabular-nums;
+}
+[data-theme="dark"] .kanzlei-mail {
+	--km-canvas: #131817;
+	--km-pane: #181e1c;
+	--km-paper: #1f2624;
+	--km-ink: #e5ebe8;
+	--km-muted: #9ea8a4;
+	--km-faint: #7a8580;
+	--km-line: #2b3431;
+	--km-hover: #222a28;
+	--km-pine: #63c2a1;
+	--km-pine-soft: #1e3530;
+	--km-akte: #ecc47a;
+	--km-akte-bg: #3a2f1b;
+	--km-akte-edge: #5c4825;
+	--km-danger: #f97066;
+}
+
+.kanzlei-mail button {
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+.kanzlei-mail :focus-visible {
+	outline: 2px solid var(--km-pine);
+	outline-offset: 2px;
+}
+.kanzlei-mail .km-icon {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.kanzlei-mail .sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* Folder rail */
+.kanzlei-mail .km-rail {
+	padding: 14px 10px;
+	overflow-y: auto;
+	border-right: 1px solid var(--km-line);
+}
+.kanzlei-mail .km-folders {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 2px;
+}
+.kanzlei-mail .km-folder {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--km-muted);
+	font-size: 13.5px;
+	text-align: left;
+}
+.kanzlei-mail .km-folder:hover {
+	background: var(--km-hover);
+	color: var(--km-ink);
+}
+.kanzlei-mail .km-folder.is-active {
+	background: var(--km-paper);
+	color: var(--km-ink);
+	font-weight: 600;
+	box-shadow: inset 0 0 0 1px var(--km-line);
+}
+.kanzlei-mail .km-folder.is-active .km-icon {
+	color: var(--km-pine);
+}
+.kanzlei-mail .km-folder-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kanzlei-mail .km-count {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--km-pine);
+}
+.kanzlei-mail [data-folder="unassigned"] .km-count {
+	color: var(--km-akte);
+}
+.kanzlei-mail .km-accounts {
+	margin-top: 22px;
+	padding-top: 14px;
+	border-top: 1px solid var(--km-line);
+	display: grid;
+	gap: 2px;
+}
+.kanzlei-mail .km-accounts h3 {
+	margin: 0 10px 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--km-faint);
+}
+.kanzlei-mail .km-account {
+	display: grid;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	text-align: left;
+	font-size: 13px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-account small {
+	font-size: 11.5px;
+	color: var(--km-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.kanzlei-mail .km-account:hover {
+	background: var(--km-hover);
+}
+.kanzlei-mail .km-account[aria-pressed="true"] {
+	color: var(--km-ink);
+	font-weight: 600;
+}
+
+/* Message list */
+.kanzlei-mail .km-list {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	background: var(--km-pane);
+	border-right: 1px solid var(--km-line);
+}
+.kanzlei-mail .km-list-head {
+	padding: 16px 16px 10px;
+	display: grid;
+	gap: 10px;
+	border-bottom: 1px solid var(--km-line);
+}
+.kanzlei-mail .km-list-title {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	min-width: 0;
+}
+.kanzlei-mail .km-list-title h2 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+}
+.kanzlei-mail .km-list-title span {
+	font-size: 12.5px;
+	color: var(--km-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kanzlei-mail .km-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 0 10px;
+	height: 34px;
+	border-radius: 8px;
+	background: var(--km-paper);
+	border: 1px solid var(--km-line);
+	color: var(--km-faint);
+	font-weight: 400;
+}
+.kanzlei-mail .km-search:focus-within {
+	border-color: var(--km-pine);
+	color: var(--km-pine);
+}
+.kanzlei-mail .km-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	background: none;
+	color: var(--km-ink);
+	font-size: 13.5px;
+}
+.kanzlei-mail .km-filters {
+	display: flex;
+	gap: 6px;
+}
+.kanzlei-mail .km-filters button {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 10px;
+	border: 1px solid var(--km-line);
+	border-radius: 999px;
+	background: none;
+	font-size: 12.5px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-filters .km-icon {
+	width: 13px;
+	height: 13px;
+}
+.kanzlei-mail .km-filters button[aria-pressed="true"] {
+	border-color: var(--km-pine);
+	background: var(--km-pine-soft);
+	color: var(--km-pine);
+	font-weight: 600;
+}
+.kanzlei-mail .km-rows {
+	flex: 1;
+	overflow-y: auto;
+	outline: 0;
+	overscroll-behavior: contain;
+}
+.kanzlei-mail .km-group {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 10px 16px 6px;
+	background: var(--km-pane);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--km-faint);
+}
+.kanzlei-mail .km-row {
+	position: relative;
+	display: grid;
+	grid-template-columns: 34px minmax(0, 1fr);
+	gap: 12px;
+	padding: 11px 16px 12px 14px;
+	border-left: 3px solid transparent;
+	cursor: pointer;
+}
+.kanzlei-mail .km-row + .km-row::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 60px;
+	right: 0;
+	border-top: 1px solid var(--km-line);
+}
+.kanzlei-mail .km-row:hover {
+	background: var(--km-hover);
+}
+.kanzlei-mail .km-row.is-selected {
+	background: var(--km-paper);
+	border-left-color: var(--km-pine);
+}
+.kanzlei-mail .km-row.is-selected::before,
+.kanzlei-mail .km-row.is-selected + .km-row::before {
+	border-top-color: transparent;
+}
+.kanzlei-mail .km-avatar {
+	display: inline-grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	flex: none;
+	background: hsl(var(--km-hue, 160) 22% 88%);
+	color: hsl(var(--km-hue, 160) 30% 28%);
+	font-size: 12.5px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+}
+[data-theme="dark"] .kanzlei-mail .km-avatar {
+	background: hsl(var(--km-hue, 160) 18% 26%);
+	color: hsl(var(--km-hue, 160) 35% 82%);
+}
+.kanzlei-mail .km-row-main {
+	min-width: 0;
+	display: grid;
+	gap: 2px;
+}
+.kanzlei-mail .km-row-top {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+.kanzlei-mail .km-from {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 14px;
+	font-weight: 500;
+}
+.kanzlei-mail .km-row time {
+	font-size: 12px;
+	color: var(--km-faint);
+	white-space: nowrap;
+}
+.kanzlei-mail .km-row-subject {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13.5px;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.kanzlei-mail .km-row-preview {
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--km-muted);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.kanzlei-mail .km-row.is-unread .km-from,
+.kanzlei-mail .km-row.is-unread .km-row-subject {
+	font-weight: 650;
+}
+.kanzlei-mail .km-row.is-unread time {
+	color: var(--km-pine);
+	font-weight: 600;
+}
+.kanzlei-mail .km-dot {
+	width: 8px;
+	height: 8px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--km-pine);
+}
+.kanzlei-mail .km-row-tags {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 5px;
+	min-width: 0;
+}
+.kanzlei-mail .km-clip {
+	color: var(--km-faint);
+	display: inline-flex;
+	align-self: center;
+}
+.kanzlei-mail .km-akte-more {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--km-akte);
+}
+.kanzlei-mail .km-clip .km-icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* The Akte tab: a manila folder register, notched like a real file tab. */
+.kanzlei-mail .km-akte,
+.kanzlei-mail .km-akte-tab {
+	position: relative;
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	background: var(--km-akte-bg);
+	color: var(--km-akte);
+	font-weight: 600;
+	clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+}
+.kanzlei-mail .km-akte {
+	padding: 1px 12px 1px 7px;
+	font-size: 11.5px;
+	border-radius: 3px 0 0 3px;
+}
+
+.kanzlei-mail .km-empty,
+.kanzlei-mail .km-reader-loading {
+	padding: 48px 24px;
+	text-align: center;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-empty h3 {
+	font-size: 15px;
+	color: var(--km-ink);
+	margin: 0 0 6px;
+}
+.kanzlei-mail .km-empty p {
+	margin: 0 0 12px;
+}
+.kanzlei-mail .km-more {
+	padding: 16px;
+	text-align: center;
+}
+.kanzlei-mail .km-skeleton-row {
+	display: grid;
+	grid-template-columns: 34px 1fr;
+	gap: 6px 12px;
+	padding: 14px 16px;
+}
+.kanzlei-mail .km-skeleton-row i {
+	grid-row: span 2;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--km-hover);
+}
+.kanzlei-mail .km-skeleton-row b {
+	height: 10px;
+	border-radius: 4px;
+	background: var(--km-hover);
+}
+.kanzlei-mail .km-skeleton-row b:last-child {
+	width: 70%;
+}
+
+/* Reader */
+.kanzlei-mail .km-reader {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	background: var(--km-paper);
+}
+.kanzlei-mail .km-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 10px 16px;
+	border-bottom: 1px solid var(--km-line);
+	flex-wrap: wrap;
+}
+.kanzlei-mail .km-tool {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 9px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background: none;
+	font-size: 13px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-tool:hover {
+	background: var(--km-hover);
+	color: var(--km-ink);
+}
+.kanzlei-mail .km-tool.is-primary {
+	background: var(--km-pine);
+	color: #fff;
+	font-weight: 600;
+	padding: 0 12px;
+}
+[data-theme="dark"] .kanzlei-mail .km-tool.is-primary {
+	color: #0f1b17;
+}
+.kanzlei-mail .km-tool.is-primary:hover {
+	filter: brightness(1.06);
+}
+.kanzlei-mail .km-tool[data-action="trash"]:hover,
+.kanzlei-mail .km-tool[data-action="spam"]:hover {
+	color: var(--km-danger);
+}
+.kanzlei-mail .km-tool:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.kanzlei-mail .km-tool-gap {
+	flex: 1;
+}
+.kanzlei-mail .km-back {
+	display: none;
+}
+.kanzlei-mail .km-reader-scroll {
+	flex: 1;
+	overflow-y: auto;
+	padding: 22px 32px 40px;
+}
+.kanzlei-mail .km-reader-scroll > * {
+	max-width: 860px;
+}
+.kanzlei-mail .km-akte-strip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px 12px;
+	border-bottom: 2px solid var(--km-akte-edge);
+	margin-bottom: 18px;
+}
+.kanzlei-mail .km-akte-strip.is-open {
+	border-bottom-style: dashed;
+	border-bottom-color: var(--km-line);
+}
+.kanzlei-mail .km-akte-tab {
+	padding: 4px 18px 4px 10px;
+	font-size: 13px;
+	border-radius: 4px 0 0 0;
+	text-decoration: none;
+	padding-bottom: 6px;
+}
+.kanzlei-mail .km-akte-strip > :not(.km-akte-tab) {
+	margin-bottom: 7px;
+}
+.kanzlei-mail .km-akte-strip.is-open {
+	padding-top: 2px;
+}
+.kanzlei-mail .km-akte-tab:hover {
+	color: var(--km-akte);
+	text-decoration: underline;
+}
+.kanzlei-mail .km-akte-label {
+	font-size: 13px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-akte-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12.5px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-akte-link .km-icon {
+	width: 13px;
+	height: 13px;
+}
+.kanzlei-mail .km-link-button {
+	border: 0;
+	padding: 0;
+	background: none;
+	color: var(--km-pine);
+	font-size: 13px;
+	font-weight: 600;
+}
+.kanzlei-mail .km-link-button:hover {
+	text-decoration: underline;
+}
+.kanzlei-mail .km-subject {
+	margin: 0 0 16px;
+	font-size: 24px;
+	line-height: 1.25;
+	font-weight: 650;
+	letter-spacing: -0.015em;
+	overflow-wrap: anywhere;
+}
+.kanzlei-mail .km-status-note {
+	margin: -8px 0 14px;
+	font-size: 13px;
+	color: var(--km-danger);
+}
+.kanzlei-mail .km-sender {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: start;
+}
+.kanzlei-mail .km-sender .km-avatar {
+	width: 40px;
+	height: 40px;
+	font-size: 14px;
+}
+.kanzlei-mail .km-people {
+	min-width: 0;
+	font-size: 13px;
+}
+.kanzlei-mail .km-from-line {
+	margin: 0 0 2px;
+	overflow-wrap: anywhere;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-from-line strong {
+	color: var(--km-ink);
+	font-size: 14.5px;
+	font-weight: 650;
+	margin-right: 4px;
+}
+.kanzlei-mail .km-people dl {
+	margin: 0;
+	display: grid;
+	gap: 1px;
+}
+.kanzlei-mail .km-people dl div {
+	display: flex;
+	gap: 6px;
+	min-width: 0;
+}
+.kanzlei-mail .km-people dt {
+	color: var(--km-faint);
+	font-weight: 400;
+	min-width: 24px;
+}
+.kanzlei-mail .km-people dd {
+	margin: 0;
+	color: var(--km-muted);
+	overflow-wrap: anywhere;
+}
+.kanzlei-mail .km-when {
+	font-size: 12.5px;
+	color: var(--km-faint);
+	white-space: nowrap;
+}
+.kanzlei-mail .km-images-note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+	margin-top: 18px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	background: var(--km-pane);
+	font-size: 13px;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-sheet {
+	margin-top: 18px;
+	border: 1px solid var(--km-line);
+	border-radius: var(--km-radius);
+	overflow: hidden;
+	background: #fff;
+}
+.kanzlei-mail .km-body {
+	display: block;
+	width: 100%;
+	height: 160px;
+	border: 0;
+	background: #fff;
+}
+.kanzlei-mail .km-attachments,
+.kanzlei-mail .km-thread {
+	margin-top: 26px;
+}
+.kanzlei-mail .km-attachments h2,
+.kanzlei-mail .km-thread h2 {
+	margin: 0 0 10px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--km-muted);
+}
+.kanzlei-mail .km-attachments ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 8px;
+}
+.kanzlei-mail .km-file {
+	display: grid;
+	grid-template-columns: 38px minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	column-gap: 10px;
+	align-items: center;
+	padding: 8px 10px;
+	border: 1px solid var(--km-line);
+	border-radius: 8px;
+	color: var(--km-ink);
+	text-decoration: none;
+}
+.kanzlei-mail .km-file:hover {
+	border-color: var(--km-pine);
+	text-decoration: none;
+	color: var(--km-ink);
+}
+.kanzlei-mail .km-file-type {
+	grid-row: span 2;
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 42px;
+	border-radius: 6px;
+	background: var(--km-pane);
+	color: var(--km-muted);
+	position: relative;
+	padding-bottom: 9px;
+	box-sizing: border-box;
+}
+.kanzlei-mail .km-file-type .km-icon {
+	width: 22px;
+	height: 22px;
+	stroke-width: 1.4;
+}
+.kanzlei-mail .km-file-type em {
+	position: absolute;
+	bottom: 3px;
+	font-style: normal;
+	font-size: 8.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.kanzlei-mail .km-file-type[data-ext="pdf"] {
+	color: #b42318;
+	background: #fcecea;
+}
+.kanzlei-mail .km-file-type[data-ext="xml"] {
+	color: #2c5f8a;
+	background: #e8f0f7;
+}
+[data-theme="dark"] .kanzlei-mail .km-file-type[data-ext="pdf"] {
+	color: #f9a097;
+	background: #3a2220;
+}
+[data-theme="dark"] .kanzlei-mail .km-file-type[data-ext="xml"] {
+	color: #9cc3e6;
+	background: #1d2a36;
+}
+.kanzlei-mail .km-file-name {
+	font-size: 13px;
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kanzlei-mail .km-file small {
+	font-size: 12px;
+	color: var(--km-faint);
+}
+.kanzlei-mail .km-thread ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-left: 2px solid var(--km-line);
+}
+.kanzlei-mail .km-thread-item {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0 12px;
+	width: 100%;
+	padding: 8px 12px;
+	border: 0;
+	background: none;
+	text-align: left;
+	border-radius: 0 8px 8px 0;
+}
+.kanzlei-mail .km-thread-item:hover {
+	background: var(--km-hover);
+}
+.kanzlei-mail .km-thread-item.is-current {
+	box-shadow: inset 2px 0 0 var(--km-pine);
+	background: var(--km-pine-soft);
+	cursor: default;
+}
+.kanzlei-mail .km-thread-who {
+	font-size: 13px;
+	font-weight: 600;
+}
+.kanzlei-mail .km-thread-item time {
+	font-size: 12px;
+	color: var(--km-faint);
+}
+.kanzlei-mail .km-thread-preview {
+	grid-column: 1 / -1;
+	font-size: 12.5px;
+	color: var(--km-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kanzlei-mail .km-quick-reply {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	margin-top: 26px;
+	padding: 14px 16px;
+	border: 1px solid var(--km-line);
+	border-radius: var(--km-radius);
+	background: var(--km-pane);
+	color: var(--km-faint);
+	text-align: left;
+	font-size: 13.5px;
+}
+.kanzlei-mail .km-quick-reply:hover {
+	border-color: var(--km-pine);
+	color: var(--km-pine);
+}
+.kanzlei-mail .km-reader-empty {
+	margin: auto;
+	padding: 40px 24px;
+	text-align: center;
+	color: var(--km-muted);
+	max-width: 340px;
+}
+.kanzlei-mail .km-reader-empty-sheet {
+	display: inline-grid;
+	place-items: center;
+	width: 64px;
+	height: 64px;
+	margin-bottom: 14px;
+	border-radius: 16px;
+	background: var(--km-pane);
+	color: var(--km-faint);
+}
+.kanzlei-mail .km-reader-empty-sheet .km-icon {
+	width: 28px;
+	height: 28px;
+	stroke-width: 1.4;
+}
+.kanzlei-mail .km-reader-empty p {
+	margin: 0 0 18px;
+	font-size: 14px;
+}
+.kanzlei-mail .km-keys {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	font-size: 12.5px;
+	text-align: left;
+}
+.kanzlei-mail .km-keys div {
+	display: grid;
+	grid-template-columns: 70px 1fr;
+	gap: 10px;
+}
+.kanzlei-mail .km-keys dt {
+	text-align: right;
+	font-weight: 400;
+}
+.kanzlei-mail .km-keys dd {
+	margin: 0;
+	color: var(--km-faint);
+}
+.kanzlei-mail kbd {
+	display: inline-block;
+	min-width: 20px;
+	padding: 1px 5px;
+	border: 1px solid var(--km-line);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	background: var(--km-paper);
+	color: var(--km-muted);
+	font: 600 11px/1.4 inherit;
+	text-align: center;
+	box-shadow: none;
+}
+
+/* Medium screens: folders become a strip above the list. */
+@media (max-width: 1199px) {
+	.kanzlei-mail {
+		grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+	.kanzlei-mail .km-rail {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 10px;
+		border-right: 0;
+		border-bottom: 1px solid var(--km-line);
+		overflow-x: auto;
+	}
+	.kanzlei-mail .km-folders {
+		display: flex;
+	}
+	.kanzlei-mail .km-folder {
+		width: auto;
+		white-space: nowrap;
+		padding: 6px 10px;
+	}
+	.kanzlei-mail .km-accounts {
+		display: flex;
+		align-items: center;
+		margin: 0 0 0 auto;
+		padding: 0 0 0 12px;
+		border-top: 0;
+		border-left: 1px solid var(--km-line);
+	}
+	.kanzlei-mail .km-accounts h3,
+	.kanzlei-mail .km-account small {
+		display: none;
+	}
+	.kanzlei-mail .km-account {
+		white-space: nowrap;
+	}
+	.kanzlei-mail .km-sender {
+		grid-template-columns: 40px minmax(0, 1fr);
+	}
+	.kanzlei-mail .km-when {
+		grid-column: 2;
+		margin-top: -6px;
+	}
+}
+
+/* Phones: one pane at a time. */
+@media (max-width: 767px) {
+	.kanzlei-mail {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+		border-radius: 0;
+		border-left: 0;
+		border-right: 0;
+		height: calc(100dvh - var(--km-top, 100px));
+		margin: 0 -15px;
+	}
+	.kanzlei-mail .km-list,
+	.kanzlei-mail .km-reader {
+		grid-row: 2;
+		grid-column: 1;
+		border-right: 0;
+	}
+	.kanzlei-mail[data-view="list"] .km-reader,
+	.kanzlei-mail[data-view="reader"] .km-list,
+	.kanzlei-mail[data-view="reader"] .km-rail {
+		display: none;
+	}
+	.kanzlei-mail[data-view="reader"] .km-reader {
+		grid-row: 1 / -1;
+	}
+	.kanzlei-mail .km-back {
+		display: inline-flex;
+		padding-left: 4px;
+	}
+	.kanzlei-mail .km-toolbar {
+		padding: 8px 10px;
+		flex-wrap: nowrap;
+		gap: 2px;
+	}
+	.kanzlei-mail .km-tool[data-action="form"],
+	.kanzlei-mail .km-tool[data-action="spam"] {
+		display: none;
+	}
+	.kanzlei-mail .km-tool span {
+		display: none;
+	}
+	.kanzlei-mail .km-tool.is-primary span {
+		display: inline;
+	}
+	.kanzlei-mail .km-reader-scroll {
+		padding: 18px 16px 32px;
+	}
+	.kanzlei-mail .km-subject {
+		font-size: 20px;
+	}
+	.kanzlei-mail .km-sender {
+		grid-template-columns: 36px minmax(0, 1fr);
+	}
+	.kanzlei-mail .km-sender .km-avatar {
+		width: 36px;
+		height: 36px;
+	}
+	.kanzlei-mail .km-sheet {
+		margin-left: -16px;
+		margin-right: -16px;
+		border-radius: 0;
+		border-left: 0;
+		border-right: 0;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.kanzlei-mail .km-row,
+	.kanzlei-mail .km-folder,
+	.kanzlei-mail .km-tool {
+		transition: background-color 0.12s ease;
+	}
+}
