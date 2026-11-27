@@ -352,6 +352,18 @@ test('status polling never draws a letter card over the list view',async()=>{
  assert.equal(h.page.client.state.revision,2,'the polled letter itself is refreshed');
 });
 
+test('a polled status change refreshes the rail chip',async()=>{
+ const h=harness({letters:{one:workspace('one',{status:'Queued',card:{state:'analyzing',tasks:[]}})}});
+ h.queue.open=[{letter:'one',status:'Queued',sender:null,letter_type:null,file_name:'one.pdf',analysis:{},matching:{},deadline:{}}];
+ await h.page.show();await settle();
+ assert.ok(text(h.page.rail).includes('Analysing'));
+ h.letters.one=workspace('one',{revision:2});
+ h.queue.open=[{letter:'one',status:'Needs Review',sender:'Finanzamt one',letter_type:'Anforderung',file_name:'one.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}}];
+ const poll=h.timers.filter(t=>t.ms===5000).at(-1);await poll.fn();await settle();await settle();
+ assert.ok(text(h.page.rail).includes('Proposal ready'),'the rail follows the polled letter without waiting for the 15 s refresh');
+ assert.ok(!text(h.page.rail).includes('Analysing'));
+});
+
 const queueRow=n=>({letter:'L'+n,status:'Needs Review',sender:'Sender '+n,letter_type:'Typ',file_name:n+'.pdf',analysis:{},matching:{ambiguity:'none'},deadline:{}});
 const pagedQueue=(open,gate)=>async(operation,args)=>{
  if(operation!=='get_queue')return undefined;

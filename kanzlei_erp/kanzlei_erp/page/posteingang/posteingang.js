@@ -169,7 +169,12 @@ class PosteingangWorkspace {
    this.statusBusy=true;const before=this.client.state;
    // Only the letter in the route owns the card; the list view keeps its placeholder.
    const shown=()=>frappe.get_route()[1]===before.letter;
-   try{await this.client.status();if(!this.client.state){if(shown()){this.clearMain();this.clearPdf();}}else if((this.client.state!==before || this.client.referencesChanged) && shown()){this.client.referencesChanged=false;this.draw();}}
+   try{
+    await this.client.status();
+    // A changed letter also changes its rail chip; refresh the list now, not on the next 15 s tick.
+    if(this.client.state!==before)this.loadQueue();
+    if(!this.client.state){if(shown()){this.clearMain();this.clearPdf();}}else if((this.client.state!==before || this.client.referencesChanged) && shown()){this.client.referencesChanged=false;this.draw();}
+   }
    catch(error){this.failure(error);}finally{this.statusBusy=false;}
   }
   this.scheduleStatus();
