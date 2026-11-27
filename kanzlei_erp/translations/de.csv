@@ -900,7 +900,7 @@ the selected Mandant,den gewählten Mandanten
 "Creates 1 task for {0}. With “Accept” you confirm Mandant, deadline and task.","Erstellt 1 Aufgabe für {0}. Mit „Übernehmen“ bestätigen Sie Mandant, Frist und Aufgabe."
 "Creates {0} tasks for {1}. With “Accept {0} tasks” you confirm Mandant, deadlines and tasks.","Erstellt {0} Aufgaben für {1}. Mit „{0} Aufgaben übernehmen“ bestätigen Sie Mandant, Fristen und Aufgaben."
 No task selected. The letter is only filed.,Keine Aufgabe ausgewählt. Das Schreiben wird nur abgelegt.
-The letter is filed with {0} without a task.,Das Schreiben wird bei {0} ohne Aufgabe abgelegt.
+The letter is filed with {0} without a task.,Das Schreiben wird ohne Aufgabe für {0} abgelegt.
 Still missing:,Noch offen:
 1 task created: {0},1 Aufgabe erstellt: {0}
 {0} tasks created: {1},{0} Aufgaben erstellt: {1}
