@@ -14,6 +14,8 @@ class PosteingangWorkspace {
   archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
   redo:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',link:'<path d="M7 17 17 7M8 7h9v9"/>'
  };
+ // Translation context: lets Posteingang labels differ from shared rows such as Responsible or Undo.
+ static CONTEXT='Posteingang';
  static CHIPS={ready:'check',need:'alert',busy:'spin',fail:'alert',done:'check'};
  static AMBIGUITY={multiple_matches:'Several Mandants match the letter. Please choose one.',multiple_addressees:'The letter is addressed to several recipients. Please choose one Mandant.',not_found:'No Mandant was found in the letter. Please search for it.'};
  static CONFLICTS=['REVISION_CONFLICT','CUSTOMER_CHANGED','STALE_RUN'];
@@ -36,7 +38,7 @@ class PosteingangWorkspace {
   // The query container; the fixed toast stays outside it.
   const shell=this.node(this.root,'div');shell.className='pe-shell';
   const body=this.node(shell,'div');body.className='pe-body';
-  this.rail=this.node(body,'aside');this.rail.className='pe-rail';this.rail.setAttribute('aria-label',__('Documents'));
+  this.rail=this.node(body,'aside');this.rail.className='pe-rail';this.rail.setAttribute('aria-label',__('Documents',null,PosteingangWorkspace.CONTEXT));
   this.drawDrop();this.lists=this.node(this.rail,'div');
   this.main=this.node(body,'div');this.main.className='pe-main';
   this.pdf=this.node(body,'aside');this.pdf.className='pe-pdf';this.pdf.setAttribute('aria-label',__('Original PDF'));
@@ -52,7 +54,7 @@ class PosteingangWorkspace {
  button(parent,label,handler,{primary=false,link=false,large=false,icon=null,args=null,mutation=false,requiresEnabled=true}={}) {
   const button=this.node(parent,'button');button.type='button';
   button.className=link ? 'btn btn-link pe-link' : 'btn '+(primary ? 'btn-primary' : 'btn-default')+(large ? ' pe-btn-lg' : '');
-  if(icon)this.icon(button,icon);button.append(args ? __(label,args) : __(label));
+  if(icon)this.icon(button,icon);button.append(__(label,args,PosteingangWorkspace.CONTEXT));
   if(mutation){button.dataset.mutation='1';button.dataset.requiresEnabled=String(requiresEnabled);this.controls.push(button);}
   button.addEventListener('click',handler);return button;
  }
@@ -436,7 +438,7 @@ class PosteingangWorkspace {
   tasks.forEach((task,i)=>this.drawTask(section,state,ui,task,i,multi,missing));
  }
  fact(parent,icon,key,value,hint){
-  const fact=this.node(parent,'div');fact.className='pe-fact';const k=this.node(fact,'div');k.className='pe-fact-k';this.icon(k,icon);k.append(__(key));
+  const fact=this.node(parent,'div');fact.className='pe-fact';const k=this.node(fact,'div');k.className='pe-fact-k';this.icon(k,icon);k.append(__(key,null,PosteingangWorkspace.CONTEXT));
   if(value!==null)this.node(fact,'div',value).className='pe-fact-v';
   const h=this.node(fact,'div',hint ? __(hint) : '');h.className='pe-fact-h';return {fact,hint:h};
  }
@@ -539,7 +541,7 @@ class PosteingangWorkspace {
  }
  formField(parent,state,key,label,{full=false,optional=false,hint=null,error=null,control='input',value='',placeholder=null,onInput=null}={}){
   const id=this.id(state,key),wrap=this.node(parent,'div');wrap.className='pe-field'+(full ? ' pe-full' : '');
-  const caption=this.node(wrap,'label',__(label));caption.setAttribute('for',id);if(optional)this.node(caption,'span',' '+__('(optional)')).className='pe-muted';
+  const caption=this.node(wrap,'label',__(label,null,PosteingangWorkspace.CONTEXT));caption.setAttribute('for',id);if(optional)this.node(caption,'span',' '+__('(optional)')).className='pe-muted';
   let input=null;
   if(control){
    input=this.node(wrap,control);input.id=id;if(control==='input'){input.type='text';input.autocomplete='off';}
