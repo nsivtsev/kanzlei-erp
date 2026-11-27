@@ -84,6 +84,8 @@ class SimpleCase(PosteingangTestCase):
 
 		self.review, self.jobs, self.workspace = posteingang_confirmation, posteingang_jobs, posteingang_workspace
 		self.committed, self.customers = [], [self.customer.name]
+		# The fixture letters address this name; another name is a matching conflict.
+		self.customer.customer_name = RECIPIENT
 		self.customer.append("kanzlei_identifiers", SYN_0007)
 		self.customer.save()
 		self.share_and_verify(self.customer)
@@ -104,6 +106,16 @@ class SimpleCase(PosteingangTestCase):
 		doc = TestPosteingangMatching.successful_letter(self, case)
 		self.committed.append(doc.name)
 		return doc
+
+	def mutate_result(self, doc, change):
+		import json
+
+		frappe.set_user("Administrator")
+		run = frappe.db.get_value("Incoming Letter Run", {"letter": doc.name, "status": "Succeeded"}, ["name", "result_json"], as_dict=True)
+		result = json.loads(run.result_json)
+		change(result)
+		frappe.db.set_value("Incoming Letter Run", run.name, "result_json", json.dumps(result))
+		return result
 
 	def tearDown(self):
 		# process_run commits everything setUp created; remove it so verified SYN-0007
@@ -207,13 +219,42 @@ class TestSimpleCard(SimpleCase):
 		self.assertEqual(card["customer"]["suggested"], {"customer": self.customer.name, "customer_name": self.customer.customer_name,
 			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "page": 1})
 		self.assertEqual(card["customer"]["candidates"], [{"customer": self.customer.name, "customer_name": self.customer.customer_name,
-			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True}])
+			"why": "Referenz „Mandantenreferenz: SYN-0007“ im Schreiben", "can_select": True, "conflicts": []}])
 		self.assertEqual(card["tasks"], [{"source_index": 0, "title": "Unterlagen einreichen", "description": "Bitte die angeforderten Unterlagen einreichen.",
 			"deadline": {"kind": "explicit_date", "date": "2026-11-20", "wording": "Bitte bis zum 20.11.2026 einreichen.", "page": 1, "quote": "Bitte bis zum 20.11.2026 einreichen.", "verified": True},
 			"internal_date": str(working_date(date(2026, 11, 20), frappe.utils.getdate(), company_holidays())),
 			"assigned_to": self.operator.name, "assigned_to_name": self.operator.full_name}])
 		self.assertIsNone(card["no_task_reason"])
 		self.assertIsNone(card["undo_until"])
+
+	def test_unknown_action_assessment_is_failed_not_no_task(self):
+		# Test-side state: a readable letter whose actions the assistant could not assess.
+		doc = self.successful("AP01-03")
+		result = self.mutate_result(doc, lambda value: value.update(action_assessment="unknown"))
+		self.assertNotEqual(result["readability"], "unreadable")
+		card = self.card(doc)
+		self.assertEqual((card["state"], card["tasks"], card["no_task_reason"]), ("failed", [], None))
+		with self.assertRaisesRegex(frappe.ValidationError, "INVALID_REQUEST"):
+			TestConfirmSimple.run_confirm(self, doc, [])
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "status"), "Needs Review")
+
+	def test_conflicting_candidate_is_not_suggested(self):
+		frappe.set_user("Administrator")
+		# Test-side state: the letter names another company than the verified identifier's Customer.
+		frappe.db.set_value("Customer", self.customer.name, "customer_name", "Synthetic Other Name GmbH", update_modified=False)
+		doc = self.successful()
+		card = self.card(doc)
+		self.assertEqual(card["customer"]["ambiguity"], "none")
+		self.assertIsNone(card["customer"]["suggested"])
+		self.assertEqual([(c["customer"], c["conflicts"]) for c in card["customer"]["candidates"]], [(self.customer.name, ["name_mismatch"])])
+		TestConfirmSimple.run_confirm(self, doc, TestConfirmSimple.proposal_tasks(self, doc))
+		self.assertEqual(frappe.db.get_value("Incoming Letter", doc.name, "customer_reason"), "Manuell gewählt")
+
+	def test_card_says_whether_holidays_are_known(self):
+		doc = self.successful()
+		for holidays, known in ((frozenset(), False), (frozenset({date(2026, 11, 18)}), True)):
+			with self.subTest(known=known), patch("kanzlei_erp.posteingang_simple.company_holidays", return_value=holidays):
+				self.assertIs(self.card(doc)["holidays_known"], known)
 
 	def test_completed_is_done(self):
 		doc = self.confirm_fixture(self.letter())
@@ -311,6 +352,7 @@ class TestSimpleCard(SimpleCase):
 		self.assertEqual(card["tasks"], [])
 
 
+RECIPIENT = "Beispielbetrieb Alpha GmbH"
 SYN_0007 = {"identifier_type": "other", "raw_value": "SYN-0007", "jurisdiction": "SYNTHETIC",
 	"authority": "Fiktive Beispielstelle", "other_type": "synthetic_client_reference"}
 
@@ -475,6 +517,36 @@ class TestConfirmSimple(SimpleCase):
 		letter = self.letter_row(doc)
 		self.assertEqual((letter.status, letter.no_actions_reason), ("Completed", "Ohne Aufgabe abgelegt"))
 
+	def test_manual_confirm_on_an_analyzed_letter_keeps_its_document_fields(self):
+		import json
+
+		doc = self.successful()
+		card = self.card(doc)
+		frappe.set_user("Administrator")
+		self.assertFalse(any(self.letter_row(doc)[key] for key in self.review.DOCUMENT_FIELDS))
+		extraction = self.review._latest_successful(frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True))[1]
+		self.run_confirm(doc, [self.manual_task()], "manual")
+		letter = self.letter_row(doc)
+		self.assertEqual(letter.sender, extraction["sender"]["value"])
+		self.assertEqual(letter.letter_type, extraction["letter_type"]["value"])
+		self.assertTrue(letter.sender)
+		self.assertEqual(letter.applied_run, card["run"])
+		self.assertEqual(json.loads(letter.fact_evidence_json)["sender"], extraction["sender"]["evidence"])
+		(row,) = self.review._actions(doc.name)
+		self.assertFalse(row.source_run)
+		self.assertIsNone(row.source_index)
+		payload = json.loads(self.event(doc).payload_json)
+		self.assertFalse(any(payload["before"]["document_fields"].values()))
+		self.assertIsNone(payload["before"]["applied_run"])
+
+	def test_manual_confirm_keeps_fields_a_human_already_has(self):
+		doc = self.letter()
+		self.manual_review(doc)
+		self.run_confirm(doc, [self.manual_task()], "manual")
+		letter = self.letter_row(doc)
+		self.assertFalse(letter.applied_run)
+		self.assertFalse(letter.sender)
+
 	def test_manual_dates_are_marked_as_entered(self):
 		doc = self.letter()
 		self.manual_review(doc)
@@ -565,13 +637,51 @@ class TestReceiptProjection(unittest.TestCase):
 	def test_hides_tasks_the_reader_cannot_read(self):
 		from kanzlei_erp.posteingang_confirmation import _receipt_projection
 
-		result = {"actions": [{"action_id": "a", "task": "TASK-OPEN"}, {"action_id": "b", "task": "TASK-HIDDEN"}],
-			"tasks_modified": {"TASK-OPEN": "2026-11-26 10:00:00", "TASK-HIDDEN": "2026-11-26 10:00:01"}}
-		with patch("frappe.has_permission", side_effect=lambda doctype, ptype, doc=None, **kw: doc != "TASK-HIDDEN"):
+		result = {"actions": [{"action_id": "a", "task": "TASK-OPEN"}, {"action_id": "b", "task": "TASK-HIDDEN"}, {"action_id": "c", "task": "TASK-GONE"}],
+			"tasks_modified": {"TASK-OPEN": "2026-11-26 10:00:00", "TASK-HIDDEN": "2026-11-26 10:00:01", "TASK-GONE": "2026-11-26 10:00:02"}}
+
+		def read(doctype, ptype, doc=None, **kw):
+			if doc == "TASK-GONE":
+				raise frappe.DoesNotExistError
+			return doc != "TASK-HIDDEN"
+
+		# A Task deleted by undo_confirm is neither readable nor an error.
+		with patch("frappe.has_permission", side_effect=read), patch("frappe.db.exists", side_effect=lambda doctype, name=None, *a, **kw: name != "TASK-GONE"):
 			projected = _receipt_projection(result)
-		self.assertEqual([row["task"] for row in projected["actions"]], ["TASK-OPEN", None])
+		self.assertEqual([row["task"] for row in projected["actions"]], ["TASK-OPEN", None, None])
 		self.assertEqual(projected["tasks_modified"], {"TASK-OPEN": "2026-11-26 10:00:00"})
-		self.assertEqual(len(result["tasks_modified"]), 2)
+		self.assertEqual(len(result["tasks_modified"]), 3)
+
+
+class TestQueueRow(SimpleCase):
+	def row(self, doc):
+		# get_queue scans every Letter of the shared test site; the row projection is what changed.
+		from kanzlei_erp.posteingang_documents import original
+
+		frappe.set_user(self.operator.name)
+		letter = frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True)
+		return self.workspace._row(letter, original(letter))
+
+	def test_rail_row_carries_the_card_state_and_proposed_document_fields(self):
+		doc = self.successful()
+		self.assertFalse(frappe.db.get_value("Incoming Letter", doc.name, "sender"))
+		extraction = self.review._latest_successful(frappe.db.get_value("Incoming Letter", doc.name, "*", as_dict=True))[1]
+		row = self.row(doc)
+		self.assertEqual((row["card_state"], row["sender"], row["letter_type"]), ("proposal", extraction["sender"]["value"], extraction["letter_type"]["value"]))
+		self.assertTrue(row["sender"])
+		self.add_action(doc)
+		self.assertEqual(self.row(doc)["card_state"], "draft")
+
+	def test_rail_row_of_an_unassessed_letter_is_failed(self):
+		doc = self.successful("AP01-03")
+		self.mutate_result(doc, lambda value: value.update(action_assessment="unknown"))
+		self.assertEqual(self.row(doc)["card_state"], "failed")
+
+	def test_rail_row_without_analysis(self):
+		doc = self.letter()
+		self.assertEqual(self.row(doc)["card_state"], "not_started")
+		self.status(doc, "Completed")
+		self.assertEqual(self.row(doc)["card_state"], "done")
 
 
 class TestUndoConfirm(SimpleCase):
@@ -711,6 +821,36 @@ class TestUndoConfirm(SimpleCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "UNDO_EXPIRED"):
 			self.undo(doc)
 		self.assertEqual((self.letter_row(doc).status, self.letter_row(doc).revision), ("Completed", revision))
+
+	def test_undo_restores_the_status_before_confirm(self):
+		for status in ("Error", "Needs Clarification"):
+			with self.subTest(status=status):
+				doc = self.successful()
+				self.status(doc, status)
+				self.run_confirm(doc, [], "manual")
+				self.assertEqual(self.undo(doc)["status"], status)
+				self.assertEqual(self.letter_row(doc).status, status)
+
+	def test_undo_of_a_manual_confirm_restores_the_empty_document_fields(self):
+		doc = self.successful()
+		fields = (*self.review.DOCUMENT_FIELDS, "applied_run", "fact_evidence_json")
+		before = {key: self.letter_row(doc)[key] for key in fields}
+		self.assertFalse(before["sender"])
+		self.run_confirm(doc, [TestConfirmSimple.manual_task(self)], "manual")
+		self.assertTrue(self.letter_row(doc).sender)
+		self.undo(doc)
+		self.assertEqual({key: self.letter_row(doc)[key] for key in fields}, before)
+
+	def test_stale_confirm_replay_after_undo_hides_the_deleted_task(self):
+		doc = self.successful()
+		tasks = self.proposal_tasks(doc)
+		revision = self.letter_row(doc).revision
+		first = self.run_confirm(doc, tasks, key="confirm-once", revision=revision)
+		self.undo(doc)
+		self.assertFalse(frappe.db.exists("Task", first["actions"][0]["task"]))
+		replay = self.run_confirm(doc, tasks, key="confirm-once", revision=revision)
+		self.assertTrue(replay["replayed"])
+		self.assertEqual(([row["task"] for row in replay["actions"]], replay["tasks_modified"]), ([None], {}))
 
 	def test_archive_without_tasks_can_be_undone(self):
 		doc = self.successful("AP01-03")

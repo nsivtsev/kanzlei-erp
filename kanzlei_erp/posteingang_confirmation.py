@@ -320,12 +320,17 @@ def save_review(letter=None, review=None, document_fields=None, request_key=None
 		return _finish(doc, "save_review", changes, {"before": before, "review": review, "document_fields": fields, "origin": "human"}, receipt)
 
 
+def _readable_task(name):
+	# undo_confirm deletes Tasks; a later replay of the confirm receipt must not fail on them.
+	return bool(name and frappe.db.exists("Task", name) and frappe.has_permission("Task", "read", doc=name))
+
+
 def _receipt_projection(result):
 	result = copy.deepcopy(result)
 	if "actions" in result:
-		result["actions"] = [{**row, "task": row["task"] if frappe.has_permission("Task", "read", doc=row["task"]) else None} for row in result["actions"]]
+		result["actions"] = [{**row, "task": row["task"] if _readable_task(row["task"]) else None} for row in result["actions"]]
 	if "tasks_modified" in result:
-		result["tasks_modified"] = {task: value for task, value in result["tasks_modified"].items() if frappe.has_permission("Task", "read", doc=task)}
+		result["tasks_modified"] = {task: value for task, value in result["tasks_modified"].items() if _readable_task(task)}
 	return result
 
 
@@ -388,12 +393,12 @@ def confirm_simple(letter=None, expected_revision=None, request_key=None, origin
 	if not (matching._customer(customer) or {}).get("can_select"):
 		frappe.throw(frappe._("Posteingang operation is not permitted"), frappe.PermissionError)
 	plan = simple.simple_review(doc, origin, customer, tasks)
-	before = {"review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run, "fact_evidence_json": doc.fact_evidence_json}
+	before = {"status": doc.status, "review": _draft(doc), "document_fields": _fields(doc), "applied_run": doc.applied_run, "fact_evidence_json": doc.fact_evidence_json}
 	with _atomic():
 		# validate_review compares against the stored rows, the Letter's customer and the applied Run's OCR.
 		changes = {"selected_customer": customer, "customer_reason": plan["review"]["customer_reason"]}
-		if plan["run"]:
-			changes.update(applied_run=plan["run"], fact_evidence_json=plan["fact_evidence_json"])
+		if plan["applied_run"]:
+			changes.update(applied_run=plan["applied_run"], fact_evidence_json=plan["fact_evidence_json"])
 		_set(doc, changes)
 		_write_actions(doc, plan["review"]["actions"], replace=True, run=plan["run"], proposals=plan["proposals"])
 		review, fields = _validated(doc, plan["review"], plan["document_fields"], confirm=True)
@@ -480,7 +485,9 @@ def undo_confirm(letter=None, expected_revision=None, request_key=None, **extra)
 		# The Letter keeps its confirmed Customer until the Task guards have run.
 		changes = {**previous["document_fields"], "applied_run": previous["applied_run"], "fact_evidence_json": previous["fact_evidence_json"],
 			"selected_customer": None, "customer_reason": None, "confirmed_customer": None, "confirmed_by": None, "confirmed_at": None,
-			"confirmation_receipt_json": None, "no_actions_reason": None, "review_outcome": "pending", "status": "Needs Review"}
+			"confirmation_receipt_json": None, "no_actions_reason": None, "review_outcome": "pending",
+			# Events written before the status was recorded came from Needs Review.
+			"status": previous.get("status") or "Needs Review"}
 		return _finish(doc, "undo_confirm", changes, {"before": before, "confirm_event": confirmation["event"], "tasks": tasks}, receipt)
 
 

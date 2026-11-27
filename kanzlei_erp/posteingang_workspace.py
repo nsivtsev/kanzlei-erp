@@ -149,21 +149,27 @@ def _row(doc, file):
 		"received_at": str(doc.received_at), "received_by": doc.received_by,
 		"received_date_known": bool(doc.received_date_known), "received_date": str(doc.received_date) if doc.received_date else None,
 		"sender": doc.sender, "letter_type": doc.letter_type, "customer": selected,
-		"analysis": state["analysis"], "matching": None, "deadline": None, "result_error": None}
+		"analysis": state["analysis"], "matching": None, "deadline": None, "result_error": None, "card_state": None}
 	try:
 		row["matching"] = matching.matching_projection(doc)["matching"]
-		if doc.status in OPEN:
+		proposal = None
+		if doc.status in OPEN or not (doc.sender and doc.letter_type):
 			_, proposal = review._latest_successful(doc)
-			if proposal is not None:
-				deadlines = [a["deadline"] for a in proposal["actions"]]
-				dates = sorted(d["date"] for d in deadlines if d["kind"] == "explicit_date")
-				row["deadline"] = {"proposed_date": dates[0] if dates else None,
-					"explicit_count": len(dates), "relative_count": sum(d["kind"] == "relative" for d in deadlines),
-					"uncertain_count": sum(d["kind"] == "uncertain" for d in deadlines)}
+		if proposal is not None:
+			# Until the Letter has its own fields, the rail names it like the card does.
+			row.update(sender=doc.sender or proposal["sender"]["value"], letter_type=doc.letter_type or proposal["letter_type"]["value"])
+		drafted = doc.status in review.DRAFT_STATES and frappe.db.exists("Incoming Letter Action", {"parent": doc.name, "parenttype": "Incoming Letter"})
+		row["card_state"] = simple._state(doc, drafted, proposal)
+		if doc.status in OPEN and proposal is not None:
+			deadlines = [a["deadline"] for a in proposal["actions"]]
+			dates = sorted(d["date"] for d in deadlines if d["kind"] == "explicit_date")
+			row["deadline"] = {"proposed_date": dates[0] if dates else None,
+				"explicit_count": len(dates), "relative_count": sum(d["kind"] == "relative" for d in deadlines),
+				"uncertain_count": sum(d["kind"] == "uncertain" for d in deadlines)}
 	except jobs.WorkflowError as error:
 		if str(error) not in {"INVALID_RESULT", "LIMIT_EXCEEDED"}:
 			raise
-		row.update(matching=None, deadline=None, result_error="INVALID_RESULT")
+		row.update(matching=None, deadline=None, result_error="INVALID_RESULT", card_state="failed")
 	return row
 
 

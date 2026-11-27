@@ -72,9 +72,11 @@ def _customer_block(extraction):
 	candidates, pages, suggested = [], [], None
 	for item in result["candidates"]:
 		why, page = _why(item)
-		candidates.append({"customer": item["customer"], "customer_name": item["customer_name"], "why": why, "can_select": item["can_select"]})
+		candidates.append({"customer": item["customer"], "customer_name": item["customer_name"], "why": why, "can_select": item["can_select"],
+			"conflicts": [conflict["code"] for conflict in item["conflicts"]]})
 		pages.append(page)
-	if result["ambiguity"] == "none" and len(candidates) == 1 and candidates[0]["can_select"]:
+	# A name mismatch or a conflicting identifier is never offered for one click.
+	if result["ambiguity"] == "none" and len(candidates) == 1 and candidates[0]["can_select"] and not candidates[0]["conflicts"]:
 		suggested = {**{k: candidates[0][k] for k in ("customer", "customer_name", "why")}, "page": pages[0]}
 	return {"suggested": suggested, "candidates": candidates, "ambiguity": result["ambiguity"]}
 
@@ -141,7 +143,12 @@ def _state(doc, rows, extraction):
 		return "draft"
 	if extraction is None:
 		return "not_started"
-	return "failed" if extraction["readability"] == "unreadable" else "proposal"
+	return "failed" if _unassessed(extraction) else "proposal"
+
+
+def _unassessed(extraction):
+	"""An unreadable scan or an unknown action assessment is never shown as "no task needed"."""
+	return extraction["readability"] == "unreadable" or extraction["action_assessment"] == "unknown"
 
 
 def simple_card(doc):
@@ -169,7 +176,8 @@ def simple_card(doc):
 	if state == "proposal" and extraction["action_assessment"] == "none_found":
 		no_task_reason = extraction["summary"]["value"] or NO_TASK_REASON
 	undo_until = review.undo_until(doc) if state == "done" else None
-	return {"state": state, "run": run, "customer": customer, "tasks": tasks, "no_task_reason": no_task_reason, "undo_until": undo_until}
+	return {"state": state, "run": run, "customer": customer, "tasks": tasks, "no_task_reason": no_task_reason, "undo_until": undo_until,
+		"holidays_known": bool(holidays)}
 
 
 def _iso(value):
@@ -237,13 +245,18 @@ def _accepted(task, basis, today, holidays):
 		"scheduling_decision": "scheduled", "needs_planning": False}
 
 
+def _extracted(extraction):
+	return ({key: extraction[key]["value"] for key in review.DOCUMENT_FIELDS},
+		canonical({key: extraction[key]["evidence"] for key in review.DOCUMENT_FIELDS}))
+
+
 def simple_review(doc, origin, customer, tasks):
 	"""The full confirm review for confirm_simple, built from the card choice; writes nothing."""
 	run, extraction = review._latest_successful(doc)
 	today, holidays = frappe.utils.getdate(), company_holidays()
 	actions = []
 	if origin == "proposal":
-		if extraction is None or extraction["readability"] == "unreadable" or review._actions(doc.name):
+		if extraction is None or _unassessed(extraction) or review._actions(doc.name):
 			workflow.fail("INVALID_REQUEST")
 		proposals = extraction["actions"]
 		indices = [task["source_index"] for task in tasks]
@@ -257,8 +270,7 @@ def simple_review(doc, origin, customer, tasks):
 			else:
 				item.update(decision="reject", rejection_reason=NOT_SELECTED)
 			actions.append(item)
-		fields = {key: extraction[key]["value"] for key in review.DOCUMENT_FIELDS}
-		evidence = canonical({key: extraction[key]["evidence"] for key in review.DOCUMENT_FIELDS})
+		applied, fields, evidence = run, *_extracted(extraction)
 	else:
 		if any(task["source_index"] is not None for task in tasks):
 			workflow.fail("INVALID_REQUEST")
@@ -266,9 +278,13 @@ def simple_review(doc, origin, customer, tasks):
 			item = review._pending(str(uuid4()), task["title"], task["title"])
 			item.update(_accepted(task, _basis(None, task["external_date"]), today, holidays))
 			actions.append(item)
-		run, proposals, fields, evidence = None, None, review._fields(doc), None
-	applied = review._source(doc, doc.applied_run) if doc.applied_run else None
-	if any(len(matching._recipients(value)) > 1 for value in (extraction, applied) if value is not None):
+		proposals, fields, applied, evidence = None, review._fields(doc), None, None
+		if extraction is not None and not any(fields.values()):
+			# Manual tasks keep the analysed letter's sender, date and type; the rows stay manual.
+			applied, fields, evidence = run, *_extracted(extraction)
+		run = None
+	applied_source = review._source(doc, doc.applied_run) if doc.applied_run else None
+	if any(len(matching._recipients(value)) > 1 for value in (extraction, applied_source) if value is not None):
 		reason = CUSTOMER_MULTIPLE
 	elif origin == "proposal" and (_customer_block(extraction)["suggested"] or {}).get("customer") == customer:
 		reason = CUSTOMER_SUGGESTED
@@ -281,7 +297,7 @@ def simple_review(doc, origin, customer, tasks):
 	else:
 		no_actions = NO_TASKS
 	clarification = doc.clarification_reason if (doc.clarification_reason or "").strip() else None
-	return {"run": run, "proposals": proposals, "document_fields": fields, "fact_evidence_json": evidence,
+	return {"run": run, "applied_run": applied, "proposals": proposals, "document_fields": fields, "fact_evidence_json": evidence,
 		"review": {"schema_version": "1.0", "mode": "confirm", "expected_revision": doc.revision, "selected_customer": customer,
 			"customer_reason": reason, "no_actions_reason": no_actions, "clarification_reason": clarification,
 			"human_verified": True, "actions": actions}}
